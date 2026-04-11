@@ -116,46 +116,110 @@ ORDER BY m.sort ASC, m.id ASC
 	return perms, nil
 }
 
+const smsConfigCacheVersion = 2
+
 func (a *Application) loadSMSConfig(ctx context.Context) (SMSConfig, error) {
+	state, err := a.loadSMSConfigState(ctx)
+	if err != nil {
+		return SMSConfig{}, err
+	}
+	return state.Config, nil
+}
+
+func (a *Application) loadSMSConfigState(ctx context.Context) (smsConfigState, error) {
 	if cached, err := a.redis.Get(ctx, smsConfigCacheKey()).Result(); err == nil {
-		var cfg SMSConfig
-		if json.Unmarshal([]byte(cached), &cfg) == nil {
-			return cfg, nil
+		var state smsConfigState
+		if json.Unmarshal([]byte(cached), &state) == nil && state.Version == smsConfigCacheVersion {
+			return state, nil
 		}
 	}
 	rows := make([]struct {
 		ConfigKey   string `db:"config_key"`
 		ConfigValue string `db:"config_value"`
+		UpdatedAt   any    `db:"updated_at"`
 	}, 0)
-	if err := a.db.SelectContext(ctx, &rows, `SELECT config_key, config_value FROM system_config WHERE config_key LIKE 'sms_%'`); err != nil {
-		return SMSConfig{}, err
+	if err := a.db.SelectContext(ctx, &rows, `SELECT config_key, config_value, updated_at FROM system_config WHERE config_key LIKE 'sms_%'`); err != nil {
+		return smsConfigState{}, err
 	}
-	cfg := SMSConfig{}
+	state := smsConfigState{
+		Version: smsConfigCacheVersion,
+		Config: SMSConfig{
+			SignName:        "玖权益",
+			TemplateCode:    "SMS_000001",
+			ExpireMinutes:   30,
+			IntervalMinutes: 1,
+		},
+	}
 	for _, row := range rows {
+		value := strings.TrimSpace(row.ConfigValue)
 		switch row.ConfigKey {
 		case "sms_access_key":
-			cfg.AccessKey = row.ConfigValue
+			state.Config.AccessKey = value
+			state.AccessKeyConfigured = value != ""
 		case "sms_access_key_secret":
-			cfg.AccessKeySecret = row.ConfigValue
+			state.Config.AccessKeySecret = value
+			state.AccessKeySecretConfigured = value != ""
 		case "sms_sign_name":
-			cfg.SignName = row.ConfigValue
+			if value != "" {
+				state.Config.SignName = value
+			}
 		case "sms_template_code":
-			cfg.TemplateCode = row.ConfigValue
+			if value != "" {
+				state.Config.TemplateCode = value
+			}
 		case "sms_expire_minutes":
-			cfg.ExpireMinutes, _ = strconv.Atoi(row.ConfigValue)
+			if minutes, err := strconv.Atoi(value); err == nil && minutes > 0 {
+				state.Config.ExpireMinutes = minutes
+			}
 		case "sms_interval_minutes":
-			cfg.IntervalMinutes, _ = strconv.Atoi(row.ConfigValue)
+			if minutes, err := strconv.Atoi(value); err == nil && minutes > 0 {
+				state.Config.IntervalMinutes = minutes
+			}
+		}
+		if updatedAt, ok := parseConfigUpdatedAt(row.UpdatedAt); ok && (state.UpdatedAt.IsZero() || updatedAt.After(state.UpdatedAt)) {
+			state.UpdatedAt = updatedAt
 		}
 	}
-	if cfg.ExpireMinutes == 0 {
-		cfg.ExpireMinutes = 30
-	}
-	if cfg.IntervalMinutes == 0 {
-		cfg.IntervalMinutes = 1
-	}
-	data, _ := json.Marshal(cfg)
+	data, _ := json.Marshal(state)
 	_ = a.redis.Set(ctx, smsConfigCacheKey(), data, 30*time.Minute).Err()
-	return cfg, nil
+	return state, nil
+}
+
+func parseConfigUpdatedAt(raw any) (time.Time, bool) {
+	switch value := raw.(type) {
+	case time.Time:
+		if value.IsZero() {
+			return time.Time{}, false
+		}
+		return value, true
+	case string:
+		return parseConfigUpdatedAtString(value)
+	case []byte:
+		return parseConfigUpdatedAtString(string(value))
+	default:
+		return time.Time{}, false
+	}
+}
+
+func parseConfigUpdatedAtString(value string) (time.Time, bool) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return time.Time{}, false
+	}
+	layouts := []string{
+		time.RFC3339Nano,
+		time.RFC3339,
+		"2006-01-02 15:04:05.999999999-07:00",
+		"2006-01-02 15:04:05 -0700 MST",
+		"2006-01-02 15:04:05.999999999",
+		"2006-01-02 15:04:05",
+	}
+	for _, layout := range layouts {
+		if parsed, err := time.ParseInLocation(layout, value, time.Local); err == nil {
+			return parsed, true
+		}
+	}
+	return time.Time{}, false
 }
 
 func (a *Application) updateLoginState(ctx context.Context, userID int64, ip string) error {
