@@ -1,0 +1,23 @@
+app_env: dev
+server:
+  address: ":8080"
+database:
+  driver: mysql
+  dsn: "root:root123456@tcp(127.0.0.1:3307)/admin?charset=utf8mb4&parseTime=true&loc=Local"
+redis:
+  addr: "127.0.0.1:6380"
+  password: ""
+  db: 0
+auth:
+  jwt_secret: "please-change-this-secret"
+  access_token_ttl_minutes: 10080
+  temp_login_ttl_minutes: 5
+bootstrap:
+  super_admin_username: "admin"
+  super_admin_phone: "${SUPER_ADMIN_PHONE}"
+  super_admin_password: "${SUPER_ADMIN_PASSWORD}"
+sms:
+  provider: mock
+audit:
+  async: true
+  buffer_size: 128
