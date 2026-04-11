@@ -1,0 +1,47 @@
+# macOS
+.DS_Store
+
+# Editor / IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+logs/
+
+# Env files
+.env
+.env.*
+!.env.example
+
+# Dependency and build caches
+.cache/
+tmp/
+temp/
+coverage/
+coverage.out
+
+# Node / frontend build output
+node_modules/
+dist/
+build/
+
+# Go build output and test artifacts
+bin/
+*.test
+*.out
+
+# Package / archive artifacts
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.gz
+*.rar
+*.7z
+
+# Workspace-specific generated directories
+admin/admin/
+
+# Local sensitive docs
+需求文档_登录与权限系统.md
