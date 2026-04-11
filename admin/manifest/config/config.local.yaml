@@ -17,7 +17,7 @@ bootstrap:
   super_admin_phone: "${SUPER_ADMIN_PHONE}"
   super_admin_password: "${SUPER_ADMIN_PASSWORD}"
 sms:
-  provider: mock
+  provider: aliyun
 audit:
   async: true
   buffer_size: 128

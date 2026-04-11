@@ -117,10 +117,13 @@ func (a *Application) handleLoginSMSSend(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if err = a.redis.Set(r.Context(), lockKey, "1", time.Duration(cfg.IntervalMinutes)*time.Minute).Err(); err != nil {
+		_ = a.redis.Del(r.Context(), smsCodeKey(user.ID)).Err()
 		writeError(w, http.StatusInternalServerError, 500, "发送频控创建失败")
 		return
 	}
 	if err = a.sender.SendLoginCode(r.Context(), user.Phone, code, cfg); err != nil {
+		// 真实短信发送失败时回滚验证码与频控锁，避免前端看到失败却仍被锁住。
+		_ = a.redis.Del(r.Context(), smsCodeKey(user.ID), lockKey).Err()
 		writeError(w, http.StatusInternalServerError, 500, "短信发送失败")
 		return
 	}

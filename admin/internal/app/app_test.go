@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 )
 
@@ -76,6 +78,45 @@ func TestAuthFlow_LoginSMSVerifyMeLogout(t *testing.T) {
 
 	meAfterLogout := h.postJSON("/api/admin/me", map[string]any{}, loginData.Token)
 	require.NotEqual(t, 0, meAfterLogout.Code)
+}
+
+type failingSMSSender struct{}
+
+func (f failingSMSSender) SendLoginCode(context.Context, string, string, SMSConfig) error {
+	return errors.New("send failed")
+}
+
+func TestLoginSMSSend_CleansCacheWhenSenderFails(t *testing.T) {
+	t.Parallel()
+
+	h := newTestHarness(t)
+	h.app.sender = failingSMSSender{}
+
+	userID := h.createUserForSMSFlow(context.Background(), "need002", "Need_123", "13800004444")
+	require.NotZero(t, userID)
+
+	loginRes := h.postJSON("/api/admin/login", map[string]any{
+		"username": "need002",
+		"password": "Need_123",
+	}, "")
+	require.Equal(t, 0, loginRes.Code)
+
+	var loginData struct {
+		NeedSMSVerify bool   `json:"need_sms_verify"`
+		LoginToken    string `json:"login_token"`
+	}
+	require.NoError(t, json.Unmarshal(loginRes.Data, &loginData))
+	require.True(t, loginData.NeedSMSVerify)
+
+	sendRes := h.postJSON("/api/admin/login/sms/send", map[string]any{
+		"login_token": loginData.LoginToken,
+	}, "")
+	require.Equal(t, 500, sendRes.Code)
+
+	_, err := h.app.redis.Get(context.Background(), smsCodeKey(userID)).Result()
+	require.ErrorIs(t, err, redis.Nil)
+	_, err = h.app.redis.Get(context.Background(), smsSendLockKey(userID)).Result()
+	require.ErrorIs(t, err, redis.Nil)
 }
 
 func TestAdminManagementFlows(t *testing.T) {
