@@ -111,7 +111,16 @@ func (c *Core) ensureDefaultGroup(ctx context.Context) error {
 }
 
 func defaultMenus() []menuSeed {
-	return []menuSeed{{ID: 1, ParentID: 0, Name: "员工管理", Code: "admin.list", MenuLevel: 1, Status: 1, SuperOnly: 0, Sort: 1}, {ID: 2, ParentID: 0, Name: "用户组与授权", Code: "admin.department", MenuLevel: 1, Status: 1, SuperOnly: 0, Sort: 2}, {ID: 3, ParentID: 0, Name: "操作日志", Code: "admin.action", MenuLevel: 1, Status: 1, SuperOnly: 0, Sort: 3}, {ID: 4, ParentID: 0, Name: "登录日志", Code: "admin.loginlog", MenuLevel: 1, Status: 1, SuperOnly: 0, Sort: 4}, {ID: 5, ParentID: 0, Name: "主体配置", Code: "subject.manage", MenuLevel: 1, Status: 1, SuperOnly: 0, Sort: 5}, {ID: 6, ParentID: 0, Name: "短信配置", Code: "config.sms", MenuLevel: 1, Status: 1, SuperOnly: 1, Sort: 6}}
+	return []menuSeed{
+		{ID: 1, ParentID: 0, Name: "员工管理", Code: "admin.list", MenuLevel: 1, Status: 1, SuperOnly: 0, Sort: 1},
+		{ID: 2, ParentID: 0, Name: "用户组与授权", Code: "admin.department", MenuLevel: 1, Status: 1, SuperOnly: 0, Sort: 2},
+		{ID: 3, ParentID: 0, Name: "操作日志", Code: "admin.action", MenuLevel: 1, Status: 1, SuperOnly: 0, Sort: 3},
+		{ID: 4, ParentID: 0, Name: "登录日志", Code: "admin.loginlog", MenuLevel: 1, Status: 1, SuperOnly: 0, Sort: 4},
+		{ID: 5, ParentID: 0, Name: "主体配置", Code: "subject.manage", MenuLevel: 1, Status: 1, SuperOnly: 0, Sort: 5},
+		{ID: 6, ParentID: 0, Name: "短信配置", Code: "config.sms", MenuLevel: 1, Status: 1, SuperOnly: 1, Sort: 6},
+		{ID: 7, ParentID: 0, Name: "品牌管理", Code: "product.brand", MenuLevel: 1, Status: 1, SuperOnly: 0, Sort: 7},
+		{ID: 8, ParentID: 0, Name: "行业管理", Code: "product.industry", MenuLevel: 1, Status: 1, SuperOnly: 0, Sort: 8},
+	}
 }
 
 func (c *Core) ensureMenus(ctx context.Context) error {
@@ -134,14 +143,14 @@ func (c *Core) ensureMenus(ctx context.Context) error {
 }
 
 func (c *Core) ensureDefaultGroupAuth(ctx context.Context) error {
-	exists, err := c.DB().GetCore().GetValue(ctx, `SELECT COUNT(*) FROM admin_group_menu WHERE group_id = 1`)
-	if err != nil {
-		return err
-	}
-	if exists.Int() > 0 {
-		return nil
-	}
-	for _, menuID := range []int64{1, 2, 3, 4, 5} {
+	for _, menuID := range []int64{1, 2, 3, 4, 5, 7, 8} {
+		exists, err := c.DB().GetCore().GetValue(ctx, `SELECT COUNT(*) FROM admin_group_menu WHERE group_id = 1 AND menu_id = ?`, menuID)
+		if err != nil {
+			return err
+		}
+		if exists.Int() > 0 {
+			continue
+		}
 		if _, err = c.DB().Exec(ctx, `INSERT INTO admin_group_menu (group_id, menu_id, created_at) VALUES (1, ?, ?)`, menuID, c.now()); err != nil {
 			return err
 		}

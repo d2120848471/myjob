@@ -46,6 +46,30 @@ type SubjectService interface {
 	Edit(ctx context.Context, req *adminapi.SubjectUpdateReq, actor entity.AdminUser, ip string) (*adminapi.SubjectUpdateRes, error)
 }
 
+type BrandService interface {
+	List(ctx context.Context, req *adminapi.BrandListReq) (*adminapi.BrandListRes, error)
+	Children(ctx context.Context, req *adminapi.BrandChildrenReq) (*adminapi.BrandChildrenRes, error)
+	Add(ctx context.Context, req *adminapi.BrandCreateReq, actor entity.AdminUser, ip string) (*adminapi.BrandCreateRes, error)
+	Edit(ctx context.Context, req *adminapi.BrandUpdateReq, actor entity.AdminUser, ip string) (*adminapi.BrandUpdateRes, error)
+	Delete(ctx context.Context, req *adminapi.BrandDeleteReq, actor entity.AdminUser, ip string) (*adminapi.BrandDeleteRes, error)
+	Sort(ctx context.Context, req *adminapi.BrandSortReq, actor entity.AdminUser, ip string) (*adminapi.BrandSortRes, error)
+	Visibility(ctx context.Context, req *adminapi.BrandVisibilityReq, actor entity.AdminUser, ip string) (*adminapi.BrandVisibilityRes, error)
+	Upload(ctx context.Context, req *adminapi.BrandUploadReq, actor entity.AdminUser, ip string) (*adminapi.BrandUploadRes, error)
+}
+
+type IndustryService interface {
+	List(ctx context.Context, req *adminapi.IndustryListReq) (*adminapi.IndustryListRes, error)
+	Add(ctx context.Context, req *adminapi.IndustryCreateReq, actor entity.AdminUser, ip string) (*adminapi.IndustryCreateRes, error)
+	Edit(ctx context.Context, req *adminapi.IndustryUpdateReq, actor entity.AdminUser, ip string) (*adminapi.IndustryUpdateRes, error)
+	Delete(ctx context.Context, req *adminapi.IndustryDeleteReq, actor entity.AdminUser, ip string) (*adminapi.IndustryDeleteRes, error)
+	Sort(ctx context.Context, req *adminapi.IndustrySortReq, actor entity.AdminUser, ip string) (*adminapi.IndustrySortRes, error)
+	BrandSelector(ctx context.Context, req *adminapi.IndustryBrandSelectorReq) (*adminapi.IndustryBrandSelectorRes, error)
+	BrandList(ctx context.Context, req *adminapi.IndustryBrandListReq) (*adminapi.IndustryBrandListRes, error)
+	BrandAdd(ctx context.Context, req *adminapi.IndustryBrandAddReq, actor entity.AdminUser, ip string) (*adminapi.IndustryBrandAddRes, error)
+	BrandDelete(ctx context.Context, req *adminapi.IndustryBrandDeleteReq, actor entity.AdminUser, ip string) (*adminapi.IndustryBrandDeleteRes, error)
+	BrandSort(ctx context.Context, req *adminapi.IndustryBrandSortReq, actor entity.AdminUser, ip string) (*adminapi.IndustryBrandSortRes, error)
+}
+
 type SMSConfigService interface {
 	Get(ctx context.Context, req *adminapi.SettingsSMSGetReq) (*adminapi.SettingsSMSGetRes, error)
 	Save(ctx context.Context, req *adminapi.SettingsSMSSaveReq, actor entity.AdminUser, ip string) (*adminapi.SettingsSMSSaveRes, error)

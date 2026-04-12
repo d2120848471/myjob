@@ -53,6 +53,9 @@ func NewTestCore() (*Core, error) {
 	cfg.Bootstrap.SuperAdminPassword = "Admin_123"
 	cfg.SMS.Provider = "mock"
 	cfg.Audit.Async = false
+	cfg.Upload.LocalDir = filepath.Join(os.TempDir(), fmt.Sprintf("myjob-upload-%d", time.Now().UnixNano()))
+	cfg.Upload.PublicPrefix = "/uploads"
+	cfg.Upload.MaxImageSizeMB = 2
 
 	tmpFile, err := os.CreateTemp("", "myjob-admin-*.db")
 	if err != nil {
@@ -78,6 +81,7 @@ func NewTestCore() (*Core, error) {
 		return nil, err
 	}
 	core.tempDBFile = tmpFile.Name()
+	core.tempUploadDir = cfg.Upload.LocalDir
 	core.miniRedis = mr
 	return core, nil
 }
@@ -215,6 +219,9 @@ func (c *Core) Close() error {
 	}
 	if c.tempDBFile != "" {
 		_ = os.Remove(c.tempDBFile)
+	}
+	if c.tempUploadDir != "" {
+		_ = os.RemoveAll(c.tempUploadDir)
 	}
 	return err
 }

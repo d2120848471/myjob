@@ -16,6 +16,14 @@ type UserListItem = entity.UserListItem
 
 type SubjectItem = entity.AdminSubject
 
+type BrandListItem = entity.BrandListItem
+
+type IndustryListItem = entity.IndustryListItem
+
+type IndustryBrandRelationItem = entity.IndustryBrandRelationItem
+
+type BrandSelectorItem = entity.BrandSelectorItem
+
 type MenuItem = entity.AdminMenu
 
 type OperationLogItem = entity.OperationLog

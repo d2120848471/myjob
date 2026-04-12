@@ -58,6 +58,37 @@
   - 新增主体
   - 编辑主体
 
+### 品牌管理
+
+- 协议：`api/brand.go`
+- controller：`internal/controller/admin/brand.go`
+- service：`BrandService`
+- logic：`internal/logic/admin/brand.go`
+- 路由前缀：`/api/admin/brands*`
+- 主要能力：
+  - 一级品牌分页与搜索
+  - 二级品牌懒加载
+  - 新增 / 编辑 / 删除
+  - 同级排序与显隐切换
+  - 本地图片上传
+- 权限边界：
+  - 品牌接口统一要求 `product.brand`
+
+### 行业管理
+
+- 协议：`api/industry.go`
+- controller：`internal/controller/admin/industry.go`
+- service：`IndustryService`
+- logic：`internal/logic/admin/industry.go`
+- 路由前缀：`/api/admin/industries*`
+- 主要能力：
+  - 行业列表、增删改、排序
+  - 品牌选择器
+  - 行业品牌关联增删排序
+  - 行业删除 / 品牌删除前的关联校验
+- 权限边界：
+  - 行业接口统一要求 `product.industry`
+
 ### 短信配置
 
 - 协议：`api/settings.go`
@@ -93,7 +124,9 @@
 
 - `auth.go`
 - `common.go`
+- `brand.go`
 - `group.go`
+- `industry.go`
 - `log.go`
 - `settings.go`
 - `subject.go`
@@ -124,6 +157,8 @@ HTTP 协议适配层，不直接写业务规则。
 - `user.go`
 - `group.go`
 - `subject.go`
+- `brand.go`
+- `industry.go`
 - `config.go`
 - `log.go`
 
@@ -175,6 +210,8 @@ HTTP 协议适配层，不直接写业务规则。
 | 员工管理 | `/api/admin/users*` | `admin.list` |
 | 用户组与授权 | `/api/admin/groups*`、`/api/admin/menus/tree` | `admin.department` |
 | 主体管理 | `/api/admin/subjects*` | `subject.manage` |
+| 品牌管理 | `/api/admin/brands*` | `product.brand` |
+| 行业管理 | `/api/admin/industries*` | `product.industry` |
 | 短信配置 | `/api/admin/settings/sms` | super-only |
 | 操作日志 | `/api/admin/logs/operations` | `admin.action` |
 | 登录日志 | `/api/admin/logs/logins` | `admin.loginlog` |

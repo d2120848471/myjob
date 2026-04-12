@@ -42,6 +42,7 @@ type Core struct {
 	regionResolver region.RegionResolver
 	auditWriter    *audit.Writer
 	tempDBFile     string
+	tempUploadDir  string
 	miniRedis      *miniredis.Miniredis
 }
 
@@ -56,6 +57,18 @@ type GroupListItem = entity.GroupListItem
 type AdminMenu = entity.AdminMenu
 
 type AdminSubject = entity.AdminSubject
+
+type ProductBrand = entity.ProductBrand
+
+type BrandListItem = entity.BrandListItem
+
+type ProductIndustry = entity.ProductIndustry
+
+type IndustryListItem = entity.IndustryListItem
+
+type IndustryBrandRelationItem = entity.IndustryBrandRelationItem
+
+type BrandSelectorItem = entity.BrandSelectorItem
 
 type OperationLog = entity.OperationLog
 

@@ -71,6 +71,44 @@ CREATE TABLE IF NOT EXISTS admin_subject (
     created_at DATETIME NOT NULL,
     updated_at DATETIME NOT NULL
 );
+CREATE TABLE IF NOT EXISTS product_brand (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    parent_id INTEGER NOT NULL DEFAULT 0,
+    name TEXT NOT NULL,
+    icon TEXT NOT NULL DEFAULT '',
+    credential_image TEXT NOT NULL DEFAULT '',
+    description TEXT,
+    is_visible INTEGER NOT NULL DEFAULT 1,
+    sort INTEGER NOT NULL DEFAULT 0,
+    goods_count INTEGER NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    UNIQUE(parent_id, name)
+);
+CREATE INDEX IF NOT EXISTS idx_product_brand_parent_sort
+    ON product_brand(parent_id, sort, id);
+CREATE TABLE IF NOT EXISTS product_industry (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    sort INTEGER NOT NULL DEFAULT 0,
+    brand_count INTEGER NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_product_industry_sort
+    ON product_industry(sort, id);
+CREATE TABLE IF NOT EXISTS product_industry_brand (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    industry_id INTEGER NOT NULL,
+    brand_id INTEGER NOT NULL,
+    sort INTEGER NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL,
+    UNIQUE(industry_id, brand_id)
+);
+CREATE INDEX IF NOT EXISTS idx_product_industry_brand_sort
+    ON product_industry_brand(industry_id, sort, id);
+CREATE INDEX IF NOT EXISTS idx_product_industry_brand_brand
+    ON product_industry_brand(brand_id);
 CREATE TABLE IF NOT EXISTS system_config (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     config_key TEXT NOT NULL UNIQUE,
@@ -155,6 +193,41 @@ CREATE TABLE IF NOT EXISTS admin_subject (
     has_tax TINYINT NOT NULL DEFAULT 0,
     created_at DATETIME NOT NULL,
     updated_at DATETIME NOT NULL
+);
+CREATE TABLE IF NOT EXISTS product_brand (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    parent_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    name VARCHAR(100) NOT NULL,
+    icon VARCHAR(500) NOT NULL DEFAULT '',
+    credential_image VARCHAR(500) NOT NULL DEFAULT '',
+    description TEXT NULL,
+    is_visible TINYINT NOT NULL DEFAULT 1,
+    sort INT NOT NULL DEFAULT 0,
+    goods_count INT NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    UNIQUE KEY uk_product_brand_parent_name (parent_id, name),
+    KEY idx_product_brand_parent_sort (parent_id, sort, id)
+);
+CREATE TABLE IF NOT EXISTS product_industry (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    sort INT NOT NULL DEFAULT 0,
+    brand_count INT NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    UNIQUE KEY uk_product_industry_name (name),
+    KEY idx_product_industry_sort (sort, id)
+);
+CREATE TABLE IF NOT EXISTS product_industry_brand (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    industry_id BIGINT UNSIGNED NOT NULL,
+    brand_id BIGINT UNSIGNED NOT NULL,
+    sort INT NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL,
+    UNIQUE KEY uk_product_industry_brand (industry_id, brand_id),
+    KEY idx_product_industry_brand_sort (industry_id, sort, id),
+    KEY idx_product_industry_brand_brand (brand_id)
 );
 CREATE TABLE IF NOT EXISTS system_config (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,

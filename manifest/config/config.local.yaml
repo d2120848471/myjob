@@ -21,3 +21,7 @@ sms:
 audit:
   async: false
   buffer_size: 16
+upload:
+  local_dir: "storage/uploads"
+  public_prefix: "/uploads"
+  max_image_size_mb: 2
