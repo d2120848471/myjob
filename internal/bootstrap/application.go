@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"myjob/internal/app"
@@ -32,7 +34,12 @@ func NewApplicationFromConfig(cfg modelconfig.Config) (*Application, error) {
 	if err != nil {
 		return nil, err
 	}
-	return assemble(core), nil
+	appInstance, err := assemble(core)
+	if err != nil {
+		_ = core.Close()
+		return nil, err
+	}
+	return appInstance, nil
 }
 
 func NewApplicationFromEnv() (*Application, error) {
@@ -40,7 +47,12 @@ func NewApplicationFromEnv() (*Application, error) {
 	if err != nil {
 		return nil, err
 	}
-	return assemble(core), nil
+	appInstance, err := assemble(core)
+	if err != nil {
+		_ = core.Close()
+		return nil, err
+	}
+	return appInstance, nil
 }
 
 func NewTestApplication() (*Application, error) {
@@ -48,7 +60,11 @@ func NewTestApplication() (*Application, error) {
 	if err != nil {
 		return nil, err
 	}
-	appInstance := assemble(core)
+	appInstance, err := assemble(core)
+	if err != nil {
+		_ = core.Close()
+		return nil, err
+	}
 	appInstance.server.SetAddr("127.0.0.1:0")
 	if err = appInstance.server.Start(); err != nil {
 		_ = core.Close()
@@ -57,13 +73,15 @@ func NewTestApplication() (*Application, error) {
 	return appInstance, nil
 }
 
-func assemble(core *app.Core) *Application {
+func assemble(core *app.Core) (*Application, error) {
 	services := adminlogic.NewServices(core)
 	authCtrl := admincontroller.NewAuth(services.Auth)
 	sessionCtrl := admincontroller.NewSession(services.Auth)
 	userCtrl := admincontroller.NewUser(services.User)
 	groupCtrl := admincontroller.NewGroup(services.Group)
 	subjectCtrl := admincontroller.NewSubject(services.Subject)
+	brandCtrl := admincontroller.NewBrand(services.Brand)
+	industryCtrl := admincontroller.NewIndustry(services.Industry)
 	settingsCtrl := admincontroller.NewSettings(services.SMSConfig)
 	operationLogCtrl := admincontroller.NewOperationLog(services.AuditLog)
 	loginLogCtrl := admincontroller.NewLoginLog(services.AuditLog)
@@ -74,6 +92,9 @@ func assemble(core *app.Core) *Application {
 	s.SetOpenApiPath("/api.json")
 	s.SetSwaggerPath("/swagger")
 	configureOpenAPI(s)
+	if err := mountUploadStaticPath(s, core.Config().Upload); err != nil {
+		return nil, err
+	}
 
 	s.Group("/api/admin", func(group *ghttp.RouterGroup) {
 		group.Middleware(middleware.Response)
@@ -96,6 +117,14 @@ func assemble(core *app.Core) *Application {
 			group.Bind(subjectCtrl)
 		})
 		group.Group("", func(group *ghttp.RouterGroup) {
+			group.Middleware(guard.Require("product.brand", false))
+			group.Bind(brandCtrl)
+		})
+		group.Group("", func(group *ghttp.RouterGroup) {
+			group.Middleware(guard.Require("product.industry", false))
+			group.Bind(industryCtrl)
+		})
+		group.Group("", func(group *ghttp.RouterGroup) {
 			group.Middleware(guard.Require("", true))
 			group.Bind(settingsCtrl)
 		})
@@ -109,7 +138,18 @@ func assemble(core *app.Core) *Application {
 		})
 	})
 
-	return &Application{core: core, server: s}
+	return &Application{core: core, server: s}, nil
+}
+
+func mountUploadStaticPath(s *ghttp.Server, cfg modelconfig.UploadConfig) error {
+	if strings.TrimSpace(cfg.PublicPrefix) == "" {
+		return nil
+	}
+	if err := os.MkdirAll(cfg.LocalDir, 0o755); err != nil {
+		return fmt.Errorf("初始化上传目录失败: %w", err)
+	}
+	s.AddStaticPath(cfg.PublicPrefix, cfg.LocalDir)
+	return nil
 }
 
 func configureOpenAPI(s *ghttp.Server) {

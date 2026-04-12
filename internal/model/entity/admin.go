@@ -74,6 +74,68 @@ type AdminSubject struct {
 	UpdatedAt time.Time `db:"updated_at" json:"updated_at"`
 }
 
+type ProductBrand struct {
+	ID              int64     `db:"id" json:"id"`
+	ParentID        int64     `db:"parent_id" json:"parent_id"`
+	Name            string    `db:"name" json:"name"`
+	Icon            string    `db:"icon" json:"icon"`
+	CredentialImage string    `db:"credential_image" json:"credential_image"`
+	Description     string    `db:"description" json:"description"`
+	IsVisible       int       `db:"is_visible" json:"is_visible"`
+	Sort            int       `db:"sort" json:"sort"`
+	GoodsCount      int       `db:"goods_count" json:"goods_count"`
+	CreatedAt       time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt       time.Time `db:"updated_at" json:"updated_at"`
+}
+
+type BrandListItem struct {
+	ID              int64           `db:"id" json:"id"`
+	ParentID        int64           `db:"parent_id" json:"parent_id"`
+	Name            string          `db:"name" json:"name"`
+	Icon            string          `db:"icon" json:"icon"`
+	CredentialImage string          `db:"credential_image" json:"credential_image"`
+	Description     string          `db:"description" json:"description"`
+	IsVisible       int             `db:"is_visible" json:"is_visible"`
+	Sort            int             `db:"sort" json:"sort"`
+	GoodsCount      int             `db:"goods_count" json:"goods_count"`
+	HasChildren     bool            `db:"has_children" json:"has_children"`
+	Children        []BrandListItem `json:"children"`
+	CreatedAt       time.Time       `db:"created_at" json:"created_at"`
+	UpdatedAt       time.Time       `db:"updated_at" json:"updated_at"`
+}
+
+type ProductIndustry struct {
+	ID         int64     `db:"id" json:"id"`
+	Name       string    `db:"name" json:"name"`
+	Sort       int       `db:"sort" json:"sort"`
+	BrandCount int       `db:"brand_count" json:"brand_count"`
+	CreatedAt  time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt  time.Time `db:"updated_at" json:"updated_at"`
+}
+
+type IndustryListItem struct {
+	ID         int64     `db:"id" json:"id"`
+	Name       string    `db:"name" json:"name"`
+	Sort       int       `db:"sort" json:"sort"`
+	BrandCount int       `db:"brand_count" json:"brand_count"`
+	CreatedAt  time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt  time.Time `db:"updated_at" json:"updated_at"`
+}
+
+type IndustryBrandRelationItem struct {
+	ID        int64  `db:"id" json:"id"`
+	BrandID   int64  `db:"brand_id" json:"brand_id"`
+	BrandName string `db:"brand_name" json:"brand_name"`
+	BrandIcon string `db:"brand_icon" json:"brand_icon"`
+	Sort      int    `db:"sort" json:"sort"`
+}
+
+type BrandSelectorItem struct {
+	ID   int64  `db:"id" json:"id"`
+	Name string `db:"name" json:"name"`
+	Icon string `db:"icon" json:"icon"`
+}
+
 type OperationLog struct {
 	ID          int64     `db:"id" json:"id"`
 	AdminID     int64     `db:"admin_id" json:"admin_id"`

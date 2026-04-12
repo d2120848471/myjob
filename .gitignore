@@ -42,6 +42,7 @@ bin/
 
 # Workspace-specific generated directories
 admin/admin/
+storage/uploads/
 
 # Local sensitive docs
 需求文档_登录与权限系统.md

@@ -18,6 +18,7 @@ type Config struct {
 	Bootstrap BootstrapConfig  `json:"bootstrap" yaml:"bootstrap"`
 	SMS       RuntimeSMSConfig `json:"sms" yaml:"sms"`
 	Audit     AuditConfig      `json:"audit" yaml:"audit"`
+	Upload    UploadConfig     `json:"upload" yaml:"upload"`
 }
 
 type ServerConfig struct {
@@ -56,6 +57,12 @@ type AuditConfig struct {
 	BufferSize int  `json:"buffer_size" yaml:"buffer_size"`
 }
 
+type UploadConfig struct {
+	LocalDir       string `json:"local_dir" yaml:"local_dir"`
+	PublicPrefix   string `json:"public_prefix" yaml:"public_prefix"`
+	MaxImageSizeMB int    `json:"max_image_size_mb" yaml:"max_image_size_mb"`
+}
+
 func Default() Config {
 	return Config{
 		AppEnv: "dev",
@@ -69,6 +76,7 @@ func Default() Config {
 		Bootstrap: BootstrapConfig{SuperAdminUsername: "admin"},
 		SMS:       RuntimeSMSConfig{Provider: "aliyun"},
 		Audit:     AuditConfig{Async: true, BufferSize: 128},
+		Upload:    UploadConfig{LocalDir: "storage/uploads", PublicPrefix: "/uploads", MaxImageSizeMB: 2},
 	}
 }
 
@@ -103,6 +111,8 @@ func normalize(cfg *Config) {
 	cfg.Bootstrap.SuperAdminPhone = strings.TrimSpace(expand(cfg.Bootstrap.SuperAdminPhone))
 	cfg.Bootstrap.SuperAdminPassword = strings.TrimSpace(expand(cfg.Bootstrap.SuperAdminPassword))
 	cfg.SMS.Provider = strings.TrimSpace(expand(cfg.SMS.Provider))
+	cfg.Upload.LocalDir = expand(cfg.Upload.LocalDir)
+	cfg.Upload.PublicPrefix = strings.TrimSpace(expand(cfg.Upload.PublicPrefix))
 	if cfg.Database.Driver == "" {
 		cfg.Database.Driver = "mysql"
 	}
@@ -117,6 +127,22 @@ func normalize(cfg *Config) {
 	}
 	if cfg.Audit.BufferSize <= 0 {
 		cfg.Audit.BufferSize = 128
+	}
+	if cfg.Upload.LocalDir == "" {
+		cfg.Upload.LocalDir = "storage/uploads"
+	}
+	if cfg.Upload.PublicPrefix == "" {
+		cfg.Upload.PublicPrefix = "/uploads"
+	}
+	if !strings.HasPrefix(cfg.Upload.PublicPrefix, "/") {
+		cfg.Upload.PublicPrefix = "/" + cfg.Upload.PublicPrefix
+	}
+	cfg.Upload.PublicPrefix = strings.TrimRight(cfg.Upload.PublicPrefix, "/")
+	if cfg.Upload.PublicPrefix == "" {
+		cfg.Upload.PublicPrefix = "/uploads"
+	}
+	if cfg.Upload.MaxImageSizeMB <= 0 {
+		cfg.Upload.MaxImageSizeMB = 2
 	}
 	if cfg.Bootstrap.SuperAdminUsername == "" {
 		cfg.Bootstrap.SuperAdminUsername = "admin"
