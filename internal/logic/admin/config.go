@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	v1 "myjob/api/admin/v1"
+	adminapi "myjob/api"
 	"myjob/internal/app"
 	"myjob/internal/consts"
 	authlib "myjob/internal/library/auth"
@@ -17,12 +17,12 @@ import (
 
 type SMSConfigLogic struct{ core *app.Core }
 
-func (l *SMSConfigLogic) Get(ctx context.Context, _ *v1.SettingsSMSGetReq) (*v1.SettingsSMSGetRes, error) {
+func (l *SMSConfigLogic) Get(ctx context.Context, _ *adminapi.SettingsSMSGetReq) (*adminapi.SettingsSMSGetRes, error) {
 	state, err := l.core.LoadSMSConfigState(ctx)
 	if err != nil {
 		return nil, apiErr(consts.CodeInternalError, "短信配置读取失败")
 	}
-	resp := &v1.SettingsSMSGetRes{
+	resp := &adminapi.SettingsSMSGetRes{
 		AccessKeyMasked:           app.MaskAccessKey(state.Config.AccessKey),
 		AccessKeySecretMasked:     app.MaskSecret(state.Config.AccessKeySecret),
 		AccessKeyConfigured:       state.AccessKeyConfigured,
@@ -38,7 +38,7 @@ func (l *SMSConfigLogic) Get(ctx context.Context, _ *v1.SettingsSMSGetReq) (*v1.
 	return resp, nil
 }
 
-func (l *SMSConfigLogic) Save(ctx context.Context, req *v1.SettingsSMSSaveReq, actor app.AdminUser, ip string) (*v1.SettingsSMSSaveRes, error) {
+func (l *SMSConfigLogic) Save(ctx context.Context, req *adminapi.SettingsSMSSaveReq, actor app.AdminUser, ip string) (*adminapi.SettingsSMSSaveRes, error) {
 	state, err := l.core.LoadSMSConfigState(ctx)
 	if err != nil {
 		return nil, apiErr(consts.CodeInternalError, "短信配置读取失败")
@@ -52,10 +52,10 @@ func (l *SMSConfigLogic) Save(ctx context.Context, req *v1.SettingsSMSSaveReq, a
 	}
 	_, _ = l.core.Redis().GroupGeneric().Del(ctx, authlib.SMSConfigCacheKey())
 	l.core.WriteOperation(ctx, actor, logDesc, ip)
-	return &v1.SettingsSMSSaveRes{}, nil
+	return &adminapi.SettingsSMSSaveRes{}, nil
 }
 
-func mergeSMSConfigSave(current modelruntime.SMSConfigState, req *v1.SettingsSMSSaveReq) (modelruntime.SMSConfig, string, error) {
+func mergeSMSConfigSave(current modelruntime.SMSConfigState, req *adminapi.SettingsSMSSaveReq) (modelruntime.SMSConfig, string, error) {
 	req.AccessKey = strings.TrimSpace(req.AccessKey)
 	req.AccessKeySecret = strings.TrimSpace(req.AccessKeySecret)
 	req.SignName = strings.TrimSpace(req.SignName)

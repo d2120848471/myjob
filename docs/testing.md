@@ -1,56 +1,95 @@
 # 测试说明
 
-## 测试分层
+## 当前测试分层
 
-### 1. 就近单元测试
+### 1. 契约测试
 
-适用于纯逻辑或基础能力：
+契约测试位于 `test/contract/`，当前是最主要的接口回归入口。
+它通过 `NewTestApplication()` 启动应用，底层使用：
 
-- `internal/logic/admin/*_test.go`
-- `internal/library/*/*_test.go`
-- 需要测试包内细节时，可配合 `testdata/`
+- 临时 SQLite 文件
+- `miniredis`
+- `mock` 短信 sender
 
-### 2. 契约测试
+当前已覆盖的重点包括：
 
-放在 `test/contract/`，用于验证对外接口兼容性和核心业务流：
+- 扁平 `api/*.go` 协议目录约束
+- 禁止继续引用历史 历史嵌套协议包路径
+- OpenAPI / Swagger 暴露
+- 统一响应 `message` 字段
+- 登录 / 短信二验 / `me` / 退出登录
+- 员工、用户组、主体、短信配置、日志查询主流程
+- 短信发送失败时 Redis 清理行为
 
-- 登录
-- 短信发送 / 验证
-- `me`
-- 退出登录
-- 用户、用户组、主体、短信配置、日志查询等关键流程
-
-当前契约测试入口是：
+运行命令：
 
 ```bash
 go test ./test/contract -count=1 -timeout 60s
 ```
 
-### 3. 集成测试
+### 2. 集成测试
 
-放在 `test/integration/`，只验证真实依赖联动：
+集成测试位于 `test/integration/`。
+当前这里只有一个 runtime smoke test，不是完整的外部依赖回归套件。
 
-- MySQL / Redis 连通性
-- 根应用配置加载
-- 超级管理员引导
-- 会话、短信验证码、日志落库等闭环
+它当前验证的是：
 
-这类测试默认通过环境开关显式开启，避免开发机每次全量测试都强依赖外部服务。
+- 按真实配置创建应用
+- 启动 HTTP server
+- 使用超级管理员密码完成一次 `/api/admin/auth/login` 请求
+- 确认接口能返回成功响应
 
-## 默认验收命令
+它需要显式开启：
+
+```bash
+export MYJOB_RUN_INTEGRATION=1
+export SUPER_ADMIN_PHONE=13800000000
+export SUPER_ADMIN_PASSWORD=Admin_123
+go test ./test/integration -count=1 -timeout 60s
+```
+
+如果没有设置环境变量，这个测试会跳过，而不是失败。
+
+### 3. 包内测试
+
+当前仓库里已经有的包内测试主要集中在基础能力层，例如：
+
+- `internal/library/region`
+- `internal/library/sms`
+
+适用于纯逻辑或基础库的回归验证。
+
+## 推荐执行顺序
+
+### 日常改动
 
 ```bash
 go test ./... -count=1 -timeout 60s
-go build ./...
 ```
 
-## Fixture 约定
+### 影响接口兼容时
 
-- `test/fixture/`：跨包共享的测试样例和说明
-- `testdata/`：只服务于单个包的本地样例数据
+```bash
+go test ./test/contract -count=1 -timeout 60s
+```
 
-## 建议执行顺序
+### 影响真实配置或启动链路时
 
-1. 改动基础逻辑时先跑就近单元测试
-2. 影响接口兼容时跑 `test/contract`
-3. 修改配置、SQL、缓存、日志链路时再跑 `test/integration`
+```bash
+export MYJOB_RUN_INTEGRATION=1
+export SUPER_ADMIN_PHONE=13800000000
+export SUPER_ADMIN_PASSWORD=Admin_123
+go test ./test/integration -count=1 -timeout 60s
+```
+
+## 当前认知边界
+
+目前文档只描述已经存在的测试覆盖，不把“建议补的测试”写成“已经覆盖”。
+
+当前尚未形成完整外部依赖闭环测试集的内容包括但不限于：
+
+- 更细的 MySQL / Redis 行为断言
+- 短信 provider 的真实发送链路回归
+- 更完整的日志落库和跨重启验证
+
+这些仍属于后续可继续扩充的范围，而不是当前已有事实。

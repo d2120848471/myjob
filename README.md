@@ -1,75 +1,119 @@
 # MyJob Admin Backend
 
-MyJob Admin Backend 是一个以仓库根为主应用入口的 GoFrame 单体后台项目，
-目标是把原来那套手写后端迁到仓库根主应用中，整理成更适合企业协作的
-标准目录、职责边界和工程化交付形态。
+MyJob Admin Backend 是当前仓库根目录下运行的 GoFrame 单体后台项目。
+当前代码已经不再依赖历史 `admin/` 子工程；仓库根就是唯一需要维护、启动和发布的后端入口。
 
-## 项目定位
+## 当前状态
 
-- 运行入口在仓库根：`main.go` + `internal/cmd`
-- HTTP 接口继续兼容既有后台路径，默认保持 `code / msg / data` 响应包裹
-- 内部职责按 `api -> controller -> service -> logic -> kernel/dao/model -> library`
-  分层，避免再回到“大一统 app 层”
-- 当前仓库只保留一套主代码，运行入口和维护入口都在仓库根
+- 主入口在仓库根：`main.go` -> `internal/cmd` -> `internal/bootstrap`
+- HTTP 接口统一挂在 `/api/admin`
+- 统一响应格式为 `code / message / data`
+- 运行时默认使用 MySQL + Redis，配置来源是 `manifest/config/config.local.yaml` 或 `ADMIN_CONFIG`
+- OpenAPI 文档默认暴露在 `/api.json`，Swagger UI 默认暴露在 `/swagger/`
+
+## 当前功能概览
+
+### 认证与会话
+
+- 支持账号密码登录
+- 当用户是首次登录，或本次登录 IP 与上次登录 IP 不一致时，登录接口会返回：
+  - `need_sms_verify=true`
+  - `login_token`
+  - 脱敏手机号 `phone`
+  - 触发原因 `reason`，当前可能是 `first_login` 或 `ip_changed`
+- 短信二验通过后才会签发正式登录 token
+- 当前登录信息和退出登录都走 `/api/admin/auth/*`
+
+### 短信验证码
+
+- 运行态短信 provider 默认是 `aliyun`
+- 测试态默认使用 `mock` sender
+- 发送验证码前会先写入 Redis 临时验证码和发送锁
+- 如果短信发送失败，会立即删除 Redis 中的验证码和发送锁，避免残留错误登录态
+- 验证码校验错误最多允许 5 次，超限后会清理临时登录态和验证码缓存
+
+### 后台业务能力
+
+- 员工管理：列表、新增、编辑、删除、恢复、启停、余额通知、批量设置/取消商务
+- 用户组与授权：列表、增删改、状态切换、菜单树、菜单授权
+- 主体管理：列表、新增、编辑
+- 短信配置：读取、保存、脱敏展示
+- 审计日志：操作日志、登录日志
+
+### 权限模型
+
+- 超级管理员使用 `group_id = 0`
+- 普通用户按用户组权限码鉴权
+- 短信配置接口是 super-only 能力，普通用户组不会拿到 `config.sms` 菜单授权
+- 用户组授权和菜单树只会暴露 `super_only = 0` 的菜单项
 
 ## 快速开始
 
-### 1. 准备依赖
+### 1. 启动依赖
 
 ```bash
 docker compose up -d mysql redis
+```
+
+### 2. 准备运行时环境变量
+
+```bash
 export SUPER_ADMIN_PHONE=13800000000
 export SUPER_ADMIN_PASSWORD=Admin_123
 ```
 
-### 2. 检查配置
+> 如果配置文件里没有写死超级管理员手机号和密码，运行时必须提供这两个环境变量；否则启动期引导会失败。
 
-默认启动会优先读取下面的配置文件：
+### 3. 检查配置来源
 
-1. `ADMIN_CONFIG` 环境变量指定的路径
-2. `manifest/config/config.local.yaml`
+启动时按下面的顺序加载配置：
 
-如需切换环境：
+1. `ADMIN_CONFIG` 指向的配置文件
+2. 默认回退到 `manifest/config/config.local.yaml`
+
+例如：
 
 ```bash
 export ADMIN_CONFIG=manifest/config/config.local.yaml
 ```
 
-### 3. 启动服务
+### 4. 启动服务
 
 ```bash
 go run .
 ```
 
-默认监听地址来自 `manifest/config/config.local.yaml`，当前配置为 `:8080`。
+默认监听地址来自配置文件，当前本地配置是 `:8080`。
 
-### 4. 运行验证
+### 5. 运行验证
 
 ```bash
 go test ./... -count=1 -timeout 60s
 go build ./...
 ```
 
-## 目录总览
+## 目录说明
 
 ```text
 .
 ├── README.md
-├── docs/
 ├── api/
-│   ├── auth
-│   ├── user
-│   ├── group
-│   ├── subject
-│   ├── config
-│   └── log
+│   ├── auth.go
+│   ├── common.go
+│   ├── group.go
+│   ├── log.go
+│   ├── settings.go
+│   ├── subject.go
+│   └── user.go
+├── docs/
+├── hack/
 ├── internal/
+│   ├── app
 │   ├── bootstrap
 │   ├── cmd
 │   ├── consts
 │   ├── controller/admin
 │   ├── dao
-│   ├── kernel
 │   ├── library
 │   ├── logic/admin
 │   ├── middleware
@@ -78,117 +122,88 @@ go build ./...
 ├── manifest/
 │   ├── config
 │   └── sql
-├── hack/
 ├── resource/
-├── test/
-│   ├── contract
-│   ├── integration
-│   └── fixture
+└── test/
+    ├── contract
+    ├── fixture
+    └── integration
 ```
-
-## 目录职责说明
-
-### 根目录文件
-
-- `README.md`：项目总入口说明，包含启动方式、目录职责、常用命令和协作约定
-- `main.go`：进程启动入口，只负责把执行权交给 `internal/cmd`
-- `go.mod` / `go.sum`：Go 模块依赖定义和锁定文件
-- `docker-compose.yml`：本地真实开发依赖的 MySQL / Redis 容器编排
 
 ### `api/`
 
-`api/` 只放“对外协议结构”，也就是 GoFrame 规范路由使用的请求 / 响应定义，
-不写业务逻辑，不直接访问数据库。
+`api/` 只放对外请求/响应协议定义，不放业务逻辑。
+当前协议目录已经拍平成仓库根下的 `api/*.go`，不再使用历史的 历史嵌套协议包路径。
 
-- `api/admin/v1/auth.go`：登录、短信二验、会话与 `me` 相关协议
-- `api/admin/v1/user.go`：员工列表、新增、编辑、删除、恢复、状态切换、业务账号设置协议
-- `api/admin/v1/group.go`：用户组管理、菜单授权、菜单树相关协议
-- `api/admin/v1/subject.go`：主体列表、新增、编辑相关协议
-- `api/admin/v1/settings.go`：短信配置读写、脱敏展示相关协议
-- `api/admin/v1/log.go`：操作日志、登录日志查询协议
-- `api/admin/v1/common.go`：公共响应结构复用类型
+### `internal/bootstrap`
 
-### `internal/`
+负责把配置、运行时 `Core`、控制器、服务、路由和中间件组装成可运行应用。
 
-`internal/` 是真正的后端实现区，所有业务逻辑、运行时资源和内部能力都在这里。
+### `internal/controller/admin`
 
-- `internal/bootstrap`：应用装配层，负责加载配置、创建 `Core`、注册规范路由、组装 controller / logic / middleware
-- `internal/cmd`：GoFrame 命令入口，负责进程启动，不承载业务逻辑
-- `internal/consts`：状态值、权限相关固定值等通用常量
-- `internal/controller/admin`：HTTP 协议层，使用标准 `Req/Res + error` 签名承接 GoFrame 严格路由
-- `internal/service`：模块接口边界，controller 依赖这里暴露的抽象，不直接碰更深层实现
-- `internal/logic/admin`：业务编排层，负责把权限、规则、流程、数据访问串起来
-- `internal/app`：运行时核心层，管理 GoFrame 配置、DB、Redis、sender、audit、region 等基础资源，并承接当前项目里的通用业务辅助能力
-- `internal/dao`：GoFrame DAO 入口和表级查询模型装配
-- `internal/model`：内部数据模型集合
-  - `internal/model/config`：配置结构体定义
-  - `internal/model/do`：持久化写入 / 条件对象
-  - `internal/model/entity`：数据库实体映射
-  - `internal/model/dto`：内部传输对象、分页对象等
-  - `internal/model/runtime`：运行时上下文、会话、短信配置等模型
-- `internal/middleware`：统一响应、鉴权和授权中间件
-- `internal/library`：跨模块基础能力库
-  - `internal/library/auth`：JWT、Session、Redis key 规则
-  - `internal/library/sms`：短信 provider 抽象和阿里云实现
-  - `internal/library/audit`：操作日志异步 / 同步写入器
-  - `internal/library/region`：IP 归属地解析与手机号/密钥脱敏
+负责 HTTP 协议适配，方法签名统一是 GoFrame 标准 `Req/Res + error`。
 
-### `manifest/`
+### `internal/service`
 
-- `manifest/config`：运行时配置文件目录，当前只保留真实开发配置 `config.local.yaml`
-- `manifest/sql`：初始化 SQL 资源，包含建表、菜单、管理员和系统配置初始化内容
+定义 controller 依赖的服务接口，是模块边界层。
 
-### 文档与接口
+### `internal/logic/admin`
 
-- 服务启动后默认暴露 `/api.json` 和 `/swagger/`
-- HTTP 响应统一为 `code / message / data`
-- 认证、员工、用户组、主体、设置、日志接口统一挂在 `/api/admin`
+负责业务编排和规则控制，调用 `app`、`library` 与数据库访问能力。
 
-### `hack/`
+### `internal/app`
 
-- `hack/bootstrap-admin.sh`：根据环境变量生成超级管理员初始化 SQL
-- `hack/gen-dao.sh`：按当前数据库连接生成 DAO / DO / Entity / table 元数据
+负责运行时核心能力，包括：
 
-### `resource/`
+- 配置加载
+- MySQL / Redis 初始化
+- 会话签发与校验
+- 菜单与种子初始化
+- 短信配置读取
+- IP 归属地解析
+- 审计写入辅助
 
-- `resource/ipdb/ip_region.xdb`：IP 归属地解析库文件，供登录日志和操作日志写入地区信息时使用
+### `internal/library`
 
-### `test/`
+跨模块基础能力库：
 
-`test/` 用来放需要集中管理的测试，而不是散落在业务目录里的包内测试。
+- `auth`：JWT、Redis key、会话存储
+- `sms`：短信 sender 抽象、mock sender、阿里云 sender
+- `audit`：审计日志写入器
+- `region`：IP 归属地解析与脱敏工具
 
-- `test/contract`：接口契约和核心业务流测试，验证登录、短信、用户、用户组、主体、日志等主流程
-- `test/integration`：真实依赖联动测试，验证 MySQL / Redis / 配置加载 / 运行时链路
-- `test/fixture`：测试样例和共享说明文件
+### `manifest/config`
 
-### `docs/`
+当前只保留本地真实开发配置 `config.local.yaml`。
 
-`docs/` 用来承接 README 之外的详细说明，方便新同事在不同场景下快速定位。
+### `manifest/sql`
 
-- `docs/overview.md`：项目背景、目标和兼容约束
-- `docs/architecture.md`：启动链路、分层说明、基础设施说明
-- `docs/module-map.md`：业务模块与目录职责地图
-- `docs/development.md`：开发配置、脚本、初始化和日常命令
-- `docs/testing.md`：测试分层、运行方式和测试放置约定
-- `docs/migration.md`：从旧实现迁移到当前根应用结构的过程说明
+初始化 SQL 资源目录，包含 schema、菜单、超级管理员模板和系统配置种子。
 
-## 常用脚本与资源
+### `hack`
 
-- `hack/bootstrap-admin.sh`：从模板生成超级管理员初始化 SQL
-- `hack/gen-dao.sh`：按当前数据库连接生成 GoFrame DAO / DO / Entity 及表元数据文件
-- `manifest/sql/`：建表、菜单、管理员、配置初始化 SQL
-- `resource/ipdb/ip_region.xdb`：IP 归属地解析库
+- `hack/bootstrap-admin.sh`：根据手机号和 bcrypt hash 生成超级管理员 SQL
+- `hack/gen-dao.sh`：按连接串生成 DAO / DO / Entity / table 元数据
+
+### `test/contract`
+
+契约测试入口，当前主要验证：
+
+- 扁平 API 协议目录
+- 统一响应包裹
+- OpenAPI / Swagger 暴露
+- 登录 / 短信二验 / 会话
+- 员工、用户组、主体、短信配置、日志等核心流程
+
+### `test/integration`
+
+当前只有一个显式环境开关控制的 runtime smoke test。
+它验证应用能按真实配置启动，并完成一次后台登录请求；不是完整的外部依赖闭环回归集。
 
 ## 文档索引
 
-- `docs/overview.md`：项目简介与目标
-- `docs/architecture.md`：启动链路、分层职责、关键基础能力
-- `docs/module-map.md`：模块职责地图
-- `docs/development.md`：开发约束、配置、脚本和日常命令
-- `docs/testing.md`：测试分层和执行方式
-- `docs/migration.md`：从旧实现迁到新根应用的迁移说明
-
-## 迁移状态
-
-- 当前仓库根已经是唯一主运行入口
-- 旧 `admin/` 历史代码已从仓库删除，后续只维护新代码
+- `docs/overview.md`：项目定位与当前功能状态
+- `docs/architecture.md`：启动链路、请求流、认证流、权限与运行时结构
+- `docs/module-map.md`：模块、接口前缀、权限与目录地图
+- `docs/development.md`：开发依赖、配置、脚本和日常命令
+- `docs/testing.md`：测试分层、当前覆盖范围与执行命令
+- `docs/migration.md`：从历史后台迁到当前根应用结构的迁移背景

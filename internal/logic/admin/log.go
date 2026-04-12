@@ -4,14 +4,14 @@ import (
 	"context"
 	"strings"
 
-	v1 "myjob/api/admin/v1"
+	adminapi "myjob/api"
 	"myjob/internal/app"
 	"myjob/internal/consts"
 )
 
 type AuditLogLogic struct{ core *app.Core }
 
-func (l *AuditLogLogic) OperationList(ctx context.Context, req *v1.OperationLogListReq) (*v1.OperationLogListRes, error) {
+func (l *AuditLogLogic) OperationList(ctx context.Context, req *adminapi.OperationLogListReq) (*adminapi.OperationLogListRes, error) {
 	page, pageSize := app.ParsePagination(req.Page, req.PageSize)
 	args := []any{}
 	conditions := []string{"1=1"}
@@ -36,10 +36,10 @@ func (l *AuditLogLogic) OperationList(ctx context.Context, req *v1.OperationLogL
 	if err = l.core.DB().GetCore().GetScan(ctx, &items, `SELECT id, admin_id, admin_name, description, ip, ip_region, created_at FROM admin_operation_log WHERE `+where+` ORDER BY id DESC LIMIT ? OFFSET ?`, queryArgs...); err != nil {
 		return nil, apiErr(consts.CodeInternalError, "操作日志查询失败")
 	}
-	return &v1.OperationLogListRes{List: items, Pagination: v1.PaginationRes{Page: page, PageSize: pageSize, Total: total.Int()}}, nil
+	return &adminapi.OperationLogListRes{List: items, Pagination: adminapi.PaginationRes{Page: page, PageSize: pageSize, Total: total.Int()}}, nil
 }
 
-func (l *AuditLogLogic) LoginList(ctx context.Context, req *v1.LoginLogListReq) (*v1.LoginLogListRes, error) {
+func (l *AuditLogLogic) LoginList(ctx context.Context, req *adminapi.LoginLogListReq) (*adminapi.LoginLogListRes, error) {
 	page, pageSize := app.ParsePagination(req.Page, req.PageSize)
 	args := []any{}
 	conditions := []string{"1=1"}
@@ -60,5 +60,5 @@ func (l *AuditLogLogic) LoginList(ctx context.Context, req *v1.LoginLogListReq) 
 	if err = l.core.DB().GetCore().GetScan(ctx, &items, `SELECT id, admin_id, admin_name, ip, ip_region, created_at FROM admin_login_log WHERE `+where+` ORDER BY id DESC LIMIT ? OFFSET ?`, queryArgs...); err != nil {
 		return nil, apiErr(consts.CodeInternalError, "登录日志查询失败")
 	}
-	return &v1.LoginLogListRes{List: items, Pagination: v1.PaginationRes{Page: page, PageSize: pageSize, Total: total.Int()}}, nil
+	return &adminapi.LoginLogListRes{List: items, Pagination: adminapi.PaginationRes{Page: page, PageSize: pageSize, Total: total.Int()}}, nil
 }

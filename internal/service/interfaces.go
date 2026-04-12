@@ -3,55 +3,55 @@ package service
 import (
 	"context"
 
-	v1 "myjob/api/admin/v1"
+	adminapi "myjob/api"
 	"myjob/internal/model/entity"
 	modelruntime "myjob/internal/model/runtime"
 )
 
 type AuthService interface {
-	Login(ctx context.Context, req *v1.AuthLoginReq, ip string) (*v1.AuthLoginRes, error)
-	LoginSMSSend(ctx context.Context, req *v1.AuthSMSSendReq) (*v1.AuthSMSSendRes, error)
-	LoginSMSVerify(ctx context.Context, req *v1.AuthSMSVerifyReq) (*v1.AuthSMSVerifyRes, error)
-	Me(ctx context.Context, principal modelruntime.Principal, user entity.AdminUser) (*v1.AuthMeRes, error)
-	Logout(ctx context.Context, principal modelruntime.Principal, user entity.AdminUser) (*v1.AuthSessionDeleteRes, error)
+	Login(ctx context.Context, req *adminapi.AuthLoginReq, ip string) (*adminapi.AuthLoginRes, error)
+	LoginSMSSend(ctx context.Context, req *adminapi.AuthSMSSendReq) (*adminapi.AuthSMSSendRes, error)
+	LoginSMSVerify(ctx context.Context, req *adminapi.AuthSMSVerifyReq) (*adminapi.AuthSMSVerifyRes, error)
+	Me(ctx context.Context, principal modelruntime.Principal, user entity.AdminUser) (*adminapi.AuthMeRes, error)
+	Logout(ctx context.Context, principal modelruntime.Principal, user entity.AdminUser) (*adminapi.AuthSessionDeleteRes, error)
 }
 
 type UserService interface {
-	List(ctx context.Context, req *v1.UserListReq) (*v1.UserListRes, error)
-	Trash(ctx context.Context, req *v1.UserTrashReq) (*v1.UserTrashRes, error)
-	Add(ctx context.Context, req *v1.UserCreateReq, actor entity.AdminUser, ip string) (*v1.UserCreateRes, error)
-	Edit(ctx context.Context, req *v1.UserUpdateReq, actor entity.AdminUser, ip string) (*v1.UserUpdateRes, error)
-	Delete(ctx context.Context, req *v1.UserDeleteReq, actor entity.AdminUser, ip string) (*v1.UserDeleteRes, error)
-	Restore(ctx context.Context, req *v1.UserRestoreReq, actor entity.AdminUser, ip string) (*v1.UserRestoreRes, error)
-	Status(ctx context.Context, req *v1.UserStatusReq, actor entity.AdminUser, ip string) (*v1.UserStatusRes, error)
-	Notify(ctx context.Context, req *v1.UserNotifyReq, actor entity.AdminUser, ip string) (*v1.UserNotifyRes, error)
-	SetBusiness(ctx context.Context, req *v1.UserBusinessAssignReq, actor entity.AdminUser, ip string) (*v1.UserBusinessAssignRes, error)
-	CancelBusiness(ctx context.Context, req *v1.UserBusinessCancelReq, actor entity.AdminUser, ip string) (*v1.UserBusinessCancelRes, error)
+	List(ctx context.Context, req *adminapi.UserListReq) (*adminapi.UserListRes, error)
+	Trash(ctx context.Context, req *adminapi.UserTrashReq) (*adminapi.UserTrashRes, error)
+	Add(ctx context.Context, req *adminapi.UserCreateReq, actor entity.AdminUser, ip string) (*adminapi.UserCreateRes, error)
+	Edit(ctx context.Context, req *adminapi.UserUpdateReq, actor entity.AdminUser, ip string) (*adminapi.UserUpdateRes, error)
+	Delete(ctx context.Context, req *adminapi.UserDeleteReq, actor entity.AdminUser, ip string) (*adminapi.UserDeleteRes, error)
+	Restore(ctx context.Context, req *adminapi.UserRestoreReq, actor entity.AdminUser, ip string) (*adminapi.UserRestoreRes, error)
+	Status(ctx context.Context, req *adminapi.UserStatusReq, actor entity.AdminUser, ip string) (*adminapi.UserStatusRes, error)
+	Notify(ctx context.Context, req *adminapi.UserNotifyReq, actor entity.AdminUser, ip string) (*adminapi.UserNotifyRes, error)
+	SetBusiness(ctx context.Context, req *adminapi.UserBusinessAssignReq, actor entity.AdminUser, ip string) (*adminapi.UserBusinessAssignRes, error)
+	CancelBusiness(ctx context.Context, req *adminapi.UserBusinessCancelReq, actor entity.AdminUser, ip string) (*adminapi.UserBusinessCancelRes, error)
 }
 
 type GroupService interface {
-	List(ctx context.Context, req *v1.GroupListReq) (*v1.GroupListRes, error)
-	Add(ctx context.Context, req *v1.GroupCreateReq, actor entity.AdminUser, ip string) (*v1.GroupCreateRes, error)
-	Edit(ctx context.Context, req *v1.GroupUpdateReq, actor entity.AdminUser, ip string) (*v1.GroupUpdateRes, error)
-	Delete(ctx context.Context, req *v1.GroupDeleteReq, actor entity.AdminUser, ip string) (*v1.GroupDeleteRes, error)
-	Status(ctx context.Context, req *v1.GroupStatusReq, actor entity.AdminUser, ip string) (*v1.GroupStatusRes, error)
-	AuthGet(ctx context.Context, req *v1.GroupPermissionsGetReq) (*v1.GroupPermissionsGetRes, error)
-	AuthSave(ctx context.Context, req *v1.GroupPermissionsSaveReq, actor entity.AdminUser, ip string) (*v1.GroupPermissionsSaveRes, error)
-	MenuTree(ctx context.Context, req *v1.MenuTreeReq) (*v1.MenuTreeRes, error)
+	List(ctx context.Context, req *adminapi.GroupListReq) (*adminapi.GroupListRes, error)
+	Add(ctx context.Context, req *adminapi.GroupCreateReq, actor entity.AdminUser, ip string) (*adminapi.GroupCreateRes, error)
+	Edit(ctx context.Context, req *adminapi.GroupUpdateReq, actor entity.AdminUser, ip string) (*adminapi.GroupUpdateRes, error)
+	Delete(ctx context.Context, req *adminapi.GroupDeleteReq, actor entity.AdminUser, ip string) (*adminapi.GroupDeleteRes, error)
+	Status(ctx context.Context, req *adminapi.GroupStatusReq, actor entity.AdminUser, ip string) (*adminapi.GroupStatusRes, error)
+	AuthGet(ctx context.Context, req *adminapi.GroupPermissionsGetReq) (*adminapi.GroupPermissionsGetRes, error)
+	AuthSave(ctx context.Context, req *adminapi.GroupPermissionsSaveReq, actor entity.AdminUser, ip string) (*adminapi.GroupPermissionsSaveRes, error)
+	MenuTree(ctx context.Context, req *adminapi.MenuTreeReq) (*adminapi.MenuTreeRes, error)
 }
 
 type SubjectService interface {
-	List(ctx context.Context, req *v1.SubjectListReq) (*v1.SubjectListRes, error)
-	Add(ctx context.Context, req *v1.SubjectCreateReq, actor entity.AdminUser, ip string) (*v1.SubjectCreateRes, error)
-	Edit(ctx context.Context, req *v1.SubjectUpdateReq, actor entity.AdminUser, ip string) (*v1.SubjectUpdateRes, error)
+	List(ctx context.Context, req *adminapi.SubjectListReq) (*adminapi.SubjectListRes, error)
+	Add(ctx context.Context, req *adminapi.SubjectCreateReq, actor entity.AdminUser, ip string) (*adminapi.SubjectCreateRes, error)
+	Edit(ctx context.Context, req *adminapi.SubjectUpdateReq, actor entity.AdminUser, ip string) (*adminapi.SubjectUpdateRes, error)
 }
 
 type SMSConfigService interface {
-	Get(ctx context.Context, req *v1.SettingsSMSGetReq) (*v1.SettingsSMSGetRes, error)
-	Save(ctx context.Context, req *v1.SettingsSMSSaveReq, actor entity.AdminUser, ip string) (*v1.SettingsSMSSaveRes, error)
+	Get(ctx context.Context, req *adminapi.SettingsSMSGetReq) (*adminapi.SettingsSMSGetRes, error)
+	Save(ctx context.Context, req *adminapi.SettingsSMSSaveReq, actor entity.AdminUser, ip string) (*adminapi.SettingsSMSSaveRes, error)
 }
 
 type AuditLogService interface {
-	OperationList(ctx context.Context, req *v1.OperationLogListReq) (*v1.OperationLogListRes, error)
-	LoginList(ctx context.Context, req *v1.LoginLogListReq) (*v1.LoginLogListRes, error)
+	OperationList(ctx context.Context, req *adminapi.OperationLogListReq) (*adminapi.OperationLogListRes, error)
+	LoginList(ctx context.Context, req *adminapi.LoginLogListReq) (*adminapi.LoginLogListRes, error)
 }

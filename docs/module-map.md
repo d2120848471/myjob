@@ -1,59 +1,180 @@
 # 模块职责地图
 
-## 业务域与服务接口
+## 业务域到实现目录
 
-| 业务域 | service 接口 | controller | logic | 说明 |
-| --- | --- | --- | --- | --- |
-| 登录鉴权 | `AuthService` | `internal/controller/admin/auth.go` | `internal/logic/admin/auth.go` | 账号登录、短信二验、获取 me、退出登录 |
-| 员工管理 | `UserService` | `internal/controller/admin/user.go` | `internal/logic/admin/user.go` | 用户列表、增改删、恢复、状态、业务账号设置 |
-| 用户组 / 授权 | `GroupService` | `internal/controller/admin/group.go` | `internal/logic/admin/group.go` | 用户组 CRUD、菜单授权、菜单树 |
-| 主体管理 | `SubjectService` | `internal/controller/admin/subject.go` | `internal/logic/admin/subject.go` | 主体列表、新增、编辑 |
-| 会话管理 | `AuthService` | `internal/controller/admin/session.go` | `internal/logic/admin/auth.go` | 当前登录态与退出登录 |
-| 短信配置 | `SMSConfigService` | `internal/controller/admin/settings.go` | `internal/logic/admin/config.go` | 短信配置读取、保存与脱敏展示 |
-| 审计日志 | `AuditLogService` | `internal/controller/admin/operation_log.go` / `internal/controller/admin/login_log.go` | `internal/logic/admin/log.go` | 操作日志、登录日志查询 |
+### 认证与会话
 
-## 基础目录职责
+- 协议：`api/auth.go`
+- controller：`internal/controller/admin/auth.go`、`internal/controller/admin/session.go`
+- service：`internal/service/interfaces.go` 中的 `AuthService`
+- logic：`internal/logic/admin/auth.go`
+- 路由前缀：`/api/admin/auth/*`
+- 主要能力：
+  - 账号密码登录
+  - 条件短信二验
+  - 发送验证码 / 校验验证码
+  - 获取当前登录信息
+  - 退出登录
 
-| 目录 | 主要职责 | 备注 |
+### 员工管理
+
+- 协议：`api/user.go`
+- controller：`internal/controller/admin/user.go`
+- service：`UserService`
+- logic：`internal/logic/admin/user.go`
+- 路由前缀：`/api/admin/users*`
+- 主要能力：
+  - 员工列表
+  - 回收站
+  - 新增 / 编辑 / 删除 / 恢复
+  - 启停
+  - 余额通知开关
+  - 批量设置 / 取消商务
+
+### 用户组与授权
+
+- 协议：`api/group.go`
+- controller：`internal/controller/admin/group.go`
+- service：`GroupService`
+- logic：`internal/logic/admin/group.go`
+- 路由前缀：`/api/admin/groups*`、`/api/admin/menus/tree`
+- 主要能力：
+  - 用户组列表、增删改、状态切换
+  - 菜单树
+  - 保存用户组菜单授权
+- 权限边界：
+  - 用户组授权只允许分配 `super_only = 0` 的菜单
+  - 菜单树只返回 `super_only = 0` 的菜单项
+
+### 主体管理
+
+- 协议：`api/subject.go`
+- controller：`internal/controller/admin/subject.go`
+- service：`SubjectService`
+- logic：`internal/logic/admin/subject.go`
+- 路由前缀：`/api/admin/subjects*`
+- 主要能力：
+  - 主体列表
+  - 新增主体
+  - 编辑主体
+
+### 短信配置
+
+- 协议：`api/settings.go`
+- controller：`internal/controller/admin/settings.go`
+- service：`SMSConfigService`
+- logic：`internal/logic/admin/config.go`
+- 路由前缀：`/api/admin/settings/sms`
+- 主要能力：
+  - 读取脱敏后的短信配置状态
+  - 保存阿里云 AccessKey、签名、模板和验证码时效配置
+- 权限边界：
+  - 该模块是 super-only 接口
+  - 普通用户组不会获得 `config.sms` 菜单权限
+
+### 审计日志
+
+- 协议：`api/log.go`
+- controller：`internal/controller/admin/operation_log.go`、`internal/controller/admin/login_log.go`
+- service：`AuditLogService`
+- logic：`internal/logic/admin/log.go`
+- 路由前缀：`/api/admin/logs/*`
+- 主要能力：
+  - 操作日志分页查询
+  - 登录日志分页查询
+  - 支持管理员 ID、时间范围过滤
+  - 操作日志额外支持关键字过滤
+
+## 目录地图
+
+### `api`
+
+对外协议目录，当前是扁平文件结构：
+
+- `auth.go`
+- `common.go`
+- `group.go`
+- `log.go`
+- `settings.go`
+- `subject.go`
+- `user.go`
+
+### `internal/bootstrap`
+
+应用装配层，负责：
+
+- 创建 controller / service / logic 组合
+- 绑定 `/api/admin` 路由
+- 注册统一响应中间件和鉴权中间件
+- 注册 OpenAPI / Swagger
+
+### `internal/controller/admin`
+
+HTTP 协议适配层，不直接写业务规则。
+
+### `internal/service`
+
+模块接口边界层。
+
+### `internal/logic/admin`
+
+业务编排层，当前按业务域拆分为：
+
+- `auth.go`
+- `user.go`
+- `group.go`
+- `subject.go`
+- `config.go`
+- `log.go`
+
+### `internal/app`
+
+运行时核心层，负责配置、依赖初始化、种子引导、公共查询和通用辅助能力。
+
+### `internal/library`
+
+基础能力库：
+
+- `auth`
+- `sms`
+- `audit`
+- `region`
+
+### `internal/model`
+
+当前已使用的模型子目录：
+
+- `config`：配置结构体
+- `do`：写入 / 条件对象
+- `dto/admin`：分页 DTO 等内部传输对象
+- `entity`：数据库实体与查询结果结构
+- `runtime`：登录态、短信配置等运行时模型
+
+### `manifest/config`
+
+运行时配置目录，当前主要是 `config.local.yaml`。
+
+### `manifest/sql`
+
+数据库 schema、菜单种子、超级管理员模板和系统配置种子。
+
+### `test/contract`
+
+契约测试目录，覆盖接口兼容和核心业务流。
+
+### `test/integration`
+
+集成测试目录，当前只有 runtime smoke test。
+
+## 当前路由与权限摘要
+
+| 模块 | 路由前缀 | 进入条件 |
 | --- | --- | --- |
-| `api/admin/v1` | 请求 / 响应协议定义 | 版本化 GoFrame 严格路由协议，不承载业务逻辑 |
-| `internal/bootstrap` | 应用装配、路由绑定、运行入口对接 | 启动链路核心 |
-| `internal/cmd` | GoFrame 命令入口 | 根应用启动命令 |
-| `internal/consts` | 后台通用常量 | 状态值、通用枚举 |
-| `internal/controller/admin` | HTTP 协议层 | 标准 `Req/Res + error` 控制器 |
-| `internal/service` | 模块接口边界 | 供 controller 依赖 |
-| `internal/logic/admin` | 业务编排层 | 组合 app 与 library |
-| `internal/app` | 运行时核心与公共数据能力 | GoFrame 配置 / DB / Redis 入口收口层 |
-| `internal/dao` | GoFrame DAO 模型装配 | 为进一步自动生成预留统一入口 |
-| `internal/model/do` | 数据写入 / 条件对象 | 贴近持久化层 |
-| `internal/model/entity` | 数据库实体结构 | 贴近表结构 |
-| `internal/middleware` | 中间件 | 统一响应、鉴权与授权 |
-| `internal/library` | 跨模块基础能力 | auth / sms / audit / region |
-| `manifest/config` | 配置模板 | 环境变量展开后加载 |
-| `manifest/sql` | SQL 初始化资源 | schema / seed / config |
-| `hack` | 辅助脚本 | 初始化 SQL、DAO 生成 |
-| `test/contract` | 接口兼容与核心业务流测试 | 默认 CI 风格测试入口 |
-| `test/integration` | 真实依赖联动测试 | 通过环境开关显式启用 |
-| `test/fixture` | 测试说明与样例资源目录 | 放共享伪数据或样例配置 |
-
-## 历史目录映射
-
-| 旧位置 | 新位置 | 说明 |
-| --- | --- | --- |
-| `admin/cmd/admin/main.go` | `main.go` + `internal/cmd/root.go` | 根目录成为唯一主入口 |
-| `admin/internal/app/application.go` | `internal/bootstrap/application.go` | 启动装配拆出 |
-| `admin/internal/app/routes.go` | `internal/bootstrap/application.go` | 路由绑定收口 |
-| `admin/internal/app/*handlers.go` | `internal/controller/admin` + `internal/logic/admin` | 协议层与业务层拆分 |
-| `admin/utility/ipx` | `internal/library/region` | 基础库归位 |
-
-## 当前接口入口
-
-| 分类 | 路径前缀 | 说明 |
-| --- | --- | --- |
-| 认证 | `/api/admin/auth/*` | 登录、短信二验 |
-| 会话 | `/api/admin/auth/*` | `me`、退出登录 |
-| 员工 | `/api/admin/users*` | 员工 CRUD、状态、业务设置 |
-| 用户组 | `/api/admin/groups*` | 用户组 CRUD 与权限 |
-| 主体 | `/api/admin/subjects*` | 主体管理 |
-| 设置 | `/api/admin/settings/*` | 短信配置 |
-| 日志 | `/api/admin/logs/*` | 操作日志、登录日志 |
+| 认证登录 / 短信发送 / 短信验证 | `/api/admin/auth/login`、`/api/admin/auth/sms/*` | 无需登录 |
+| 会话信息 / 退出登录 | `/api/admin/auth/me`、`/api/admin/auth/session` | 需要登录 |
+| 员工管理 | `/api/admin/users*` | `admin.list` |
+| 用户组与授权 | `/api/admin/groups*`、`/api/admin/menus/tree` | `admin.department` |
+| 主体管理 | `/api/admin/subjects*` | `subject.manage` |
+| 短信配置 | `/api/admin/settings/sms` | super-only |
+| 操作日志 | `/api/admin/logs/operations` | `admin.action` |
+| 登录日志 | `/api/admin/logs/logins` | `admin.loginlog` |
