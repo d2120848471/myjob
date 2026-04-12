@@ -1,10 +1,11 @@
-package kernel
+package app
 
 import (
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -14,6 +15,8 @@ import (
 	authlib "myjob/internal/library/auth"
 	"myjob/internal/library/region"
 	modelruntime "myjob/internal/model/runtime"
+
+	"github.com/gogf/gf/v2/database/gredis"
 )
 
 const smsConfigCacheVersion = 2
@@ -109,14 +112,21 @@ func (c *Core) ResolveRegion(ip string) string {
 	return c.regionResolver.Resolve(ip)
 }
 
-func (c *Core) BuildLoginUser(ctx context.Context, user AdminUser) map[string]any {
+func (c *Core) BuildLoginUser(ctx context.Context, user AdminUser) modelruntime.LoginUser {
 	groupName := "超级管理员"
 	if user.GroupID != 0 {
 		if group, err := c.GetGroupByID(ctx, user.GroupID); err == nil {
 			groupName = group.Name
 		}
 	}
-	return map[string]any{"id": user.ID, "username": user.Username, "real_name": user.RealName, "group_id": user.GroupID, "group_name": groupName, "is_business": user.IsBusiness}
+	return modelruntime.LoginUser{
+		ID:         user.ID,
+		Username:   user.Username,
+		RealName:   user.RealName,
+		GroupID:    user.GroupID,
+		GroupName:  groupName,
+		IsBusiness: user.IsBusiness,
+	}
 }
 
 func (c *Core) IssueSession(ctx context.Context, user AdminUser) (string, []string, error) {
@@ -131,7 +141,7 @@ func (c *Core) IssueSession(ctx context.Context, user AdminUser) (string, []stri
 		return "", nil, err
 	}
 	payload := modelruntime.SessionPayload{UserID: user.ID, GroupID: user.GroupID, TokenVersion: user.TokenVersion, JTI: jti, ExpiresAt: now.Add(ttl)}
-	if err = authlib.SaveSession(ctx, c.redis, payload, ttl); err != nil {
+	if err = authlib.SaveSession(ctx, c.Redis(), payload, ttl); err != nil {
 		return "", nil, err
 	}
 	return tokenString, perms, nil
@@ -149,11 +159,11 @@ func SMSVerifyReason(user AdminUser, ip string) string {
 
 func (c *Core) SaveTempLogin(ctx context.Context, loginToken string, payload modelruntime.TempLoginPayload) error {
 	data, _ := json.Marshal(payload)
-	return c.redis.Set(ctx, authlib.TempLoginKey(loginToken), data, time.Duration(c.cfg.Auth.TempLoginTTLMin)*time.Minute).Err()
+	return c.RedisSetString(ctx, authlib.TempLoginKey(loginToken), string(data), time.Duration(c.cfg.Auth.TempLoginTTLMin)*time.Minute)
 }
 
 func (c *Core) GetTempLogin(ctx context.Context, loginToken string) (modelruntime.TempLoginPayload, error) {
-	raw, err := c.redis.Get(ctx, authlib.TempLoginKey(loginToken)).Result()
+	raw, err := c.RedisGetString(ctx, authlib.TempLoginKey(loginToken))
 	if err != nil {
 		return modelruntime.TempLoginPayload{}, err
 	}
@@ -164,7 +174,7 @@ func (c *Core) GetTempLogin(ctx context.Context, loginToken string) (modelruntim
 
 func (c *Core) LoadPermissions(ctx context.Context, groupID int64) ([]string, error) {
 	if groupID == 0 {
-		arr, err := c.db.GetCore().GetArray(ctx, `SELECT code FROM admin_menu WHERE code <> '' AND status = 1 ORDER BY sort ASC, id ASC`)
+		arr, err := c.DB().GetCore().GetArray(ctx, `SELECT code FROM admin_menu WHERE code <> '' AND status = 1 ORDER BY sort ASC, id ASC`)
 		if err != nil {
 			return nil, err
 		}
@@ -174,13 +184,13 @@ func (c *Core) LoadPermissions(ctx context.Context, groupID int64) ([]string, er
 		}
 		return perms, nil
 	}
-	if cached, err := c.redis.Get(ctx, authlib.PermissionCacheKey(groupID)).Result(); err == nil {
+	if cached, err := c.RedisGetString(ctx, authlib.PermissionCacheKey(groupID)); err == nil {
 		perms := make([]string, 0)
 		if json.Unmarshal([]byte(cached), &perms) == nil {
 			return perms, nil
 		}
 	}
-	arr, err := c.db.GetCore().GetArray(ctx, `
+	arr, err := c.DB().GetCore().GetArray(ctx, `
 SELECT m.code
 FROM admin_group_menu gm
 JOIN admin_menu m ON m.id = gm.menu_id
@@ -195,7 +205,7 @@ ORDER BY m.sort ASC, m.id ASC
 		perms = append(perms, item.String())
 	}
 	data, _ := json.Marshal(perms)
-	_ = c.redis.Set(ctx, authlib.PermissionCacheKey(groupID), data, 30*time.Minute).Err()
+	_ = c.RedisSetString(ctx, authlib.PermissionCacheKey(groupID), string(data), 30*time.Minute)
 	return perms, nil
 }
 
@@ -208,13 +218,13 @@ func (c *Core) LoadSMSConfig(ctx context.Context) (modelruntime.SMSConfig, error
 }
 
 func (c *Core) LoadSMSConfigState(ctx context.Context) (smsConfigState, error) {
-	if cached, err := c.redis.Get(ctx, authlib.SMSConfigCacheKey()).Result(); err == nil {
+	if cached, err := c.RedisGetString(ctx, authlib.SMSConfigCacheKey()); err == nil {
 		var state smsConfigState
 		if json.Unmarshal([]byte(cached), &state) == nil && state.Version == smsConfigCacheVersion {
 			return state, nil
 		}
 	}
-	rows, err := c.db.GetCore().GetAll(ctx, `SELECT config_key, config_value, updated_at FROM system_config WHERE config_key LIKE 'sms_%'`)
+	rows, err := c.DB().GetCore().GetAll(ctx, `SELECT config_key, config_value, updated_at FROM system_config WHERE config_key LIKE 'sms_%'`)
 	if err != nil {
 		return smsConfigState{}, err
 	}
@@ -251,7 +261,7 @@ func (c *Core) LoadSMSConfigState(ctx context.Context) (smsConfigState, error) {
 		}
 	}
 	data, _ := json.Marshal(state)
-	_ = c.redis.Set(ctx, authlib.SMSConfigCacheKey(), data, 30*time.Minute).Err()
+	_ = c.RedisSetString(ctx, authlib.SMSConfigCacheKey(), string(data), 30*time.Minute)
 	return state, nil
 }
 
@@ -291,17 +301,17 @@ func parseConfigUpdatedAtString(value string) (time.Time, bool) {
 }
 
 func (c *Core) UpdateLoginState(ctx context.Context, userID int64, ip string) error {
-	_, err := c.db.Exec(ctx, `UPDATE admin_user SET last_login_ip = ?, last_login_at = ?, updated_at = ? WHERE id = ?`, ip, c.now(), c.now(), userID)
+	_, err := c.DB().Exec(ctx, `UPDATE admin_user SET last_login_ip = ?, last_login_at = ?, updated_at = ? WHERE id = ?`, ip, c.now(), c.now(), userID)
 	return err
 }
 
 func (c *Core) InsertLoginLog(ctx context.Context, userID int64, adminName, ip string) error {
-	_, err := c.db.Exec(ctx, `INSERT INTO admin_login_log (admin_id, admin_name, ip, ip_region, created_at) VALUES (?, ?, ?, ?, ?)`, userID, adminName, ip, c.ResolveRegion(ip), c.now())
+	_, err := c.DB().Exec(ctx, `INSERT INTO admin_login_log (admin_id, admin_name, ip, ip_region, created_at) VALUES (?, ?, ?, ?, ?)`, userID, adminName, ip, c.ResolveRegion(ip), c.now())
 	return err
 }
 
 func (c *Core) insertOperationLog(ctx context.Context, evt modelruntime.OperationEvent) error {
-	_, err := c.db.Exec(ctx, `INSERT INTO admin_operation_log (admin_id, admin_name, description, ip, ip_region, created_at) VALUES (?, ?, ?, ?, ?, ?)`, evt.AdminID, evt.AdminName, evt.Description, evt.IP, evt.IPRegion, c.now())
+	_, err := c.DB().Exec(ctx, `INSERT INTO admin_operation_log (admin_id, admin_name, description, ip, ip_region, created_at) VALUES (?, ?, ?, ?, ?, ?)`, evt.AdminID, evt.AdminName, evt.Description, evt.IP, evt.IPRegion, c.now())
 	return err
 }
 
@@ -315,20 +325,22 @@ func (c *Core) WriteOperation(ctx context.Context, actor AdminUser, desc, ip str
 }
 
 func (c *Core) RemoveSession(ctx context.Context, jti string, userID int64) error {
-	if err := c.redis.Del(ctx, authlib.SessionKey(jti)).Err(); err != nil {
+	if _, err := c.Redis().GroupGeneric().Del(ctx, authlib.SessionKey(jti)); err != nil {
 		return err
 	}
-	return c.redis.SRem(ctx, authlib.UserSessionsKey(userID), jti).Err()
+	_, err := c.Redis().GroupSet().SRem(ctx, authlib.UserSessionsKey(userID), jti)
+	return err
 }
 
 func (c *Core) RemoveAllUserSessions(ctx context.Context, userID int64) error {
-	sessions, err := c.redis.SMembers(ctx, authlib.UserSessionsKey(userID)).Result()
+	sessions, err := c.RedisSMembers(ctx, authlib.UserSessionsKey(userID))
 	if err == nil {
 		for _, jti := range sessions {
-			_ = c.redis.Del(ctx, authlib.SessionKey(jti)).Err()
+			_, _ = c.Redis().GroupGeneric().Del(ctx, authlib.SessionKey(jti))
 		}
 	}
-	return c.redis.Del(ctx, authlib.UserSessionsKey(userID)).Err()
+	_, err = c.Redis().GroupGeneric().Del(ctx, authlib.UserSessionsKey(userID))
+	return err
 }
 
 func (c *Core) EnsureGroupActive(ctx context.Context, groupID int64) error {
@@ -346,18 +358,18 @@ func (c *Core) EnsureGroupActive(ctx context.Context, groupID int64) error {
 }
 
 func (c *Core) ActiveUsernameExists(ctx context.Context, username string, excludeID int64) (bool, error) {
-	count, err := c.db.GetCore().GetValue(ctx, `SELECT COUNT(*) FROM admin_user WHERE username = ? AND is_deleted = 0 AND id <> ?`, username, excludeID)
+	count, err := c.DB().GetCore().GetValue(ctx, `SELECT COUNT(*) FROM admin_user WHERE username = ? AND is_deleted = 0 AND id <> ?`, username, excludeID)
 	return count.Int() > 0, err
 }
 
 func (c *Core) ActivePhoneExists(ctx context.Context, phone string, excludeID int64) (bool, error) {
-	count, err := c.db.GetCore().GetValue(ctx, `SELECT COUNT(*) FROM admin_user WHERE phone = ? AND is_deleted = 0 AND id <> ?`, phone, excludeID)
+	count, err := c.DB().GetCore().GetValue(ctx, `SELECT COUNT(*) FROM admin_user WHERE phone = ? AND is_deleted = 0 AND id <> ?`, phone, excludeID)
 	return count.Int() > 0, err
 }
 
 func (c *Core) GetUserByUsername(ctx context.Context, username string) (AdminUser, error) {
 	var user AdminUser
-	err := c.db.GetCore().GetScan(ctx, &user, `
+	err := c.DB().GetCore().GetScan(ctx, &user, `
 SELECT id, username, password_hash, real_name, phone, group_id, status, balance_notify, is_business, is_deleted,
        COALESCE(last_login_ip, '') AS last_login_ip, last_login_at, token_version, deleted_at, created_at, updated_at
 FROM admin_user WHERE username = ? LIMIT 1
@@ -367,7 +379,7 @@ FROM admin_user WHERE username = ? LIMIT 1
 
 func (c *Core) GetUserByID(ctx context.Context, id int64) (AdminUser, error) {
 	var user AdminUser
-	err := c.db.GetCore().GetScan(ctx, &user, `
+	err := c.DB().GetCore().GetScan(ctx, &user, `
 SELECT id, username, password_hash, real_name, phone, group_id, status, balance_notify, is_business, is_deleted,
        COALESCE(last_login_ip, '') AS last_login_ip, last_login_at, token_version, deleted_at, created_at, updated_at
 FROM admin_user WHERE id = ? LIMIT 1
@@ -377,6 +389,48 @@ FROM admin_user WHERE id = ? LIMIT 1
 
 func (c *Core) GetGroupByID(ctx context.Context, id int64) (AdminGroup, error) {
 	var group AdminGroup
-	err := c.db.GetCore().GetScan(ctx, &group, `SELECT id, name, description, status, created_at, updated_at FROM admin_group WHERE id = ? LIMIT 1`, id)
+	err := c.DB().GetCore().GetScan(ctx, &group, `SELECT id, name, description, status, created_at, updated_at FROM admin_group WHERE id = ? LIMIT 1`, id)
 	return group, err
+}
+
+func (c *Core) RedisSetString(ctx context.Context, key, value string, ttl time.Duration) error {
+	if ttl <= 0 {
+		ttl = time.Second
+	}
+	seconds := int64(math.Ceil(ttl.Seconds()))
+	_, err := c.Redis().GroupString().Set(ctx, key, value, gredis.SetOption{
+		TTLOption: gredis.TTLOption{EX: &seconds},
+	})
+	return err
+}
+
+func (c *Core) RedisGetString(ctx context.Context, key string) (string, error) {
+	value, err := c.Redis().GroupString().Get(ctx, key)
+	if err != nil {
+		return "", err
+	}
+	if value == nil || value.IsNil() {
+		return "", sql.ErrNoRows
+	}
+	return value.String(), nil
+}
+
+func (c *Core) RedisTTL(ctx context.Context, key string) (time.Duration, error) {
+	seconds, err := c.Redis().GroupGeneric().TTL(ctx, key)
+	if err != nil {
+		return 0, err
+	}
+	return time.Duration(seconds) * time.Second, nil
+}
+
+func (c *Core) RedisSMembers(ctx context.Context, key string) ([]string, error) {
+	values, err := c.Redis().GroupSet().SMembers(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		result = append(result, value.String())
+	}
+	return result, nil
 }

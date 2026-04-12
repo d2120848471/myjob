@@ -6,8 +6,8 @@
 main.go
   -> internal/cmd/root.go
     -> bootstrap.NewApplicationFromEnv()
-      -> model/config.Load()
-      -> kernel.NewCoreFromConfig()
+      -> model/config.LoadFromGoFrame()
+      -> app.NewCoreFromEnv()
       -> bootstrap.assemble()
       -> ghttp.Server.Run()
 ```
@@ -16,22 +16,22 @@ main.go
 
 - `main.go` 只负责交给 GoFrame 命令入口
 - `internal/cmd` 只负责启动命令，不承载业务逻辑
-- `internal/bootstrap` 负责把 controller、logic、middleware、kernel 组装起来
-- `internal/kernel` 负责运行时资源、启动期数据准备和跨模块共用的数据访问封装
+- `internal/bootstrap` 负责把 controller、logic、middleware、app 组装起来
+- `internal/app` 负责运行时资源、启动期数据准备和跨模块共用的数据访问封装
 
 ## 分层职责
 
-### `api/*`
+### `api/admin/v1`
 
-放请求和响应协议结构，保证 HTTP 协议类型不会直接渗透到更深层。
+放版本化请求和响应协议结构，并通过 `g.Meta` 同时声明路由、方法、标签和文档信息。
 
 ### `internal/controller/admin`
 
 只处理 HTTP 协议适配：
 
-- 解析参数
+- 承接 GoFrame 标准 `Req/Res + error`
 - 调用 `service` 接口
-- 返回统一 JSON 包裹
+- 不直接写响应，由中间件统一输出 JSON 包裹
 
 控制器不直接访问 DAO，也不直接拼 SQL。
 
@@ -45,17 +45,17 @@ main.go
 
 - 参数合法性判断
 - 业务流程控制
-- 调用 `kernel` / `library`
+- 调用 `app` / `library`
 - 组织返回数据
 
-### `internal/kernel`
+### `internal/app`
 
-这是本次迁移里的“应用内核层”，主要承担两类职责：
+这是当前 GoFrame 官方化后的运行时核心层，主要承担两类职责：
 
-1. 运行时资源管理：数据库、Redis、短信发送器、审计写入器、区域解析器
-2. 迁移期的数据访问与通用业务辅助：会话签发、权限读取、种子初始化、公共查询
+1. 运行时资源管理：GoFrame 配置、数据库、Redis、短信发送器、审计写入器、区域解析器
+2. 数据访问与通用业务辅助：会话签发、权限读取、种子初始化、公共查询
 
-后续如果 DAO 自动生成进一步稳定，可以把 `kernel` 中更细的查询逐步继续下沉。
+后续如果 DAO 自动生成进一步稳定，可以把 `app` 中更细的查询逐步继续下沉。
 
 ### `internal/dao`、`internal/model/do`、`internal/model/entity`
 
@@ -73,7 +73,6 @@ main.go
 - `sms`：短信供应商抽象和实现
 - `audit`：审计日志写入器
 - `region`：IP 归属地解析
-- `response`：统一响应包裹
 
 ## 请求流转
 
@@ -83,9 +82,11 @@ HTTP Request
   -> controller/admin
   -> service interface
   -> logic/admin
-  -> kernel / dao / library
+  -> app / dao / library
   -> MySQL / Redis / provider
 ```
+
+统一响应由 `middleware.Response` 在出口生成，格式固定为 `code / message / data`。
 
 ## 基础设施说明
 
@@ -110,3 +111,8 @@ HTTP Request
 
 - 操作日志写入支持同步 / 异步两种模式
 - 默认是否异步由 `audit.async` 控制
+
+### OpenAPI
+
+- 服务默认暴露 `/api.json` 与 `/swagger/`
+- OpenAPI 公共响应壳与 Bearer 鉴权方案在启动时统一注册

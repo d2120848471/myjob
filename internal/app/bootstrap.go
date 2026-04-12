@@ -1,4 +1,4 @@
-package kernel
+package app
 
 import (
 	"context"
@@ -24,11 +24,11 @@ func execStatements(ctx context.Context, exec func(string, ...any) (sql.Result, 
 
 func (c *Core) bootstrap(ctx context.Context) error {
 	if c.driver == "sqlite" {
-		if err := execStatements(ctx, func(sql string, args ...any) (sql.Result, error) { return c.db.Exec(ctx, sql, args...) }, sqliteSchema); err != nil {
+		if err := execStatements(ctx, func(sql string, args ...any) (sql.Result, error) { return c.DB().Exec(ctx, sql, args...) }, sqliteSchema); err != nil {
 			return err
 		}
 	} else {
-		if err := execStatements(ctx, func(sql string, args ...any) (sql.Result, error) { return c.db.Exec(ctx, sql, args...) }, mysqlSchema); err != nil {
+		if err := execStatements(ctx, func(sql string, args ...any) (sql.Result, error) { return c.DB().Exec(ctx, sql, args...) }, mysqlSchema); err != nil {
 			return err
 		}
 	}
@@ -59,7 +59,7 @@ func (c *Core) ensureMenuSchema(ctx context.Context) error {
 		rows := make([]struct {
 			Name string `db:"name"`
 		}, 0)
-		if err := c.db.GetCore().GetScan(ctx, &rows, `PRAGMA table_info(admin_menu)`); err != nil {
+		if err := c.DB().GetCore().GetScan(ctx, &rows, `PRAGMA table_info(admin_menu)`); err != nil {
 			return err
 		}
 		existing := map[string]struct{}{}
@@ -70,7 +70,7 @@ func (c *Core) ensureMenuSchema(ctx context.Context) error {
 			if _, ok := existing[column]; ok {
 				continue
 			}
-			if _, err := c.db.Exec(ctx, `ALTER TABLE admin_menu ADD COLUMN `+column+` `+definition); err != nil {
+			if _, err := c.DB().Exec(ctx, `ALTER TABLE admin_menu ADD COLUMN `+column+` `+definition); err != nil {
 				return err
 			}
 		}
@@ -79,7 +79,7 @@ func (c *Core) ensureMenuSchema(ctx context.Context) error {
 	rows := make([]struct {
 		Field string `db:"Field"`
 	}, 0)
-	if err := c.db.GetCore().GetScan(ctx, &rows, `SHOW COLUMNS FROM admin_menu`); err != nil {
+	if err := c.DB().GetCore().GetScan(ctx, &rows, `SHOW COLUMNS FROM admin_menu`); err != nil {
 		return err
 	}
 	existing := map[string]struct{}{}
@@ -91,7 +91,7 @@ func (c *Core) ensureMenuSchema(ctx context.Context) error {
 		if _, ok := existing[column]; ok {
 			continue
 		}
-		if _, err := c.db.Exec(ctx, `ALTER TABLE admin_menu ADD COLUMN `+column+` `+definition); err != nil {
+		if _, err := c.DB().Exec(ctx, `ALTER TABLE admin_menu ADD COLUMN `+column+` `+definition); err != nil {
 			return err
 		}
 	}
@@ -99,14 +99,14 @@ func (c *Core) ensureMenuSchema(ctx context.Context) error {
 }
 
 func (c *Core) ensureDefaultGroup(ctx context.Context) error {
-	count, err := c.db.GetCore().GetValue(ctx, `SELECT COUNT(*) FROM admin_group WHERE id = 1`)
+	count, err := c.DB().GetCore().GetValue(ctx, `SELECT COUNT(*) FROM admin_group WHERE id = 1`)
 	if err != nil {
 		return err
 	}
 	if count.Int() > 0 {
 		return nil
 	}
-	_, err = c.db.Exec(ctx, `INSERT INTO admin_group (id, name, description, status, created_at, updated_at) VALUES (1, '默认组', '默认权限组', 1, ?, ?)`, c.now(), c.now())
+	_, err = c.DB().Exec(ctx, `INSERT INTO admin_group (id, name, description, status, created_at, updated_at) VALUES (1, '默认组', '默认权限组', 1, ?, ?)`, c.now(), c.now())
 	return err
 }
 
@@ -116,17 +116,17 @@ func defaultMenus() []menuSeed {
 
 func (c *Core) ensureMenus(ctx context.Context) error {
 	for _, item := range defaultMenus() {
-		exists, err := c.db.GetCore().GetValue(ctx, `SELECT COUNT(*) FROM admin_menu WHERE id = ?`, item.ID)
+		exists, err := c.DB().GetCore().GetValue(ctx, `SELECT COUNT(*) FROM admin_menu WHERE id = ?`, item.ID)
 		if err != nil {
 			return err
 		}
 		if exists.Int() == 0 {
-			if _, err = c.db.Exec(ctx, `INSERT INTO admin_menu (id, parent_id, name, code, menu_type, menu_level, status, super_only, sort, created_at, updated_at) VALUES (?, ?, ?, ?, 'permission', ?, ?, ?, ?, ?, ?)`, item.ID, item.ParentID, item.Name, item.Code, item.MenuLevel, item.Status, item.SuperOnly, item.Sort, c.now(), c.now()); err != nil {
+			if _, err = c.DB().Exec(ctx, `INSERT INTO admin_menu (id, parent_id, name, code, menu_type, menu_level, status, super_only, sort, created_at, updated_at) VALUES (?, ?, ?, ?, 'permission', ?, ?, ?, ?, ?, ?)`, item.ID, item.ParentID, item.Name, item.Code, item.MenuLevel, item.Status, item.SuperOnly, item.Sort, c.now(), c.now()); err != nil {
 				return err
 			}
 			continue
 		}
-		if _, err = c.db.Exec(ctx, `UPDATE admin_menu SET parent_id = ?, name = ?, code = ?, menu_type = 'permission', menu_level = ?, status = ?, super_only = ?, sort = ?, updated_at = ? WHERE id = ?`, item.ParentID, item.Name, item.Code, item.MenuLevel, item.Status, item.SuperOnly, item.Sort, c.now(), item.ID); err != nil {
+		if _, err = c.DB().Exec(ctx, `UPDATE admin_menu SET parent_id = ?, name = ?, code = ?, menu_type = 'permission', menu_level = ?, status = ?, super_only = ?, sort = ?, updated_at = ? WHERE id = ?`, item.ParentID, item.Name, item.Code, item.MenuLevel, item.Status, item.SuperOnly, item.Sort, c.now(), item.ID); err != nil {
 			return err
 		}
 	}
@@ -134,7 +134,7 @@ func (c *Core) ensureMenus(ctx context.Context) error {
 }
 
 func (c *Core) ensureDefaultGroupAuth(ctx context.Context) error {
-	exists, err := c.db.GetCore().GetValue(ctx, `SELECT COUNT(*) FROM admin_group_menu WHERE group_id = 1`)
+	exists, err := c.DB().GetCore().GetValue(ctx, `SELECT COUNT(*) FROM admin_group_menu WHERE group_id = 1`)
 	if err != nil {
 		return err
 	}
@@ -142,7 +142,7 @@ func (c *Core) ensureDefaultGroupAuth(ctx context.Context) error {
 		return nil
 	}
 	for _, menuID := range []int64{1, 2, 3, 4, 5} {
-		if _, err = c.db.Exec(ctx, `INSERT INTO admin_group_menu (group_id, menu_id, created_at) VALUES (1, ?, ?)`, menuID, c.now()); err != nil {
+		if _, err = c.DB().Exec(ctx, `INSERT INTO admin_group_menu (group_id, menu_id, created_at) VALUES (1, ?, ?)`, menuID, c.now()); err != nil {
 			return err
 		}
 	}
@@ -152,14 +152,14 @@ func (c *Core) ensureDefaultGroupAuth(ctx context.Context) error {
 func (c *Core) ensureSMSConfig(ctx context.Context) error {
 	defaults := map[string]string{"sms_access_key": "", "sms_access_key_secret": "", "sms_sign_name": "玖权益", "sms_template_code": "SMS_000001", "sms_expire_minutes": "30", "sms_interval_minutes": "1"}
 	for key, value := range defaults {
-		exists, err := c.db.GetCore().GetValue(ctx, `SELECT COUNT(*) FROM system_config WHERE config_key = ?`, key)
+		exists, err := c.DB().GetCore().GetValue(ctx, `SELECT COUNT(*) FROM system_config WHERE config_key = ?`, key)
 		if err != nil {
 			return err
 		}
 		if exists.Int() > 0 {
 			continue
 		}
-		if _, err = c.db.Exec(ctx, `INSERT INTO system_config (config_key, config_value, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`, key, value, key, c.now(), c.now()); err != nil {
+		if _, err = c.DB().Exec(ctx, `INSERT INTO system_config (config_key, config_value, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`, key, value, key, c.now(), c.now()); err != nil {
 			return err
 		}
 	}
@@ -171,7 +171,7 @@ func (c *Core) ensureSuperAdmin(ctx context.Context) error {
 	if username == "" {
 		username = "admin"
 	}
-	count, err := c.db.GetCore().GetValue(ctx, `SELECT COUNT(*) FROM admin_user WHERE username = ?`, username)
+	count, err := c.DB().GetCore().GetValue(ctx, `SELECT COUNT(*) FROM admin_user WHERE username = ?`, username)
 	if err != nil {
 		return err
 	}
@@ -182,7 +182,7 @@ func (c *Core) ensureSuperAdmin(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	_, err = c.db.Exec(ctx, `
+	_, err = c.DB().Exec(ctx, `
 INSERT INTO admin_user (
     username, password_hash, real_name, phone, group_id, status, balance_notify, is_business, is_deleted,
     last_login_ip, token_version, created_at, updated_at

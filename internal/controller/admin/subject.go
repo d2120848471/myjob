@@ -1,49 +1,25 @@
 package admincontroller
 
 import (
-	subjectapi "myjob/api/subject"
-	"myjob/internal/library/response"
-	"myjob/internal/model/entity"
-	modelruntime "myjob/internal/model/runtime"
-	"myjob/internal/service"
+	"context"
 
-	"github.com/gogf/gf/v2/net/ghttp"
+	v1 "myjob/api/admin/v1"
+	authctx "myjob/internal/library/auth"
+	"myjob/internal/service"
 )
 
 type SubjectController struct{ svc service.SubjectService }
 
 func NewSubject(svc service.SubjectService) *SubjectController { return &SubjectController{svc: svc} }
-func (c *SubjectController) List(r *ghttp.Request, _ modelruntime.Principal, _ entity.AdminUser) {
-	data, apiErr := c.svc.List(r.Context())
-	if apiErr != nil {
-		response.Error(r, apiErr)
-		return
-	}
-	response.Success(r, data)
+
+func (c *SubjectController) List(ctx context.Context, req *v1.SubjectListReq) (res *v1.SubjectListRes, err error) {
+	return c.svc.List(ctx, req)
 }
-func (c *SubjectController) Add(r *ghttp.Request, _ modelruntime.Principal, actor entity.AdminUser) {
-	var req subjectapi.AddReq
-	if err := r.Parse(&req); err != nil {
-		response.Error(r, &modelruntime.APIError{HTTPStatus: 400, Code: 400, Message: "参数错误"})
-		return
-	}
-	data, apiErr := c.svc.Add(r.Context(), req, actor, r.GetClientIp())
-	if apiErr != nil {
-		response.Error(r, apiErr)
-		return
-	}
-	response.Success(r, data)
+
+func (c *SubjectController) Create(ctx context.Context, req *v1.SubjectCreateReq) (res *v1.SubjectCreateRes, err error) {
+	return c.svc.Add(ctx, req, authctx.MustUserFromCtx(ctx), clientIP(ctx))
 }
-func (c *SubjectController) Edit(r *ghttp.Request, _ modelruntime.Principal, actor entity.AdminUser) {
-	var req subjectapi.EditReq
-	if err := r.Parse(&req); err != nil {
-		response.Error(r, &modelruntime.APIError{HTTPStatus: 400, Code: 400, Message: "参数错误"})
-		return
-	}
-	data, apiErr := c.svc.Edit(r.Context(), r.GetRouter("id").Int64(), req, actor, r.GetClientIp())
-	if apiErr != nil {
-		response.Error(r, apiErr)
-		return
-	}
-	response.Success(r, data)
+
+func (c *SubjectController) Update(ctx context.Context, req *v1.SubjectUpdateReq) (res *v1.SubjectUpdateRes, err error) {
+	return c.svc.Edit(ctx, req, authctx.MustUserFromCtx(ctx), clientIP(ctx))
 }

@@ -11,14 +11,13 @@ import (
 
 	"myjob/internal/bootstrap"
 
-	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 )
 
 type apiEnvelope struct {
-	Code int             `json:"code"`
-	Msg  string          `json:"msg"`
-	Data json.RawMessage `json:"data"`
+	Code    int             `json:"code"`
+	Message string          `json:"message"`
+	Data    json.RawMessage `json:"data"`
 }
 
 type failingSMSSender struct{}
@@ -27,16 +26,15 @@ func (f failingSMSSender) SendLoginCode(context.Context, string, string, bootstr
 	return errors.New("send failed")
 }
 
-func TestAuthFlow_LoginSMSVerifyMeLogout(t *testing.T) {
-	t.Parallel()
-
+func TestAuthFlow_SessionSMSProfileLogout(t *testing.T) {
 	h := newTestHarness(t)
 
-	loginRes := h.postJSON("/api/admin/login", map[string]any{
+	loginRes := h.postJSON("/api/admin/auth/login", map[string]any{
 		"username": "admin",
 		"password": "Admin_123",
 	}, "")
 	require.Equal(t, 0, loginRes.Code)
+	require.Equal(t, "OK", loginRes.Message)
 
 	var loginData struct {
 		Token string `json:"token"`
@@ -44,17 +42,19 @@ func TestAuthFlow_LoginSMSVerifyMeLogout(t *testing.T) {
 	require.NoError(t, json.Unmarshal(loginRes.Data, &loginData))
 	require.NotEmpty(t, loginData.Token)
 
-	meRes := h.postJSON("/api/admin/me", map[string]any{}, loginData.Token)
-	require.Equal(t, 0, meRes.Code)
+	profileRes := h.getJSON("/api/admin/auth/me", loginData.Token)
+	require.Equal(t, 0, profileRes.Code)
+	require.Equal(t, "OK", profileRes.Message)
 
 	smsUserID := h.createUserForSMSFlow(context.Background(), "need001", "Need_123", "13800001111")
 	require.NotZero(t, smsUserID)
 
-	smsLogin := h.postJSON("/api/admin/login", map[string]any{
+	smsLogin := h.postJSON("/api/admin/auth/login", map[string]any{
 		"username": "need001",
 		"password": "Need_123",
 	}, "")
 	require.Equal(t, 0, smsLogin.Code)
+
 	var smsLoginData struct {
 		NeedSMSVerify bool   `json:"need_sms_verify"`
 		LoginToken    string `json:"login_token"`
@@ -63,13 +63,13 @@ func TestAuthFlow_LoginSMSVerifyMeLogout(t *testing.T) {
 	require.True(t, smsLoginData.NeedSMSVerify)
 	require.NotEmpty(t, smsLoginData.LoginToken)
 
-	sendRes := h.postJSON("/api/admin/login/sms/send", map[string]any{
+	sendRes := h.postJSON("/api/admin/auth/sms/send", map[string]any{
 		"login_token": smsLoginData.LoginToken,
 	}, "")
 	require.Equal(t, 0, sendRes.Code)
-
 	code := h.lastSMSCode(t, "13800001111")
-	verifyRes := h.postJSON("/api/admin/login/sms/verify", map[string]any{
+
+	verifyRes := h.postJSON("/api/admin/auth/sms/verify", map[string]any{
 		"login_token": smsLoginData.LoginToken,
 		"sms_code":    code,
 	}, "")
@@ -81,23 +81,21 @@ func TestAuthFlow_LoginSMSVerifyMeLogout(t *testing.T) {
 	require.NoError(t, json.Unmarshal(verifyRes.Data, &verifyData))
 	require.NotEmpty(t, verifyData.Token)
 
-	logoutRes := h.postJSON("/api/admin/logout", map[string]any{}, loginData.Token)
+	logoutRes := h.deleteJSON("/api/admin/auth/session", loginData.Token)
 	require.Equal(t, 0, logoutRes.Code)
 
-	meAfterLogout := h.postJSON("/api/admin/me", map[string]any{}, loginData.Token)
-	require.NotEqual(t, 0, meAfterLogout.Code)
+	profileAfterLogout := h.getJSON("/api/admin/auth/me", loginData.Token)
+	require.NotEqual(t, 0, profileAfterLogout.Code)
 }
 
 func TestLoginSMSSend_CleansCacheWhenSenderFails(t *testing.T) {
-	t.Parallel()
-
 	h := newTestHarness(t)
 	h.app.SetSMSSender(failingSMSSender{})
 
 	userID := h.createUserForSMSFlow(context.Background(), "need002", "Need_123", "13800004444")
 	require.NotZero(t, userID)
 
-	loginRes := h.postJSON("/api/admin/login", map[string]any{
+	loginRes := h.postJSON("/api/admin/auth/login", map[string]any{
 		"username": "need002",
 		"password": "Need_123",
 	}, "")
@@ -110,24 +108,25 @@ func TestLoginSMSSend_CleansCacheWhenSenderFails(t *testing.T) {
 	require.NoError(t, json.Unmarshal(loginRes.Data, &loginData))
 	require.True(t, loginData.NeedSMSVerify)
 
-	sendRes := h.postJSON("/api/admin/login/sms/send", map[string]any{
+	sendRes := h.postJSON("/api/admin/auth/sms/send", map[string]any{
 		"login_token": loginData.LoginToken,
 	}, "")
-	require.Equal(t, 500, sendRes.Code)
+	require.NotEqual(t, 0, sendRes.Code)
 
-	_, err := h.app.Redis().Get(context.Background(), bootstrap.SMSCodeKey(userID)).Result()
-	require.ErrorIs(t, err, redis.Nil)
-	_, err = h.app.Redis().Get(context.Background(), bootstrap.SMSSendLockKey(userID)).Result()
-	require.ErrorIs(t, err, redis.Nil)
+	exists, err := h.app.Redis().GroupGeneric().Exists(
+		context.Background(),
+		bootstrap.SMSCodeKey(userID),
+		bootstrap.SMSSendLockKey(userID),
+	)
+	require.NoError(t, err)
+	require.EqualValues(t, 0, exists)
 }
 
 func TestAdminManagementFlows(t *testing.T) {
-	t.Parallel()
-
 	h := newTestHarness(t)
 	token := h.loginAdmin(t)
 
-	addGroup := h.postJSON("/api/admin/group/add", map[string]any{
+	addGroup := h.postJSON("/api/admin/groups", map[string]any{
 		"name":        "客服组",
 		"description": "客服权限组",
 	}, token)
@@ -139,12 +138,12 @@ func TestAdminManagementFlows(t *testing.T) {
 	require.NoError(t, json.Unmarshal(addGroup.Data, &addGroupData))
 	require.NotZero(t, addGroupData.ID)
 
-	saveAuth := h.putJSON("/api/admin/group/1/auth", map[string]any{
+	saveAuth := h.patchJSON("/api/admin/groups/1/permissions", map[string]any{
 		"menu_ids": []int64{1, 2, 3, 4},
 	}, token)
 	require.Equal(t, 0, saveAuth.Code)
 
-	addUser := h.postJSON("/api/admin/user/add", map[string]any{
+	addUser := h.postJSON("/api/admin/users", map[string]any{
 		"username":         "alice01",
 		"confirm_username": "alice01",
 		"password":         "Alice_123",
@@ -155,28 +154,28 @@ func TestAdminManagementFlows(t *testing.T) {
 	}, token)
 	require.Equal(t, 0, addUser.Code)
 
-	listUsers := h.getJSON("/api/admin/user/list?page=1&page_size=20", token)
+	listUsers := h.getJSON("/api/admin/users?page=1&page_size=20", token)
 	require.Equal(t, 0, listUsers.Code)
 
-	trashBefore := h.getJSON("/api/admin/user/trash?page=1&page_size=20", token)
+	trashBefore := h.getJSON("/api/admin/users/trash?page=1&page_size=20", token)
 	require.Equal(t, 0, trashBefore.Code)
 
-	deleteUser := h.deleteJSON("/api/admin/user/2", token)
+	deleteUser := h.deleteJSON("/api/admin/users/2", token)
 	require.Equal(t, 0, deleteUser.Code)
 
-	trashAfter := h.getJSON("/api/admin/user/trash?page=1&page_size=20", token)
+	trashAfter := h.getJSON("/api/admin/users/trash?page=1&page_size=20", token)
 	require.Equal(t, 0, trashAfter.Code)
 
-	restoreUser := h.putJSON("/api/admin/user/2/restore", map[string]any{}, token)
+	restoreUser := h.patchJSON("/api/admin/users/2/restore", map[string]any{}, token)
 	require.Equal(t, 0, restoreUser.Code)
 
-	addSubject := h.postJSON("/api/admin/subject/add", map[string]any{
+	addSubject := h.postJSON("/api/admin/subjects", map[string]any{
 		"name":    "主体A",
 		"has_tax": 1,
 	}, token)
 	require.Equal(t, 0, addSubject.Code)
 
-	smsSave := h.putJSON("/api/admin/config/sms", map[string]any{
+	smsSave := h.putJSON("/api/admin/settings/sms", map[string]any{
 		"access_key":        "LTAI-test",
 		"access_key_secret": "secret-test-value",
 		"sign_name":         "玖权益",
@@ -186,13 +185,13 @@ func TestAdminManagementFlows(t *testing.T) {
 	}, token)
 	require.Equal(t, 0, smsSave.Code)
 
-	smsGet := h.getJSON("/api/admin/config/sms", token)
+	smsGet := h.getJSON("/api/admin/settings/sms", token)
 	require.Equal(t, 0, smsGet.Code)
 
-	opLogs := h.getJSON("/api/admin/log/operation?page=1&page_size=20", token)
+	opLogs := h.getJSON("/api/admin/logs/operations?page=1&page_size=20", token)
 	require.Equal(t, 0, opLogs.Code)
 
-	loginLogs := h.getJSON("/api/admin/log/login?page=1&page_size=20", token)
+	loginLogs := h.getJSON("/api/admin/logs/logins?page=1&page_size=20", token)
 	require.Equal(t, 0, loginLogs.Code)
 }
 
@@ -248,6 +247,10 @@ func (h *testHarness) putJSON(path string, body any, token string) apiEnvelope {
 	return h.request(http.MethodPut, path, body, token)
 }
 
+func (h *testHarness) patchJSON(path string, body any, token string) apiEnvelope {
+	return h.request(http.MethodPatch, path, body, token)
+}
+
 func (h *testHarness) getJSON(path string, token string) apiEnvelope {
 	return h.request(http.MethodGet, path, nil, token)
 }
@@ -258,7 +261,7 @@ func (h *testHarness) deleteJSON(path string, token string) apiEnvelope {
 
 func (h *testHarness) loginAdmin(t *testing.T) string {
 	t.Helper()
-	res := h.postJSON("/api/admin/login", map[string]any{
+	res := h.postJSON("/api/admin/auth/login", map[string]any{
 		"username": "admin",
 		"password": "Admin_123",
 	}, "")

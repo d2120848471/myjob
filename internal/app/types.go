@@ -1,4 +1,4 @@
-package kernel
+package app
 
 import (
 	"context"
@@ -9,12 +9,15 @@ import (
 	"myjob/internal/library/audit"
 	"myjob/internal/library/region"
 	"myjob/internal/library/sms"
-	"myjob/internal/model/config"
+	modelconfig "myjob/internal/model/config"
 	"myjob/internal/model/entity"
 	modelruntime "myjob/internal/model/runtime"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/gogf/gf/v2/database/gdb"
-	"github.com/redis/go-redis/v9"
+	"github.com/gogf/gf/v2/database/gredis"
+	"github.com/gogf/gf/v2/frame/g"
+	"github.com/gogf/gf/v2/os/gcfg"
 )
 
 var (
@@ -24,28 +27,38 @@ var (
 	smsCodeRegexp  = regexp.MustCompile(`^\d{6}$`)
 )
 
-type Config = config.Config
+type Config = modelconfig.Config
 
 type Core struct {
-	cfg            config.Config
+	cfg            modelconfig.Config
+	cfgName        string
+	cfgInstance    *gcfg.Config
+	dbGroup        string
+	redisGroup     string
 	driver         string
-	db             gdb.DB
-	redis          *redis.Client
 	now            func() time.Time
 	sender         sms.Sender
 	mock           *sms.MockSender
 	regionResolver region.RegionResolver
 	auditWriter    *audit.Writer
 	tempDBFile     string
+	miniRedis      *miniredis.Miniredis
 }
 
 type AdminUser = entity.AdminUser
+
 type UserListItem = entity.UserListItem
+
 type AdminGroup = entity.AdminGroup
+
 type GroupListItem = entity.GroupListItem
+
 type AdminMenu = entity.AdminMenu
+
 type AdminSubject = entity.AdminSubject
+
 type OperationLog = entity.OperationLog
+
 type LoginLog = entity.LoginLog
 
 type smsConfigState = modelruntime.SMSConfigState
@@ -69,16 +82,20 @@ type sqlExecutor interface {
 	GetAll(sql string, args ...any) (gdb.Result, error)
 }
 
-func (c *Core) Config() config.Config {
+func (c *Core) Config() modelconfig.Config {
 	return c.cfg
 }
 
-func (c *Core) DB() gdb.DB {
-	return c.db
+func (c *Core) Cfg() *gcfg.Config {
+	return c.cfgInstance
 }
 
-func (c *Core) Redis() *redis.Client {
-	return c.redis
+func (c *Core) DB() gdb.DB {
+	return g.DB(c.dbGroup)
+}
+
+func (c *Core) Redis() *gredis.Redis {
+	return gredis.Instance(c.redisGroup)
 }
 
 func (c *Core) SetSMSSender(sender sms.Sender) {
@@ -102,7 +119,7 @@ func (c *Core) CreateTestUser(ctx context.Context, username, password, phone str
 	if err != nil {
 		return 0, err
 	}
-	result, err := c.db.Exec(ctx, `
+	result, err := c.DB().Exec(ctx, `
 INSERT INTO admin_user (
     username, password_hash, real_name, phone, group_id, status, balance_notify, is_business, is_deleted, token_version, created_at, updated_at
 ) VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, ?, ?)

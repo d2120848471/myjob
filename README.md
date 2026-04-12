@@ -97,46 +97,52 @@ go build ./...
 
 ### `api/`
 
-`api/` 只放“对外协议结构”，也就是 controller 解析请求和组织响应时使用的
-结构体定义，不写业务逻辑，不直接访问数据库。
+`api/` 只放“对外协议结构”，也就是 GoFrame 规范路由使用的请求 / 响应定义，
+不写业务逻辑，不直接访问数据库。
 
-- `api/auth`：登录、短信二验、退出登录、`me` 相关协议
-- `api/user`：员工列表、新增、编辑、删除、恢复、状态切换、业务账号设置协议
-- `api/group`：用户组管理、菜单授权、菜单树相关协议
-- `api/subject`：主体列表、新增、编辑相关协议
-- `api/config`：短信配置读写、脱敏展示相关协议
-- `api/log`：操作日志、登录日志查询协议
+- `api/admin/v1/auth.go`：登录、短信二验、会话与 `me` 相关协议
+- `api/admin/v1/user.go`：员工列表、新增、编辑、删除、恢复、状态切换、业务账号设置协议
+- `api/admin/v1/group.go`：用户组管理、菜单授权、菜单树相关协议
+- `api/admin/v1/subject.go`：主体列表、新增、编辑相关协议
+- `api/admin/v1/settings.go`：短信配置读写、脱敏展示相关协议
+- `api/admin/v1/log.go`：操作日志、登录日志查询协议
+- `api/admin/v1/common.go`：公共响应结构复用类型
 
 ### `internal/`
 
 `internal/` 是真正的后端实现区，所有业务逻辑、运行时资源和内部能力都在这里。
 
-- `internal/bootstrap`：应用装配层，负责加载配置、创建 `Core`、注册路由、组装 controller / logic / middleware
+- `internal/bootstrap`：应用装配层，负责加载配置、创建 `Core`、注册规范路由、组装 controller / logic / middleware
 - `internal/cmd`：GoFrame 命令入口，负责进程启动，不承载业务逻辑
 - `internal/consts`：状态值、权限相关固定值等通用常量
-- `internal/controller/admin`：HTTP 协议层，负责参数解析、调用 service、返回统一 JSON 包裹
+- `internal/controller/admin`：HTTP 协议层，使用标准 `Req/Res + error` 签名承接 GoFrame 严格路由
 - `internal/service`：模块接口边界，controller 依赖这里暴露的抽象，不直接碰更深层实现
 - `internal/logic/admin`：业务编排层，负责把权限、规则、流程、数据访问串起来
-- `internal/kernel`：运行时核心层，管理 DB / Redis / sender / audit / region 等基础资源，并承接当前项目里的通用业务辅助能力
+- `internal/app`：运行时核心层，管理 GoFrame 配置、DB、Redis、sender、audit、region 等基础资源，并承接当前项目里的通用业务辅助能力
 - `internal/dao`：GoFrame DAO 入口和表级查询模型装配
 - `internal/model`：内部数据模型集合
   - `internal/model/config`：配置结构体定义
   - `internal/model/do`：持久化写入 / 条件对象
   - `internal/model/entity`：数据库实体映射
   - `internal/model/dto`：内部传输对象、分页对象等
-  - `internal/model/runtime`：运行时上下文、统一响应、错误对象等
-- `internal/middleware`：鉴权和授权中间件
+  - `internal/model/runtime`：运行时上下文、会话、短信配置等模型
+- `internal/middleware`：统一响应、鉴权和授权中间件
 - `internal/library`：跨模块基础能力库
   - `internal/library/auth`：JWT、Session、Redis key 规则
   - `internal/library/sms`：短信 provider 抽象和阿里云实现
   - `internal/library/audit`：操作日志异步 / 同步写入器
   - `internal/library/region`：IP 归属地解析与手机号/密钥脱敏
-  - `internal/library/response`：统一 `code / msg / data` 响应输出
 
 ### `manifest/`
 
 - `manifest/config`：运行时配置文件目录，当前只保留真实开发配置 `config.local.yaml`
 - `manifest/sql`：初始化 SQL 资源，包含建表、菜单、管理员和系统配置初始化内容
+
+### 文档与接口
+
+- 服务启动后默认暴露 `/api.json` 和 `/swagger/`
+- HTTP 响应统一为 `code / message / data`
+- 认证、员工、用户组、主体、设置、日志接口统一挂在 `/api/admin`
 
 ### `hack/`
 

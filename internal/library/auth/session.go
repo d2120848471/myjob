@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"time"
 
 	modelruntime "myjob/internal/model/runtime"
 
+	"github.com/gogf/gf/v2/database/gredis"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	"github.com/redis/go-redis/v9"
 )
 
 type Claims struct {
@@ -52,15 +53,18 @@ func ParseToken(secret, tokenString string) (*Claims, error) {
 	return claims, nil
 }
 
-func SaveSession(ctx context.Context, client *redis.Client, payload modelruntime.SessionPayload, ttl time.Duration) error {
+func SaveSession(ctx context.Context, client *gredis.Redis, payload modelruntime.SessionPayload, ttl time.Duration) error {
 	data, _ := json.Marshal(payload)
-	if err := client.Set(ctx, SessionKey(payload.JTI), data, ttl).Err(); err != nil {
+	seconds := int64(math.Ceil(ttl.Seconds()))
+	if _, err := client.GroupString().Set(ctx, SessionKey(payload.JTI), string(data), gredis.SetOption{
+		TTLOption: gredis.TTLOption{EX: &seconds},
+	}); err != nil {
 		return err
 	}
-	if err := client.SAdd(ctx, UserSessionsKey(payload.UserID), payload.JTI).Err(); err != nil {
+	if _, err := client.GroupSet().SAdd(ctx, UserSessionsKey(payload.UserID), payload.JTI); err != nil {
 		return err
 	}
-	_ = client.Expire(ctx, UserSessionsKey(payload.UserID), ttl).Err()
+	_, _ = client.GroupGeneric().Expire(ctx, UserSessionsKey(payload.UserID), seconds)
 	return nil
 }
 
