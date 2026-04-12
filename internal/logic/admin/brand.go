@@ -101,32 +101,60 @@ func (l *BrandLogic) Children(ctx context.Context, req *adminapi.BrandChildrenRe
 	if _, err := l.getBrand(ctx, req.ID); err != nil {
 		return nil, apiErr(consts.CodeBadRequest, "品牌不存在")
 	}
-	rows := make([]app.BrandListItem, 0)
+	type brandRow struct {
+		ID              int64     `db:"id"`
+		ParentID        int64     `db:"parent_id"`
+		Name            string    `db:"name"`
+		Icon            string    `db:"icon"`
+		CredentialImage string    `db:"credential_image"`
+		Description     string    `db:"description"`
+		IsVisible       int       `db:"is_visible"`
+		Sort            int       `db:"sort"`
+		GoodsCount      int       `db:"goods_count"`
+		HasChildren     int       `db:"has_children"`
+		CreatedAt       time.Time `db:"created_at"`
+		UpdatedAt       time.Time `db:"updated_at"`
+	}
+	rows := make([]brandRow, 0)
 	if err := l.core.DB().GetCore().GetScan(ctx, &rows, `
 SELECT
-    id,
-    parent_id,
-    name,
-    icon,
-    credential_image,
-    COALESCE(description, '') AS description,
-    is_visible,
-    sort,
-    goods_count,
-    0 AS has_children,
-    created_at,
-    updated_at
-FROM product_brand
-WHERE parent_id = ?
+    b.id,
+    b.parent_id,
+    b.name,
+    b.icon,
+    b.credential_image,
+    COALESCE(b.description, '') AS description,
+    b.is_visible,
+    b.sort,
+    b.goods_count,
+    CASE WHEN EXISTS(SELECT 1 FROM product_brand c WHERE c.parent_id = b.id) THEN 1 ELSE 0 END AS has_children,
+    b.created_at,
+    b.updated_at
+FROM product_brand b
+WHERE b.parent_id = ?
 ORDER BY sort ASC, id ASC
 `, req.ID); err != nil {
 		return nil, apiErr(consts.CodeInternalError, "子品牌查询失败")
 	}
-	for index := range rows {
-		rows[index].Children = make([]app.BrandListItem, 0)
-		rows[index].HasChildren = false
+	items := make([]app.BrandListItem, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, app.BrandListItem{
+			ID:              row.ID,
+			ParentID:        row.ParentID,
+			Name:            row.Name,
+			Icon:            row.Icon,
+			CredentialImage: row.CredentialImage,
+			Description:     row.Description,
+			IsVisible:       row.IsVisible,
+			Sort:            row.Sort,
+			GoodsCount:      row.GoodsCount,
+			HasChildren:     row.HasChildren == 1,
+			Children:        make([]app.BrandListItem, 0),
+			CreatedAt:       row.CreatedAt,
+			UpdatedAt:       row.UpdatedAt,
+		})
 	}
-	return &adminapi.BrandChildrenRes{List: rows}, nil
+	return &adminapi.BrandChildrenRes{List: items}, nil
 }
 
 func (l *BrandLogic) Add(ctx context.Context, req *adminapi.BrandCreateReq, actor app.AdminUser, ip string) (*adminapi.BrandCreateRes, error) {
@@ -137,7 +165,8 @@ func (l *BrandLogic) Add(ctx context.Context, req *adminapi.BrandCreateReq, acto
 	if req.Name == "" || (req.IsVisible != 0 && req.IsVisible != 1) || req.ParentID < 0 {
 		return nil, apiErr(consts.CodeBadRequest, "品牌参数错误")
 	}
-	if _, err := l.validateParent(ctx, req.ParentID); err != nil {
+	_, level, err := l.validateParent(ctx, req.ParentID)
+	if err != nil {
 		return nil, err
 	}
 	exists, err := l.siblingNameExists(ctx, req.ParentID, req.Name, 0)
@@ -160,11 +189,7 @@ INSERT INTO product_brand (
 		return nil, apiErr(consts.CodeInternalError, "品牌新增失败")
 	}
 	id, _ := result.LastInsertId()
-	if req.ParentID == 0 {
-		l.core.WriteOperation(ctx, actor, fmt.Sprintf("添加一级品牌：%s", req.Name), ip)
-	} else {
-		l.core.WriteOperation(ctx, actor, fmt.Sprintf("添加二级品牌：%s（父级ID=%d）", req.Name, req.ParentID), ip)
-	}
+	l.core.WriteOperation(ctx, actor, l.buildBrandCreateLog(level, req.Name, req.ParentID), ip)
 	return &adminapi.BrandCreateRes{ID: id}, nil
 }
 
@@ -203,14 +228,12 @@ func (l *BrandLogic) Delete(ctx context.Context, req *adminapi.BrandDeleteReq, a
 	if err != nil {
 		return nil, apiErr(consts.CodeBadRequest, "品牌不存在")
 	}
-	if brand.ParentID == 0 {
-		childCount, countErr := l.core.DB().GetCore().GetValue(ctx, `SELECT COUNT(*) FROM product_brand WHERE parent_id = ?`, req.ID)
-		if countErr != nil {
-			return nil, apiErr(consts.CodeInternalError, "品牌删除校验失败")
-		}
-		if childCount.Int() > 0 {
-			return nil, apiErr(consts.CodeConflict, "该品牌下存在子品牌，请先删除子品牌")
-		}
+	childCount, countErr := l.core.DB().GetCore().GetValue(ctx, `SELECT COUNT(*) FROM product_brand WHERE parent_id = ?`, req.ID)
+	if countErr != nil {
+		return nil, apiErr(consts.CodeInternalError, "品牌删除校验失败")
+	}
+	if childCount.Int() > 0 {
+		return nil, apiErr(consts.CodeConflict, "该品牌下存在子品牌，请先删除子品牌")
 	}
 	industryRefCount, err := l.core.DB().GetCore().GetValue(ctx, `SELECT COUNT(*) FROM product_industry_brand WHERE brand_id = ?`, req.ID)
 	if err != nil {
@@ -303,18 +326,63 @@ func (l *BrandLogic) Upload(ctx context.Context, req *adminapi.BrandUploadReq, a
 	return &adminapi.BrandUploadRes{URL: publicURL, FileName: fileName, Size: req.File.Size}, nil
 }
 
-func (l *BrandLogic) validateParent(ctx context.Context, parentID int64) (app.ProductBrand, error) {
+func (l *BrandLogic) validateParent(ctx context.Context, parentID int64) (app.ProductBrand, int, error) {
 	if parentID == 0 {
-		return app.ProductBrand{}, nil
+		return app.ProductBrand{}, 1, nil
 	}
 	parent, err := l.getBrand(ctx, parentID)
 	if err != nil {
-		return app.ProductBrand{}, apiErr(consts.CodeBadRequest, "父级品牌不存在")
+		return app.ProductBrand{}, 0, apiErr(consts.CodeBadRequest, "父级品牌不存在")
 	}
-	if parent.ParentID != 0 {
-		return app.ProductBrand{}, apiErr(consts.CodeBadRequest, "品牌层级仅支持两级")
+	// 沿着父链回溯层级，最多允许新增到三级品牌。
+	parentLevel, err := l.brandLevel(ctx, parent)
+	if err != nil {
+		return app.ProductBrand{}, 0, err
 	}
-	return parent, nil
+	if parentLevel >= 3 {
+		return app.ProductBrand{}, 0, apiErr(consts.CodeBadRequest, "品牌层级最多支持三级")
+	}
+	return parent, parentLevel + 1, nil
+}
+
+func (l *BrandLogic) brandLevel(ctx context.Context, brand app.ProductBrand) (int, error) {
+	level := 1
+	visited := map[int64]struct{}{}
+	current := brand
+	for current.ParentID != 0 {
+		if _, ok := visited[current.ID]; ok {
+			return 0, apiErr(consts.CodeBadRequest, "父级品牌层级异常")
+		}
+		visited[current.ID] = struct{}{}
+		parent, err := l.getBrand(ctx, current.ParentID)
+		if err != nil {
+			return 0, apiErr(consts.CodeBadRequest, "父级品牌不存在")
+		}
+		level++
+		current = parent
+	}
+	return level, nil
+}
+
+func (l *BrandLogic) buildBrandCreateLog(level int, name string, parentID int64) string {
+	levelLabel := brandLevelLabel(level)
+	if parentID == 0 {
+		return fmt.Sprintf("添加%s品牌：%s", levelLabel, name)
+	}
+	return fmt.Sprintf("添加%s品牌：%s（父级ID=%d）", levelLabel, name, parentID)
+}
+
+func brandLevelLabel(level int) string {
+	switch level {
+	case 1:
+		return "一级"
+	case 2:
+		return "二级"
+	case 3:
+		return "三级"
+	default:
+		return fmt.Sprintf("%d级", level)
+	}
 }
 
 func (l *BrandLogic) getBrand(ctx context.Context, id int64) (app.ProductBrand, error) {

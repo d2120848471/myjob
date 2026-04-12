@@ -74,9 +74,22 @@ func TestProductBrandFlows(t *testing.T) {
 	require.NoError(t, json.Unmarshal(addChild.Data, &childData))
 	require.NotZero(t, childData.ID)
 
-	levelErr := h.postJSON("/api/admin/brands", map[string]any{
+	addGrandChild := h.postJSON("/api/admin/brands", map[string]any{
 		"parent_id":  childData.ID,
-		"name":       "非法三级品牌",
+		"name":       "腾讯视频影视会员周卡",
+		"is_visible": 1,
+	}, token)
+	require.Equal(t, 0, addGrandChild.Code)
+
+	var grandChildData struct {
+		ID int64 `json:"id"`
+	}
+	require.NoError(t, json.Unmarshal(addGrandChild.Data, &grandChildData))
+	require.NotZero(t, grandChildData.ID)
+
+	levelErr := h.postJSON("/api/admin/brands", map[string]any{
+		"parent_id":  grandChildData.ID,
+		"name":       "非法四级品牌",
 		"is_visible": 1,
 	}, token)
 	require.NotEqual(t, 0, levelErr.Code)
@@ -133,7 +146,23 @@ func TestProductBrandFlows(t *testing.T) {
 	require.Len(t, childrenData.List, 1)
 	require.Equal(t, childData.ID, childrenData.List[0].ID)
 	require.Equal(t, parentData.ID, childrenData.List[0].ParentID)
-	require.False(t, childrenData.List[0].HasChildren)
+	require.True(t, childrenData.List[0].HasChildren)
+
+	grandChildrenRes := h.getJSON(fmt.Sprintf("/api/admin/brands/%d/children", childData.ID), token)
+	require.Equal(t, 0, grandChildrenRes.Code)
+
+	var grandChildrenData struct {
+		List []struct {
+			ID          int64 `json:"id"`
+			ParentID    int64 `json:"parent_id"`
+			HasChildren bool  `json:"has_children"`
+		} `json:"list"`
+	}
+	require.NoError(t, json.Unmarshal(grandChildrenRes.Data, &grandChildrenData))
+	require.Len(t, grandChildrenData.List, 1)
+	require.Equal(t, grandChildData.ID, grandChildrenData.List[0].ID)
+	require.Equal(t, childData.ID, grandChildrenData.List[0].ParentID)
+	require.False(t, grandChildrenData.List[0].HasChildren)
 
 	visibilityRes := h.patchJSON(fmt.Sprintf("/api/admin/brands/%d/visibility", parentData.ID), map[string]any{
 		"is_visible": 0,
@@ -169,6 +198,12 @@ func TestProductBrandFlows(t *testing.T) {
 	deleteParentConflict := h.deleteJSON(fmt.Sprintf("/api/admin/brands/%d", parentData.ID), token)
 	require.Equal(t, 409, deleteParentConflict.Code)
 
+	deleteChildConflict := h.deleteJSON(fmt.Sprintf("/api/admin/brands/%d", childData.ID), token)
+	require.Equal(t, 409, deleteChildConflict.Code)
+
+	deleteGrandChild := h.deleteJSON(fmt.Sprintf("/api/admin/brands/%d", grandChildData.ID), token)
+	require.Equal(t, 0, deleteGrandChild.Code)
+
 	deleteChild := h.deleteJSON(fmt.Sprintf("/api/admin/brands/%d", childData.ID), token)
 	require.Equal(t, 0, deleteChild.Code)
 
@@ -183,6 +218,31 @@ func TestProductIndustryFlows(t *testing.T) {
 	brand1 := h.createTopLevelBrand(t, token, "腾讯视频")
 	brand2 := h.createTopLevelBrand(t, token, "优酷")
 	brand3 := h.createTopLevelBrand(t, token, "爱奇艺")
+	brand1Child := h.postJSON("/api/admin/brands", map[string]any{
+		"parent_id":  brand1,
+		"name":       "腾讯视频影视会员",
+		"is_visible": 1,
+	}, token)
+	require.Equal(t, 0, brand1Child.Code)
+
+	var brand1ChildData struct {
+		ID int64 `json:"id"`
+	}
+	require.NoError(t, json.Unmarshal(brand1Child.Data, &brand1ChildData))
+	require.NotZero(t, brand1ChildData.ID)
+
+	brand1GrandChild := h.postJSON("/api/admin/brands", map[string]any{
+		"parent_id":  brand1ChildData.ID,
+		"name":       "腾讯视频影视会员周卡",
+		"is_visible": 1,
+	}, token)
+	require.Equal(t, 0, brand1GrandChild.Code)
+
+	var brand1GrandChildData struct {
+		ID int64 `json:"id"`
+	}
+	require.NoError(t, json.Unmarshal(brand1GrandChild.Data, &brand1GrandChildData))
+	require.NotZero(t, brand1GrandChildData.ID)
 
 	invalidCreate := h.postJSON("/api/admin/industries", map[string]any{
 		"name":      "非法行业",
@@ -221,7 +281,8 @@ func TestProductIndustryFlows(t *testing.T) {
 	selectorRes := h.getJSON("/api/admin/industries/brand-selector?name=视频", token)
 	require.Equal(t, 0, selectorRes.Code)
 	require.Contains(t, string(selectorRes.Data), "腾讯视频")
-	require.NotContains(t, string(selectorRes.Data), "二级")
+	require.NotContains(t, string(selectorRes.Data), "腾讯视频影视会员")
+	require.NotContains(t, string(selectorRes.Data), "腾讯视频影视会员周卡")
 
 	brandListRes := h.getJSON(fmt.Sprintf("/api/admin/industries/%d/brands", createIndustryData.ID), token)
 	require.Equal(t, 0, brandListRes.Code)
@@ -259,6 +320,16 @@ func TestProductIndustryFlows(t *testing.T) {
 		"brand_ids": []int64{brand3},
 	}, token)
 	require.Equal(t, 0, addRelation.Code)
+
+	addChildRelation := h.postJSON(fmt.Sprintf("/api/admin/industries/%d/brands", createIndustryData.ID), map[string]any{
+		"brand_ids": []int64{brand1ChildData.ID},
+	}, token)
+	require.Equal(t, 400, addChildRelation.Code)
+
+	addGrandChildRelation := h.postJSON(fmt.Sprintf("/api/admin/industries/%d/brands", createIndustryData.ID), map[string]any{
+		"brand_ids": []int64{brand1GrandChildData.ID},
+	}, token)
+	require.Equal(t, 400, addGrandChildRelation.Code)
 
 	sortRelation := h.patchJSON(fmt.Sprintf("/api/admin/industries/%d/brands/%d/sort", createIndustryData.ID, brand3), map[string]any{
 		"action": "top",
