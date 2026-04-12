@@ -102,8 +102,9 @@ HTTP Request
 
 ### 短信
 
-- 当前支持 `mock` 和 `aliyun` 两种 provider
-- provider 选择由 `manifest/config/*.yaml` 中的 `sms.provider` 控制
+- 运行态默认使用 `aliyun` provider
+- `mock` 只保留给测试场景和 `NewTestCore` 这类测试初始化逻辑
+- provider 选择由 `manifest/config/config.local.yaml` 或 `ADMIN_CONFIG` 指向的真实配置控制
 
 ### 审计
 

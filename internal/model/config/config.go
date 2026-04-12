@@ -64,7 +64,7 @@ func Default() Config {
 		Redis:     RedisConfig{Addr: "127.0.0.1:6380", DB: 0},
 		Auth:      AuthConfig{JWTSecret: "please-change-this-secret", AccessTokenTTLMin: 10080, TempLoginTTLMin: 5},
 		Bootstrap: BootstrapConfig{SuperAdminUsername: "admin"},
-		SMS:       RuntimeSMSConfig{Provider: "mock"},
+		SMS:       RuntimeSMSConfig{Provider: "aliyun"},
 		Audit:     AuditConfig{Async: true, BufferSize: 128},
 	}
 }

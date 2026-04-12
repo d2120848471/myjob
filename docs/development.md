@@ -39,14 +39,12 @@ go build ./...
 
 配置文件位于 `manifest/config/`：
 
-- `config.example.yaml`：示例模板
-- `config.local.yaml`：本地运行模板
+- `config.local.yaml`：本地真实开发配置
 
 配置加载规则：
 
 1. 优先读取 `ADMIN_CONFIG`
 2. 否则读取 `manifest/config/config.local.yaml`
-3. 如果本地配置不存在，再回退到 `manifest/config/config.example.yaml`
 
 同时支持环境变量占位，例如：
 
