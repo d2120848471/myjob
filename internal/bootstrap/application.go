@@ -38,10 +38,10 @@ func NewApplicationFromConfig(cfg modelconfig.Config) (*Application, error) {
 func NewApplicationFromEnv() (*Application, error) {
 	configPath := os.Getenv("ADMIN_CONFIG")
 	if configPath == "" {
-		// 先读本地配置，不存在时再回退到示例模板，方便新同事直接起服务。
+		// 运行时统一走本地真实开发配置，不再回退到 mock 示例模板。
 		configPath = "manifest/config/config.local.yaml"
 		if _, err := os.Stat(configPath); err != nil {
-			configPath = "manifest/config/config.example.yaml"
+			return nil, err
 		}
 	}
 	cfg, err := modelconfig.Load(configPath)
