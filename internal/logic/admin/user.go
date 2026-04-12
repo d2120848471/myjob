@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	v1 "myjob/api/admin/v1"
+	adminapi "myjob/api"
 	"myjob/internal/app"
 	"myjob/internal/consts"
 
@@ -15,7 +15,7 @@ import (
 
 type UserLogic struct{ core *app.Core }
 
-func (l *UserLogic) List(ctx context.Context, req *v1.UserListReq) (*v1.UserListRes, error) {
+func (l *UserLogic) List(ctx context.Context, req *adminapi.UserListReq) (*adminapi.UserListRes, error) {
 	page, pageSize := app.ParsePagination(req.Page, req.PageSize)
 	totalVal, err := l.core.DB().GetCore().GetValue(ctx, `SELECT COUNT(*) FROM admin_user WHERE is_deleted = 0`)
 	if err != nil {
@@ -33,10 +33,10 @@ LIMIT ? OFFSET ?
 `, pageSize, (page-1)*pageSize); err != nil {
 		return nil, apiErr(consts.CodeInternalError, "员工列表查询失败")
 	}
-	return &v1.UserListRes{List: items, Pagination: v1.PaginationRes{Page: page, PageSize: pageSize, Total: totalVal.Int()}}, nil
+	return &adminapi.UserListRes{List: items, Pagination: adminapi.PaginationRes{Page: page, PageSize: pageSize, Total: totalVal.Int()}}, nil
 }
 
-func (l *UserLogic) Trash(ctx context.Context, req *v1.UserTrashReq) (*v1.UserTrashRes, error) {
+func (l *UserLogic) Trash(ctx context.Context, req *adminapi.UserTrashReq) (*adminapi.UserTrashRes, error) {
 	page, pageSize := app.ParsePagination(req.Page, req.PageSize)
 	totalVal, err := l.core.DB().GetCore().GetValue(ctx, `SELECT COUNT(*) FROM admin_user WHERE is_deleted = 1`)
 	if err != nil {
@@ -54,10 +54,10 @@ LIMIT ? OFFSET ?
 `, pageSize, (page-1)*pageSize); err != nil {
 		return nil, apiErr(consts.CodeInternalError, "回收站查询失败")
 	}
-	return &v1.UserTrashRes{List: items, Pagination: v1.PaginationRes{Page: page, PageSize: pageSize, Total: totalVal.Int()}}, nil
+	return &adminapi.UserTrashRes{List: items, Pagination: adminapi.PaginationRes{Page: page, PageSize: pageSize, Total: totalVal.Int()}}, nil
 }
 
-func (l *UserLogic) Add(ctx context.Context, req *v1.UserCreateReq, actor app.AdminUser, ip string) (*v1.UserCreateRes, error) {
+func (l *UserLogic) Add(ctx context.Context, req *adminapi.UserCreateReq, actor app.AdminUser, ip string) (*adminapi.UserCreateRes, error) {
 	req.Username = strings.TrimSpace(req.Username)
 	req.RealName = strings.TrimSpace(req.RealName)
 	req.Phone = strings.TrimSpace(req.Phone)
@@ -89,10 +89,10 @@ func (l *UserLogic) Add(ctx context.Context, req *v1.UserCreateReq, actor app.Ad
 	}
 	id, _ := result.LastInsertId()
 	l.core.WriteOperation(ctx, actor, fmt.Sprintf("添加员工：%s，用户组：%d", req.Username, req.GroupID), ip)
-	return &v1.UserCreateRes{ID: id}, nil
+	return &adminapi.UserCreateRes{ID: id}, nil
 }
 
-func (l *UserLogic) Edit(ctx context.Context, req *v1.UserUpdateReq, actor app.AdminUser, ip string) (*v1.UserUpdateRes, error) {
+func (l *UserLogic) Edit(ctx context.Context, req *adminapi.UserUpdateReq, actor app.AdminUser, ip string) (*adminapi.UserUpdateRes, error) {
 	user, err := l.core.GetUserByID(ctx, req.ID)
 	if err != nil {
 		return nil, apiErr(consts.CodeBadRequest, "员工不存在")
@@ -133,10 +133,10 @@ func (l *UserLogic) Edit(ctx context.Context, req *v1.UserUpdateReq, actor app.A
 		_ = l.core.RemoveAllUserSessions(ctx, req.ID)
 	}
 	l.core.WriteOperation(ctx, actor, fmt.Sprintf("编辑员工：%s", user.Username), ip)
-	return &v1.UserUpdateRes{}, nil
+	return &adminapi.UserUpdateRes{}, nil
 }
 
-func (l *UserLogic) Delete(ctx context.Context, req *v1.UserDeleteReq, actor app.AdminUser, ip string) (*v1.UserDeleteRes, error) {
+func (l *UserLogic) Delete(ctx context.Context, req *adminapi.UserDeleteReq, actor app.AdminUser, ip string) (*adminapi.UserDeleteRes, error) {
 	user, err := l.core.GetUserByID(ctx, req.ID)
 	if err != nil {
 		return nil, apiErr(consts.CodeBadRequest, "员工不存在")
@@ -150,10 +150,10 @@ func (l *UserLogic) Delete(ctx context.Context, req *v1.UserDeleteReq, actor app
 	}
 	_ = l.core.RemoveAllUserSessions(ctx, req.ID)
 	l.core.WriteOperation(ctx, actor, fmt.Sprintf("删除员工：%s", app.RestoreUsername(user.Username)), ip)
-	return &v1.UserDeleteRes{}, nil
+	return &adminapi.UserDeleteRes{}, nil
 }
 
-func (l *UserLogic) Restore(ctx context.Context, req *v1.UserRestoreReq, actor app.AdminUser, ip string) (*v1.UserRestoreRes, error) {
+func (l *UserLogic) Restore(ctx context.Context, req *adminapi.UserRestoreReq, actor app.AdminUser, ip string) (*adminapi.UserRestoreRes, error) {
 	user, err := l.core.GetUserByID(ctx, req.ID)
 	if err != nil {
 		return nil, apiErr(consts.CodeBadRequest, "员工不存在")
@@ -170,10 +170,10 @@ func (l *UserLogic) Restore(ctx context.Context, req *v1.UserRestoreReq, actor a
 	}
 	_ = l.core.RemoveAllUserSessions(ctx, req.ID)
 	l.core.WriteOperation(ctx, actor, fmt.Sprintf("恢复员工：%s", original), ip)
-	return &v1.UserRestoreRes{}, nil
+	return &adminapi.UserRestoreRes{}, nil
 }
 
-func (l *UserLogic) Status(ctx context.Context, req *v1.UserStatusReq, actor app.AdminUser, ip string) (*v1.UserStatusRes, error) {
+func (l *UserLogic) Status(ctx context.Context, req *adminapi.UserStatusReq, actor app.AdminUser, ip string) (*adminapi.UserStatusRes, error) {
 	user, err := l.core.GetUserByID(ctx, req.ID)
 	if err != nil {
 		return nil, apiErr(consts.CodeBadRequest, "员工不存在")
@@ -194,10 +194,10 @@ func (l *UserLogic) Status(ctx context.Context, req *v1.UserStatusReq, actor app
 		return nil, apiErr(consts.CodeInternalError, "状态更新失败")
 	}
 	l.core.WriteOperation(ctx, actor, fmt.Sprintf("切换员工状态：%s -> %d", user.Username, req.Status), ip)
-	return &v1.UserStatusRes{}, nil
+	return &adminapi.UserStatusRes{}, nil
 }
 
-func (l *UserLogic) Notify(ctx context.Context, req *v1.UserNotifyReq, actor app.AdminUser, ip string) (*v1.UserNotifyRes, error) {
+func (l *UserLogic) Notify(ctx context.Context, req *adminapi.UserNotifyReq, actor app.AdminUser, ip string) (*adminapi.UserNotifyRes, error) {
 	if req.BalanceNotify != 0 && req.BalanceNotify != 1 {
 		return nil, apiErr(consts.CodeBadRequest, "余额通知值错误")
 	}
@@ -205,21 +205,21 @@ func (l *UserLogic) Notify(ctx context.Context, req *v1.UserNotifyReq, actor app
 		return nil, apiErr(consts.CodeInternalError, "余额通知更新失败")
 	}
 	l.core.WriteOperation(ctx, actor, fmt.Sprintf("切换余额通知：%d", req.ID), ip)
-	return &v1.UserNotifyRes{}, nil
+	return &adminapi.UserNotifyRes{}, nil
 }
 
-func (l *UserLogic) SetBusiness(ctx context.Context, req *v1.UserBusinessAssignReq, actor app.AdminUser, ip string) (*v1.UserBusinessAssignRes, error) {
+func (l *UserLogic) SetBusiness(ctx context.Context, req *adminapi.UserBusinessAssignReq, actor app.AdminUser, ip string) (*adminapi.UserBusinessAssignRes, error) {
 	if err := l.handleBusiness(ctx, req.IDs, actor, ip, 1); err != nil {
 		return nil, err
 	}
-	return &v1.UserBusinessAssignRes{}, nil
+	return &adminapi.UserBusinessAssignRes{}, nil
 }
 
-func (l *UserLogic) CancelBusiness(ctx context.Context, req *v1.UserBusinessCancelReq, actor app.AdminUser, ip string) (*v1.UserBusinessCancelRes, error) {
+func (l *UserLogic) CancelBusiness(ctx context.Context, req *adminapi.UserBusinessCancelReq, actor app.AdminUser, ip string) (*adminapi.UserBusinessCancelRes, error) {
 	if err := l.handleBusiness(ctx, req.IDs, actor, ip, 0); err != nil {
 		return nil, err
 	}
-	return &v1.UserBusinessCancelRes{}, nil
+	return &adminapi.UserBusinessCancelRes{}, nil
 }
 
 func (l *UserLogic) handleBusiness(ctx context.Context, ids []int64, actor app.AdminUser, ip string, flag int) error {

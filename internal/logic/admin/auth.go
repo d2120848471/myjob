@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	v1 "myjob/api/admin/v1"
+	adminapi "myjob/api"
 	"myjob/internal/app"
 	"myjob/internal/consts"
 	authlib "myjob/internal/library/auth"
@@ -20,7 +20,7 @@ import (
 
 type AuthLogic struct{ core *app.Core }
 
-func (l *AuthLogic) Login(ctx context.Context, req *v1.AuthLoginReq, ip string) (*v1.AuthLoginRes, error) {
+func (l *AuthLogic) Login(ctx context.Context, req *adminapi.AuthLoginReq, ip string) (*adminapi.AuthLoginRes, error) {
 	req.Username = strings.TrimSpace(req.Username)
 	req.Password = strings.TrimSpace(req.Password)
 	if req.Username == "" || req.Password == "" {
@@ -45,7 +45,7 @@ func (l *AuthLogic) Login(ctx context.Context, req *v1.AuthLoginReq, ip string) 
 		if err = l.core.SaveTempLogin(ctx, loginToken, temp); err != nil {
 			return nil, apiErr(consts.CodeInternalError, "登录临时态创建失败")
 		}
-		return &v1.AuthLoginRes{
+		return &adminapi.AuthLoginRes{
 			NeedSMSVerify: true,
 			LoginToken:    loginToken,
 			Phone:         app.MaskPhone(user.Phone),
@@ -60,7 +60,7 @@ func (l *AuthLogic) Login(ctx context.Context, req *v1.AuthLoginReq, ip string) 
 		return nil, apiErr(consts.CodeInternalError, "登录状态更新失败")
 	}
 	_ = l.core.InsertLoginLog(ctx, user.ID, user.RealName, ip)
-	return &v1.AuthLoginRes{
+	return &adminapi.AuthLoginRes{
 		NeedSMSVerify: false,
 		Token:         token,
 		User:          ptrLoginUser(l.core.BuildLoginUser(ctx, user)),
@@ -68,7 +68,7 @@ func (l *AuthLogic) Login(ctx context.Context, req *v1.AuthLoginReq, ip string) 
 	}, nil
 }
 
-func (l *AuthLogic) LoginSMSSend(ctx context.Context, req *v1.AuthSMSSendReq) (*v1.AuthSMSSendRes, error) {
+func (l *AuthLogic) LoginSMSSend(ctx context.Context, req *adminapi.AuthSMSSendReq) (*adminapi.AuthSMSSendRes, error) {
 	if strings.TrimSpace(req.LoginToken) == "" {
 		return nil, apiErr(consts.CodeBadRequest, "login_token不能为空")
 	}
@@ -102,10 +102,10 @@ func (l *AuthLogic) LoginSMSSend(ctx context.Context, req *v1.AuthSMSSendReq) (*
 		_, _ = l.core.Redis().GroupGeneric().Del(ctx, authlib.SMSCodeKey(user.ID), lockKey)
 		return nil, apiErr(consts.CodeInternalError, "短信发送失败")
 	}
-	return &v1.AuthSMSSendRes{}, nil
+	return &adminapi.AuthSMSSendRes{}, nil
 }
 
-func (l *AuthLogic) LoginSMSVerify(ctx context.Context, req *v1.AuthSMSVerifyReq) (*v1.AuthSMSVerifyRes, error) {
+func (l *AuthLogic) LoginSMSVerify(ctx context.Context, req *adminapi.AuthSMSVerifyReq) (*adminapi.AuthSMSVerifyRes, error) {
 	if strings.TrimSpace(req.LoginToken) == "" || !app.SMSCodeRegexp().MatchString(req.SMSCode) {
 		return nil, apiErr(consts.CodeBadRequest, "验证码格式错误")
 	}
@@ -148,24 +148,24 @@ func (l *AuthLogic) LoginSMSVerify(ctx context.Context, req *v1.AuthSMSVerifyReq
 		return nil, apiErr(consts.CodeInternalError, "登录状态更新失败")
 	}
 	_ = l.core.InsertLoginLog(ctx, user.ID, user.RealName, temp.IP)
-	return &v1.AuthSMSVerifyRes{
+	return &adminapi.AuthSMSVerifyRes{
 		Token:       token,
 		User:        l.core.BuildLoginUser(ctx, user),
 		Permissions: perms,
 	}, nil
 }
 
-func (l *AuthLogic) Me(ctx context.Context, _ modelruntime.Principal, user app.AdminUser) (*v1.AuthMeRes, error) {
+func (l *AuthLogic) Me(ctx context.Context, _ modelruntime.Principal, user app.AdminUser) (*adminapi.AuthMeRes, error) {
 	perms, err := l.core.LoadPermissions(ctx, user.GroupID)
 	if err != nil {
 		return nil, apiErr(consts.CodeInternalError, "权限读取失败")
 	}
-	return &v1.AuthMeRes{User: l.core.BuildLoginUser(ctx, user), Permissions: perms}, nil
+	return &adminapi.AuthMeRes{User: l.core.BuildLoginUser(ctx, user), Permissions: perms}, nil
 }
 
-func (l *AuthLogic) Logout(ctx context.Context, principal modelruntime.Principal, user app.AdminUser) (*v1.AuthSessionDeleteRes, error) {
+func (l *AuthLogic) Logout(ctx context.Context, principal modelruntime.Principal, user app.AdminUser) (*adminapi.AuthSessionDeleteRes, error) {
 	_ = l.core.RemoveSession(ctx, principal.JTI, user.ID)
-	return &v1.AuthSessionDeleteRes{}, nil
+	return &adminapi.AuthSessionDeleteRes{}, nil
 }
 
 func ptrLoginUser(user modelruntime.LoginUser) *modelruntime.LoginUser {

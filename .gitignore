@@ -45,3 +45,6 @@ admin/admin/
 
 # Local sensitive docs
 需求文档_登录与权限系统.md
+
+# Git worktrees
+.worktrees/

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	v1 "myjob/api/admin/v1"
+	adminapi "myjob/api"
 	"myjob/internal/app"
 	"myjob/internal/consts"
 	authlib "myjob/internal/library/auth"
@@ -15,7 +15,7 @@ import (
 
 type GroupLogic struct{ core *app.Core }
 
-func (l *GroupLogic) List(ctx context.Context, req *v1.GroupListReq) (*v1.GroupListRes, error) {
+func (l *GroupLogic) List(ctx context.Context, req *adminapi.GroupListReq) (*adminapi.GroupListRes, error) {
 	page, pageSize := app.ParsePagination(req.Page, req.PageSize)
 	totalVal, err := l.core.DB().GetCore().GetValue(ctx, `SELECT COUNT(*) FROM admin_group`)
 	if err != nil {
@@ -25,10 +25,10 @@ func (l *GroupLogic) List(ctx context.Context, req *v1.GroupListReq) (*v1.GroupL
 	if err = l.core.DB().GetCore().GetScan(ctx, &items, `SELECT g.id, g.name, g.description, g.status, (SELECT COUNT(*) FROM admin_user u WHERE u.group_id = g.id) AS user_count FROM admin_group g ORDER BY g.id DESC LIMIT ? OFFSET ?`, pageSize, (page-1)*pageSize); err != nil {
 		return nil, apiErr(consts.CodeInternalError, "用户组列表查询失败")
 	}
-	return &v1.GroupListRes{List: items, Pagination: v1.PaginationRes{Page: page, PageSize: pageSize, Total: totalVal.Int()}}, nil
+	return &adminapi.GroupListRes{List: items, Pagination: adminapi.PaginationRes{Page: page, PageSize: pageSize, Total: totalVal.Int()}}, nil
 }
 
-func (l *GroupLogic) Add(ctx context.Context, req *v1.GroupCreateReq, actor app.AdminUser, ip string) (*v1.GroupCreateRes, error) {
+func (l *GroupLogic) Add(ctx context.Context, req *adminapi.GroupCreateReq, actor app.AdminUser, ip string) (*adminapi.GroupCreateRes, error) {
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" {
 		return nil, apiErr(consts.CodeBadRequest, "请输入用户组名称")
@@ -46,10 +46,10 @@ func (l *GroupLogic) Add(ctx context.Context, req *v1.GroupCreateReq, actor app.
 	}
 	id, _ := result.LastInsertId()
 	l.core.WriteOperation(ctx, actor, fmt.Sprintf("添加用户组：%s", req.Name), ip)
-	return &v1.GroupCreateRes{ID: id}, nil
+	return &adminapi.GroupCreateRes{ID: id}, nil
 }
 
-func (l *GroupLogic) Edit(ctx context.Context, req *v1.GroupUpdateReq, actor app.AdminUser, ip string) (*v1.GroupUpdateRes, error) {
+func (l *GroupLogic) Edit(ctx context.Context, req *adminapi.GroupUpdateReq, actor app.AdminUser, ip string) (*adminapi.GroupUpdateRes, error) {
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" {
 		return nil, apiErr(consts.CodeBadRequest, "请输入用户组名称")
@@ -65,10 +65,10 @@ func (l *GroupLogic) Edit(ctx context.Context, req *v1.GroupUpdateReq, actor app
 		return nil, apiErr(consts.CodeInternalError, "用户组编辑失败")
 	}
 	l.core.WriteOperation(ctx, actor, fmt.Sprintf("编辑用户组：%s", req.Name), ip)
-	return &v1.GroupUpdateRes{}, nil
+	return &adminapi.GroupUpdateRes{}, nil
 }
 
-func (l *GroupLogic) Delete(ctx context.Context, req *v1.GroupDeleteReq, actor app.AdminUser, ip string) (*v1.GroupDeleteRes, error) {
+func (l *GroupLogic) Delete(ctx context.Context, req *adminapi.GroupDeleteReq, actor app.AdminUser, ip string) (*adminapi.GroupDeleteRes, error) {
 	userCount, err := l.core.DB().GetCore().GetValue(ctx, `SELECT COUNT(*) FROM admin_user WHERE group_id = ?`, req.ID)
 	if err != nil {
 		return nil, apiErr(consts.CodeInternalError, "用户组校验失败")
@@ -89,10 +89,10 @@ func (l *GroupLogic) Delete(ctx context.Context, req *v1.GroupDeleteReq, actor a
 	}
 	_, _ = l.core.Redis().GroupGeneric().Del(ctx, authlib.PermissionCacheKey(req.ID))
 	l.core.WriteOperation(ctx, actor, fmt.Sprintf("删除用户组：%d", req.ID), ip)
-	return &v1.GroupDeleteRes{}, nil
+	return &adminapi.GroupDeleteRes{}, nil
 }
 
-func (l *GroupLogic) Status(ctx context.Context, req *v1.GroupStatusReq, actor app.AdminUser, ip string) (*v1.GroupStatusRes, error) {
+func (l *GroupLogic) Status(ctx context.Context, req *adminapi.GroupStatusReq, actor app.AdminUser, ip string) (*adminapi.GroupStatusRes, error) {
 	if req.Status != 0 && req.Status != 1 {
 		return nil, apiErr(consts.CodeBadRequest, "状态错误")
 	}
@@ -101,10 +101,10 @@ func (l *GroupLogic) Status(ctx context.Context, req *v1.GroupStatusReq, actor a
 	}
 	_, _ = l.core.Redis().GroupGeneric().Del(ctx, authlib.PermissionCacheKey(req.ID))
 	l.core.WriteOperation(ctx, actor, fmt.Sprintf("切换用户组状态：%d -> %d", req.ID, req.Status), ip)
-	return &v1.GroupStatusRes{}, nil
+	return &adminapi.GroupStatusRes{}, nil
 }
 
-func (l *GroupLogic) AuthGet(ctx context.Context, req *v1.GroupPermissionsGetReq) (*v1.GroupPermissionsGetRes, error) {
+func (l *GroupLogic) AuthGet(ctx context.Context, req *adminapi.GroupPermissionsGetReq) (*adminapi.GroupPermissionsGetRes, error) {
 	arr, err := l.core.DB().GetCore().GetArray(ctx, `SELECT gm.menu_id FROM admin_group_menu gm JOIN admin_menu m ON m.id = gm.menu_id WHERE gm.group_id = ? AND m.status = 1 AND m.super_only = 0 ORDER BY gm.menu_id ASC`, req.ID)
 	if err != nil {
 		return nil, apiErr(consts.CodeInternalError, "授权查询失败")
@@ -113,10 +113,10 @@ func (l *GroupLogic) AuthGet(ctx context.Context, req *v1.GroupPermissionsGetReq
 	for _, item := range arr {
 		ids = append(ids, item.Int64())
 	}
-	return &v1.GroupPermissionsGetRes{MenuIDs: ids}, nil
+	return &adminapi.GroupPermissionsGetRes{MenuIDs: ids}, nil
 }
 
-func (l *GroupLogic) AuthSave(ctx context.Context, req *v1.GroupPermissionsSaveReq, actor app.AdminUser, ip string) (*v1.GroupPermissionsSaveRes, error) {
+func (l *GroupLogic) AuthSave(ctx context.Context, req *adminapi.GroupPermissionsSaveReq, actor app.AdminUser, ip string) (*adminapi.GroupPermissionsSaveRes, error) {
 	allowed := make([]int64, 0, len(req.MenuIDs))
 	if err := l.core.DB().Transaction(ctx, func(ctx context.Context, tx gdb.TX) error {
 		if _, txErr := tx.Exec(`DELETE FROM admin_group_menu WHERE group_id = ?`, req.ID); txErr != nil {
@@ -148,13 +148,13 @@ func (l *GroupLogic) AuthSave(ctx context.Context, req *v1.GroupPermissionsSaveR
 	}
 	_, _ = l.core.Redis().GroupGeneric().Del(ctx, authlib.PermissionCacheKey(req.ID))
 	l.core.WriteOperation(ctx, actor, fmt.Sprintf("保存用户组授权：%d，共 %d 个权限", req.ID, len(allowed)), ip)
-	return &v1.GroupPermissionsSaveRes{}, nil
+	return &adminapi.GroupPermissionsSaveRes{}, nil
 }
 
-func (l *GroupLogic) MenuTree(ctx context.Context, _ *v1.MenuTreeReq) (*v1.MenuTreeRes, error) {
+func (l *GroupLogic) MenuTree(ctx context.Context, _ *adminapi.MenuTreeReq) (*adminapi.MenuTreeRes, error) {
 	items := make([]app.AdminMenu, 0)
 	if err := l.core.DB().GetCore().GetScan(ctx, &items, `SELECT id, parent_id, name, code, menu_type, menu_level, status, super_only, sort FROM admin_menu WHERE status = 1 AND super_only = 0 ORDER BY sort ASC, id ASC`); err != nil {
 		return nil, apiErr(consts.CodeInternalError, "菜单树查询失败")
 	}
-	return &v1.MenuTreeRes{List: app.BuildMenuTree(items, 0)}, nil
+	return &adminapi.MenuTreeRes{List: app.BuildMenuTree(items, 0)}, nil
 }
