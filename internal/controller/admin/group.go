@@ -1,101 +1,45 @@
 package admincontroller
 
 import (
-	groupapi "myjob/api/group"
-	"myjob/internal/library/response"
-	"myjob/internal/model/entity"
-	modelruntime "myjob/internal/model/runtime"
-	"myjob/internal/service"
+	"context"
 
-	"github.com/gogf/gf/v2/net/ghttp"
+	v1 "myjob/api/admin/v1"
+	authctx "myjob/internal/library/auth"
+	"myjob/internal/service"
 )
 
 type GroupController struct{ svc service.GroupService }
 
 func NewGroup(svc service.GroupService) *GroupController { return &GroupController{svc: svc} }
-func (c *GroupController) List(r *ghttp.Request, _ modelruntime.Principal, _ entity.AdminUser) {
-	var req groupapi.ListReq
-	_ = r.Parse(&req)
-	data, apiErr := c.svc.List(r.Context(), req)
-	if apiErr != nil {
-		response.Error(r, apiErr)
-		return
-	}
-	response.Success(r, data)
+
+func (c *GroupController) List(ctx context.Context, req *v1.GroupListReq) (res *v1.GroupListRes, err error) {
+	return c.svc.List(ctx, req)
 }
-func (c *GroupController) Add(r *ghttp.Request, _ modelruntime.Principal, actor entity.AdminUser) {
-	var req groupapi.AddReq
-	if err := r.Parse(&req); err != nil {
-		response.Error(r, &modelruntime.APIError{HTTPStatus: 400, Code: 400, Message: "参数错误"})
-		return
-	}
-	data, apiErr := c.svc.Add(r.Context(), req, actor, r.GetClientIp())
-	if apiErr != nil {
-		response.Error(r, apiErr)
-		return
-	}
-	response.Success(r, data)
+
+func (c *GroupController) Create(ctx context.Context, req *v1.GroupCreateReq) (res *v1.GroupCreateRes, err error) {
+	return c.svc.Add(ctx, req, authctx.MustUserFromCtx(ctx), clientIP(ctx))
 }
-func (c *GroupController) Edit(r *ghttp.Request, _ modelruntime.Principal, actor entity.AdminUser) {
-	var req groupapi.EditReq
-	if err := r.Parse(&req); err != nil {
-		response.Error(r, &modelruntime.APIError{HTTPStatus: 400, Code: 400, Message: "参数错误"})
-		return
-	}
-	data, apiErr := c.svc.Edit(r.Context(), r.GetRouter("id").Int64(), req, actor, r.GetClientIp())
-	if apiErr != nil {
-		response.Error(r, apiErr)
-		return
-	}
-	response.Success(r, data)
+
+func (c *GroupController) Update(ctx context.Context, req *v1.GroupUpdateReq) (res *v1.GroupUpdateRes, err error) {
+	return c.svc.Edit(ctx, req, authctx.MustUserFromCtx(ctx), clientIP(ctx))
 }
-func (c *GroupController) Delete(r *ghttp.Request, _ modelruntime.Principal, actor entity.AdminUser) {
-	data, apiErr := c.svc.Delete(r.Context(), r.GetRouter("id").Int64(), actor, r.GetClientIp())
-	if apiErr != nil {
-		response.Error(r, apiErr)
-		return
-	}
-	response.Success(r, data)
+
+func (c *GroupController) Delete(ctx context.Context, req *v1.GroupDeleteReq) (res *v1.GroupDeleteRes, err error) {
+	return c.svc.Delete(ctx, req, authctx.MustUserFromCtx(ctx), clientIP(ctx))
 }
-func (c *GroupController) Status(r *ghttp.Request, _ modelruntime.Principal, actor entity.AdminUser) {
-	var req groupapi.StatusReq
-	if err := r.Parse(&req); err != nil {
-		response.Error(r, &modelruntime.APIError{HTTPStatus: 400, Code: 400, Message: "参数错误"})
-		return
-	}
-	data, apiErr := c.svc.Status(r.Context(), r.GetRouter("id").Int64(), req, actor, r.GetClientIp())
-	if apiErr != nil {
-		response.Error(r, apiErr)
-		return
-	}
-	response.Success(r, data)
+
+func (c *GroupController) Status(ctx context.Context, req *v1.GroupStatusReq) (res *v1.GroupStatusRes, err error) {
+	return c.svc.Status(ctx, req, authctx.MustUserFromCtx(ctx), clientIP(ctx))
 }
-func (c *GroupController) AuthGet(r *ghttp.Request, _ modelruntime.Principal, _ entity.AdminUser) {
-	data, apiErr := c.svc.AuthGet(r.Context(), r.GetRouter("id").Int64())
-	if apiErr != nil {
-		response.Error(r, apiErr)
-		return
-	}
-	response.Success(r, data)
+
+func (c *GroupController) GetPermissions(ctx context.Context, req *v1.GroupPermissionsGetReq) (res *v1.GroupPermissionsGetRes, err error) {
+	return c.svc.AuthGet(ctx, req)
 }
-func (c *GroupController) AuthSave(r *ghttp.Request, _ modelruntime.Principal, actor entity.AdminUser) {
-	var req groupapi.AuthSaveReq
-	if err := r.Parse(&req); err != nil {
-		response.Error(r, &modelruntime.APIError{HTTPStatus: 400, Code: 400, Message: "参数错误"})
-		return
-	}
-	data, apiErr := c.svc.AuthSave(r.Context(), r.GetRouter("id").Int64(), req, actor, r.GetClientIp())
-	if apiErr != nil {
-		response.Error(r, apiErr)
-		return
-	}
-	response.Success(r, data)
+
+func (c *GroupController) SavePermissions(ctx context.Context, req *v1.GroupPermissionsSaveReq) (res *v1.GroupPermissionsSaveRes, err error) {
+	return c.svc.AuthSave(ctx, req, authctx.MustUserFromCtx(ctx), clientIP(ctx))
 }
-func (c *GroupController) MenuTree(r *ghttp.Request, _ modelruntime.Principal, _ entity.AdminUser) {
-	data, apiErr := c.svc.MenuTree(r.Context())
-	if apiErr != nil {
-		response.Error(r, apiErr)
-		return
-	}
-	response.Success(r, data)
+
+func (c *GroupController) MenuTree(ctx context.Context, req *v1.MenuTreeReq) (res *v1.MenuTreeRes, err error) {
+	return c.svc.MenuTree(ctx, req)
 }

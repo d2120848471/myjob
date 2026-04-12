@@ -1,4 +1,4 @@
-package kernel
+package app
 
 const sqliteSchema = `
 CREATE TABLE IF NOT EXISTS admin_user (

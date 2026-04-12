@@ -42,6 +42,7 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/gogf/gf/contrib/drivers/mysql/v2 v2.10.0 // indirect
 	github.com/gogf/gf/contrib/drivers/sqlite/v2 v2.10.0 // indirect
+	github.com/gogf/gf/contrib/nosql/redis/v2 v2.10.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/grokify/html-strip-tags-go v0.1.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect

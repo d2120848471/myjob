@@ -1,26 +1,28 @@
 package adminlogic
 
 import (
-	"net/http"
+	"myjob/internal/app"
+	"myjob/internal/consts"
+	"myjob/internal/service"
 
-	"myjob/internal/kernel"
-	modelruntime "myjob/internal/model/runtime"
+	"github.com/gogf/gf/v2/errors/gcode"
+	"github.com/gogf/gf/v2/errors/gerror"
 )
 
-func apiErr(status, code int, message string) *modelruntime.APIError {
-	return &modelruntime.APIError{HTTPStatus: status, Code: code, Message: message}
+func apiErr(code gcode.Code, message string) error {
+	return gerror.NewCode(code, message)
 }
 
 type Services struct {
-	Auth      *AuthLogic
-	User      *UserLogic
-	Group     *GroupLogic
-	Subject   *SubjectLogic
-	SMSConfig *SMSConfigLogic
-	AuditLog  *AuditLogLogic
+	Auth      service.AuthService
+	User      service.UserService
+	Group     service.GroupService
+	Subject   service.SubjectService
+	SMSConfig service.SMSConfigService
+	AuditLog  service.AuditLogService
 }
 
-func NewServices(core *kernel.Core) *Services {
+func NewServices(core *app.Core) *Services {
 	return &Services{
 		Auth:      &AuthLogic{core: core},
 		User:      &UserLogic{core: core},
@@ -31,4 +33,4 @@ func NewServices(core *kernel.Core) *Services {
 	}
 }
 
-var _ = http.StatusOK
+var _ = consts.CodeInternalError

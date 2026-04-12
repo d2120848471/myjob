@@ -2,60 +2,69 @@ package adminlogic
 
 import (
 	"context"
-	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
-	configapi "myjob/api/config"
-	"myjob/internal/kernel"
+	v1 "myjob/api/admin/v1"
+	"myjob/internal/app"
+	"myjob/internal/consts"
 	authlib "myjob/internal/library/auth"
 	modelruntime "myjob/internal/model/runtime"
 
 	"github.com/gogf/gf/v2/database/gdb"
 )
 
-type SMSConfigLogic struct{ core *kernel.Core }
+type SMSConfigLogic struct{ core *app.Core }
 
-func (l *SMSConfigLogic) Get(ctx context.Context) (configapi.SMSConfigGetRes, *modelruntime.APIError) {
+func (l *SMSConfigLogic) Get(ctx context.Context, _ *v1.SettingsSMSGetReq) (*v1.SettingsSMSGetRes, error) {
 	state, err := l.core.LoadSMSConfigState(ctx)
 	if err != nil {
-		return configapi.SMSConfigGetRes{}, apiErr(http.StatusInternalServerError, 500, "短信配置读取失败")
+		return nil, apiErr(consts.CodeInternalError, "短信配置读取失败")
 	}
-	resp := configapi.SMSConfigGetRes{AccessKeyMasked: kernel.MaskAccessKey(state.Config.AccessKey), AccessKeySecretMasked: kernel.MaskSecret(state.Config.AccessKeySecret), AccessKeyConfigured: state.AccessKeyConfigured, AccessKeySecretConfigured: state.AccessKeySecretConfigured, SignName: state.Config.SignName, TemplateCode: state.Config.TemplateCode, ExpireMinutes: state.Config.ExpireMinutes, IntervalMinutes: state.Config.IntervalMinutes}
+	resp := &v1.SettingsSMSGetRes{
+		AccessKeyMasked:           app.MaskAccessKey(state.Config.AccessKey),
+		AccessKeySecretMasked:     app.MaskSecret(state.Config.AccessKeySecret),
+		AccessKeyConfigured:       state.AccessKeyConfigured,
+		AccessKeySecretConfigured: state.AccessKeySecretConfigured,
+		SignName:                  state.Config.SignName,
+		TemplateCode:              state.Config.TemplateCode,
+		ExpireMinutes:             state.Config.ExpireMinutes,
+		IntervalMinutes:           state.Config.IntervalMinutes,
+	}
 	if !state.UpdatedAt.IsZero() {
 		resp.UpdatedAt = state.UpdatedAt.In(time.Local).Format("2006-01-02 15:04:05")
 	}
 	return resp, nil
 }
 
-func (l *SMSConfigLogic) Save(ctx context.Context, req configapi.SMSConfigSaveReq, actor kernel.AdminUser, ip string) (map[string]any, *modelruntime.APIError) {
+func (l *SMSConfigLogic) Save(ctx context.Context, req *v1.SettingsSMSSaveReq, actor app.AdminUser, ip string) (*v1.SettingsSMSSaveRes, error) {
 	state, err := l.core.LoadSMSConfigState(ctx)
 	if err != nil {
-		return nil, apiErr(http.StatusInternalServerError, 500, "短信配置读取失败")
+		return nil, apiErr(consts.CodeInternalError, "短信配置读取失败")
 	}
 	finalCfg, logDesc, apiErrValue := mergeSMSConfigSave(state, req)
 	if apiErrValue != nil {
 		return nil, apiErrValue
 	}
 	if err = saveSMSConfig(ctx, l.core, finalCfg); err != nil {
-		return nil, apiErr(http.StatusInternalServerError, 500, "短信配置保存失败")
+		return nil, apiErr(consts.CodeInternalError, "短信配置保存失败")
 	}
-	_ = l.core.Redis().Del(ctx, authlib.SMSConfigCacheKey()).Err()
+	_, _ = l.core.Redis().GroupGeneric().Del(ctx, authlib.SMSConfigCacheKey())
 	l.core.WriteOperation(ctx, actor, logDesc, ip)
-	return map[string]any{}, nil
+	return &v1.SettingsSMSSaveRes{}, nil
 }
 
-func mergeSMSConfigSave(current modelruntime.SMSConfigState, req configapi.SMSConfigSaveReq) (modelruntime.SMSConfig, string, *modelruntime.APIError) {
+func mergeSMSConfigSave(current modelruntime.SMSConfigState, req *v1.SettingsSMSSaveReq) (modelruntime.SMSConfig, string, error) {
 	req.AccessKey = strings.TrimSpace(req.AccessKey)
 	req.AccessKeySecret = strings.TrimSpace(req.AccessKeySecret)
 	req.SignName = strings.TrimSpace(req.SignName)
 	req.TemplateCode = strings.TrimSpace(req.TemplateCode)
 	if req.SignName == "" || req.TemplateCode == "" {
-		return modelruntime.SMSConfig{}, "", apiErr(http.StatusBadRequest, 400, "短信配置不能为空")
+		return modelruntime.SMSConfig{}, "", apiErr(consts.CodeBadRequest, "短信配置不能为空")
 	}
 	if req.ExpireMinutes < 1 || req.ExpireMinutes > 60 || req.IntervalMinutes < 1 || req.IntervalMinutes > 10 {
-		return modelruntime.SMSConfig{}, "", apiErr(http.StatusBadRequest, 400, "短信配置范围错误")
+		return modelruntime.SMSConfig{}, "", apiErr(consts.CodeBadRequest, "短信配置范围错误")
 	}
 	finalCfg := current.Config
 	finalCfg.SignName = req.SignName
@@ -63,19 +72,19 @@ func mergeSMSConfigSave(current modelruntime.SMSConfigState, req configapi.SMSCo
 	finalCfg.ExpireMinutes = req.ExpireMinutes
 	finalCfg.IntervalMinutes = req.IntervalMinutes
 	if !current.AccessKeyConfigured && req.KeepAccessKey {
-		return modelruntime.SMSConfig{}, "", apiErr(http.StatusBadRequest, 400, "首次配置必须填写AccessKey")
+		return modelruntime.SMSConfig{}, "", apiErr(consts.CodeBadRequest, "首次配置必须填写AccessKey")
 	}
 	if !current.AccessKeySecretConfigured && req.KeepAccessKeySecret {
-		return modelruntime.SMSConfig{}, "", apiErr(http.StatusBadRequest, 400, "首次配置必须填写AccessKeySecret")
+		return modelruntime.SMSConfig{}, "", apiErr(consts.CodeBadRequest, "首次配置必须填写AccessKeySecret")
 	}
 	accessKeyChanged := false
 	if req.KeepAccessKey {
 		if !current.AccessKeyConfigured {
-			return modelruntime.SMSConfig{}, "", apiErr(http.StatusBadRequest, 400, "当前没有可保留的AccessKey")
+			return modelruntime.SMSConfig{}, "", apiErr(consts.CodeBadRequest, "当前没有可保留的AccessKey")
 		}
 	} else {
 		if req.AccessKey == "" {
-			return modelruntime.SMSConfig{}, "", apiErr(http.StatusBadRequest, 400, "请输入AccessKey")
+			return modelruntime.SMSConfig{}, "", apiErr(consts.CodeBadRequest, "请输入AccessKey")
 		}
 		finalCfg.AccessKey = req.AccessKey
 		accessKeyChanged = req.AccessKey != current.Config.AccessKey
@@ -83,11 +92,11 @@ func mergeSMSConfigSave(current modelruntime.SMSConfigState, req configapi.SMSCo
 	accessKeySecretChanged := false
 	if req.KeepAccessKeySecret {
 		if !current.AccessKeySecretConfigured {
-			return modelruntime.SMSConfig{}, "", apiErr(http.StatusBadRequest, 400, "当前没有可保留的AccessKeySecret")
+			return modelruntime.SMSConfig{}, "", apiErr(consts.CodeBadRequest, "当前没有可保留的AccessKeySecret")
 		}
 	} else {
 		if req.AccessKeySecret == "" {
-			return modelruntime.SMSConfig{}, "", apiErr(http.StatusBadRequest, 400, "请输入AccessKeySecret")
+			return modelruntime.SMSConfig{}, "", apiErr(consts.CodeBadRequest, "请输入AccessKeySecret")
 		}
 		finalCfg.AccessKeySecret = req.AccessKeySecret
 		accessKeySecretChanged = req.AccessKeySecret != current.Config.AccessKeySecret
@@ -96,7 +105,7 @@ func mergeSMSConfigSave(current modelruntime.SMSConfigState, req configapi.SMSCo
 	return finalCfg, buildSMSConfigLog(accessKeyChanged, accessKeySecretChanged, businessChanged), nil
 }
 
-func saveSMSConfig(ctx context.Context, core *kernel.Core, cfg modelruntime.SMSConfig) error {
+func saveSMSConfig(ctx context.Context, core *app.Core, cfg modelruntime.SMSConfig) error {
 	return core.DB().Transaction(ctx, func(ctx context.Context, tx gdb.TX) error {
 		values := map[string]string{"sms_access_key": cfg.AccessKey, "sms_access_key_secret": cfg.AccessKeySecret, "sms_sign_name": cfg.SignName, "sms_template_code": cfg.TemplateCode, "sms_expire_minutes": strconv.Itoa(cfg.ExpireMinutes), "sms_interval_minutes": strconv.Itoa(cfg.IntervalMinutes)}
 		for key, value := range values {

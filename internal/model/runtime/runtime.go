@@ -1,30 +1,21 @@
 package runtime
 
-import (
-	"time"
-)
-
-type APIError struct {
-	HTTPStatus int
-	Code       int
-	Message    string
-}
-
-func (e *APIError) Error() string {
-	return e.Message
-}
-
-type ResponseEnvelope struct {
-	Code int    `json:"code"`
-	Msg  string `json:"msg"`
-	Data any    `json:"data"`
-}
+import "time"
 
 type Principal struct {
 	UserID       int64
 	GroupID      int64
 	TokenVersion int
 	JTI          string
+}
+
+type LoginUser struct {
+	ID         int64  `json:"id"`
+	Username   string `json:"username"`
+	RealName   string `json:"real_name"`
+	GroupID    int64  `json:"group_id"`
+	GroupName  string `json:"group_name"`
+	IsBusiness int    `json:"is_business"`
 }
 
 type SessionPayload struct {

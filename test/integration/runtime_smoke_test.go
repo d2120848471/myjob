@@ -14,9 +14,9 @@ import (
 )
 
 type apiEnvelope struct {
-	Code int             `json:"code"`
-	Msg  string          `json:"msg"`
-	Data json.RawMessage `json:"data"`
+	Code    int             `json:"code"`
+	Message string          `json:"message"`
+	Data    json.RawMessage `json:"data"`
 }
 
 func TestRuntime_LoginSmoke(t *testing.T) {
@@ -31,7 +31,6 @@ func TestRuntime_LoginSmoke(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = app.Close() }()
 
-	// 集成测试显式启动真实 server，覆盖 GoFrame 运行时初始化链路。
 	app.Server().SetAddr("127.0.0.1:0")
 	require.NoError(t, app.Server().Start())
 
@@ -41,7 +40,7 @@ func TestRuntime_LoginSmoke(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/admin/login", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/auth/login", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.RemoteAddr = "127.0.0.1:12345"
 	rec := httptest.NewRecorder()
@@ -51,4 +50,5 @@ func TestRuntime_LoginSmoke(t *testing.T) {
 	var env apiEnvelope
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &env))
 	require.Equal(t, 0, env.Code)
+	require.Equal(t, "OK", env.Message)
 }

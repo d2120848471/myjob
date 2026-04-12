@@ -94,6 +94,8 @@ github.com/gogf/gf/contrib/drivers/mysql/v2 v2.10.0 h1:UvqxwinkelKxwdwnKUfdy51/l
 github.com/gogf/gf/contrib/drivers/mysql/v2 v2.10.0/go.mod h1:6v7oGBF9wv59WERJIOJxXmLhkUcxwON3tPYW3AZ7wbY=
 github.com/gogf/gf/contrib/drivers/sqlite/v2 v2.10.0 h1:OyAH7Ls2c9Un7CJiAq7G6eY1jWIICRkN8C5SyM94rnY=
 github.com/gogf/gf/contrib/drivers/sqlite/v2 v2.10.0/go.mod h1:fwhAMG0qZpeHbbP2JE78rJRfV7eBbu9jXkxTMM1lwyo=
+github.com/gogf/gf/contrib/nosql/redis/v2 v2.10.0 h1:N/F9CuDdUZLoM1nVRqrDE/33pDZuhVxpNY4wYdeIaBs=
+github.com/gogf/gf/contrib/nosql/redis/v2 v2.10.0/go.mod h1:x6uoJGfZOtirIRQls8xUlYzC6f7T/eULPUa9er368X0=
 github.com/gogf/gf/v2 v2.10.0 h1:rzDROlyqGMe/eM6dCalSR8dZOuMIdLhmxKSH1DGhbFs=
 github.com/gogf/gf/v2 v2.10.0/go.mod h1:Svl1N+E8G/QshU2DUbh/3J/AJauqCgUnxHurXWR4Qx0=
 github.com/golang-jwt/jwt/v5 v5.3.1 h1:kYf81DTWFe7t+1VvL7eS+jKFVWaUnK9cB1qbwn63YCY=

@@ -1,56 +1,59 @@
 package config
 
 import (
+	"context"
 	"os"
+	"strings"
 
-	"gopkg.in/yaml.v3"
+	"github.com/gogf/gf/v2/os/gcfg"
+	"github.com/gogf/gf/v2/util/gconv"
 )
 
 type Config struct {
-	AppEnv    string           `yaml:"app_env"`
-	Server    ServerConfig     `yaml:"server"`
-	Database  DatabaseConfig   `yaml:"database"`
-	Redis     RedisConfig      `yaml:"redis"`
-	Auth      AuthConfig       `yaml:"auth"`
-	Bootstrap BootstrapConfig  `yaml:"bootstrap"`
-	SMS       RuntimeSMSConfig `yaml:"sms"`
-	Audit     AuditConfig      `yaml:"audit"`
+	AppEnv    string           `json:"app_env" yaml:"app_env"`
+	Server    ServerConfig     `json:"server" yaml:"server"`
+	Database  DatabaseConfig   `json:"database" yaml:"database"`
+	Redis     RedisConfig      `json:"redis" yaml:"redis"`
+	Auth      AuthConfig       `json:"auth" yaml:"auth"`
+	Bootstrap BootstrapConfig  `json:"bootstrap" yaml:"bootstrap"`
+	SMS       RuntimeSMSConfig `json:"sms" yaml:"sms"`
+	Audit     AuditConfig      `json:"audit" yaml:"audit"`
 }
 
 type ServerConfig struct {
-	Address string `yaml:"address"`
+	Address string `json:"address" yaml:"address"`
 }
 
 type DatabaseConfig struct {
-	Driver string `yaml:"driver"`
-	DSN    string `yaml:"dsn"`
+	Driver string `json:"driver" yaml:"driver"`
+	DSN    string `json:"dsn" yaml:"dsn"`
 }
 
 type RedisConfig struct {
-	Addr     string `yaml:"addr"`
-	Password string `yaml:"password"`
-	DB       int    `yaml:"db"`
+	Addr     string `json:"addr" yaml:"addr"`
+	Password string `json:"password" yaml:"password"`
+	DB       int    `json:"db" yaml:"db"`
 }
 
 type AuthConfig struct {
-	JWTSecret         string `yaml:"jwt_secret"`
-	AccessTokenTTLMin int    `yaml:"access_token_ttl_minutes"`
-	TempLoginTTLMin   int    `yaml:"temp_login_ttl_minutes"`
+	JWTSecret         string `json:"jwt_secret" yaml:"jwt_secret"`
+	AccessTokenTTLMin int    `json:"access_token_ttl_minutes" yaml:"access_token_ttl_minutes"`
+	TempLoginTTLMin   int    `json:"temp_login_ttl_minutes" yaml:"temp_login_ttl_minutes"`
 }
 
 type BootstrapConfig struct {
-	SuperAdminUsername string `yaml:"super_admin_username"`
-	SuperAdminPhone    string `yaml:"super_admin_phone"`
-	SuperAdminPassword string `yaml:"super_admin_password"`
+	SuperAdminUsername string `json:"super_admin_username" yaml:"super_admin_username"`
+	SuperAdminPhone    string `json:"super_admin_phone" yaml:"super_admin_phone"`
+	SuperAdminPassword string `json:"super_admin_password" yaml:"super_admin_password"`
 }
 
 type RuntimeSMSConfig struct {
-	Provider string `yaml:"provider"`
+	Provider string `json:"provider" yaml:"provider"`
 }
 
 type AuditConfig struct {
-	Async      bool `yaml:"async"`
-	BufferSize int  `yaml:"buffer_size"`
+	Async      bool `json:"async" yaml:"async"`
+	BufferSize int  `json:"buffer_size" yaml:"buffer_size"`
 }
 
 func Default() Config {
@@ -69,20 +72,37 @@ func Default() Config {
 	}
 }
 
-func Load(path string) (Config, error) {
-	cfg := Default()
-	if path == "" {
-		return cfg, nil
-	}
-	data, err := os.ReadFile(path)
+func LoadFromGoFrame(ctx context.Context, cfg *gcfg.Config) (Config, error) {
+	result := Default()
+	data, err := cfg.Data(ctx)
 	if err != nil {
-		return cfg, err
+		return result, err
 	}
-	expanded := os.ExpandEnv(string(data))
-	if err = yaml.Unmarshal([]byte(expanded), &cfg); err != nil {
-		return cfg, err
+	if len(data) > 0 {
+		if err = gconv.Scan(data, &result); err != nil {
+			return result, err
+		}
 	}
-	// 配置文件允许只覆盖少量字段，缺失项继续走默认值兜底。
+	normalize(&result)
+	return result, nil
+}
+
+func Normalize(cfg *Config) {
+	normalize(cfg)
+}
+
+func normalize(cfg *Config) {
+	cfg.AppEnv = strings.TrimSpace(cfg.AppEnv)
+	cfg.Server.Address = expand(cfg.Server.Address)
+	cfg.Database.Driver = strings.TrimSpace(expand(cfg.Database.Driver))
+	cfg.Database.DSN = expand(cfg.Database.DSN)
+	cfg.Redis.Addr = expand(cfg.Redis.Addr)
+	cfg.Redis.Password = expand(cfg.Redis.Password)
+	cfg.Auth.JWTSecret = expand(cfg.Auth.JWTSecret)
+	cfg.Bootstrap.SuperAdminUsername = strings.TrimSpace(expand(cfg.Bootstrap.SuperAdminUsername))
+	cfg.Bootstrap.SuperAdminPhone = strings.TrimSpace(expand(cfg.Bootstrap.SuperAdminPhone))
+	cfg.Bootstrap.SuperAdminPassword = strings.TrimSpace(expand(cfg.Bootstrap.SuperAdminPassword))
+	cfg.SMS.Provider = strings.TrimSpace(expand(cfg.SMS.Provider))
 	if cfg.Database.Driver == "" {
 		cfg.Database.Driver = "mysql"
 	}
@@ -98,5 +118,14 @@ func Load(path string) (Config, error) {
 	if cfg.Audit.BufferSize <= 0 {
 		cfg.Audit.BufferSize = 128
 	}
-	return cfg, nil
+	if cfg.Bootstrap.SuperAdminUsername == "" {
+		cfg.Bootstrap.SuperAdminUsername = "admin"
+	}
+}
+
+func expand(value string) string {
+	if value == "" {
+		return value
+	}
+	return os.ExpandEnv(value)
 }
