@@ -18,7 +18,7 @@ type BrandListRes struct {
 }
 
 type BrandChildrenReq struct {
-	g.Meta `path:"/brands/{id}/children" method:"get" tags:"品牌" summary:"子品牌列表" security:"BearerAuth" dc:"查询指定一级品牌的子品牌列表"`
+	g.Meta `path:"/brands/{id}/children" method:"get" tags:"品牌" summary:"子品牌列表" security:"BearerAuth" dc:"查询指定品牌的直接子品牌列表"`
 	ID     int64 `json:"id" in:"path" v:"required#品牌ID不能为空" dc:"品牌ID"`
 }
 
@@ -27,7 +27,7 @@ type BrandChildrenRes struct {
 }
 
 type BrandCreateReq struct {
-	g.Meta          `path:"/brands" method:"post" tags:"品牌" summary:"新增品牌" security:"BearerAuth" dc:"新增一级或二级品牌"`
+	g.Meta          `path:"/brands" method:"post" tags:"品牌" summary:"新增品牌" security:"BearerAuth" dc:"新增一级、二级或三级品牌"`
 	ParentID        int64  `json:"parent_id" dc:"父品牌ID"`
 	Name            string `json:"name" dc:"品牌名称"`
 	Icon            string `json:"icon" dc:"品牌图标"`
@@ -53,7 +53,7 @@ type BrandUpdateReq struct {
 type BrandUpdateRes struct{}
 
 type BrandDeleteReq struct {
-	g.Meta `path:"/brands/{id}" method:"delete" tags:"品牌" summary:"删除品牌" security:"BearerAuth" dc:"删除一级或二级品牌"`
+	g.Meta `path:"/brands/{id}" method:"delete" tags:"品牌" summary:"删除品牌" security:"BearerAuth" dc:"删除一级、二级或三级品牌"`
 	ID     int64 `json:"id" in:"path" v:"required#品牌ID不能为空" dc:"品牌ID"`
 }
 
