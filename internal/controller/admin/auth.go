@@ -1,7 +1,7 @@
 package admincontroller
 
 import (
-	authv1 "myjob/api/admin/auth/v1"
+	authapi "myjob/api/auth"
 	"myjob/internal/library/response"
 	"myjob/internal/model/entity"
 	modelruntime "myjob/internal/model/runtime"
@@ -14,7 +14,7 @@ type AuthController struct{ svc service.AuthService }
 
 func NewAuth(svc service.AuthService) *AuthController { return &AuthController{svc: svc} }
 func (c *AuthController) Login(r *ghttp.Request) {
-	var req authv1.LoginReq
+	var req authapi.LoginReq
 	if err := r.Parse(&req); err != nil {
 		response.Error(r, &modelruntime.APIError{HTTPStatus: 400, Code: 400, Message: "参数错误"})
 		return
@@ -27,7 +27,7 @@ func (c *AuthController) Login(r *ghttp.Request) {
 	response.Success(r, data)
 }
 func (c *AuthController) LoginSMSSend(r *ghttp.Request) {
-	var req authv1.LoginSMSSendReq
+	var req authapi.LoginSMSSendReq
 	if err := r.Parse(&req); err != nil {
 		response.Error(r, &modelruntime.APIError{HTTPStatus: 400, Code: 400, Message: "参数错误"})
 		return
@@ -40,7 +40,7 @@ func (c *AuthController) LoginSMSSend(r *ghttp.Request) {
 	response.Success(r, data)
 }
 func (c *AuthController) LoginSMSVerify(r *ghttp.Request) {
-	var req authv1.LoginSMSVerifyReq
+	var req authapi.LoginSMSVerifyReq
 	if err := r.Parse(&req); err != nil {
 		response.Error(r, &modelruntime.APIError{HTTPStatus: 400, Code: 400, Message: "参数错误"})
 		return

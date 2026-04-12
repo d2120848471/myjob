@@ -1,4 +1,4 @@
-package v1
+package subject
 
 type AddReq struct {
 	Name   string `json:"name"`

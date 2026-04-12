@@ -1,4 +1,4 @@
-package v1
+package log
 
 type ListReq struct {
 	AdminID   string `json:"admin_id"`

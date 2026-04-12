@@ -1,4 +1,4 @@
-package v1
+package config
 
 type SMSConfigSaveReq struct {
 	AccessKey           string `json:"access_key"`
