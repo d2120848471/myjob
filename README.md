@@ -1,7 +1,7 @@
 # MyJob Admin Backend
 
 MyJob Admin Backend 是一个以仓库根为主应用入口的 GoFrame 单体后台项目，
-目标是把原来分散在 `admin/internal/app` 的手写后端，整理成更适合企业协作的
+目标是把原来那套手写后端迁到仓库根主应用中，整理成更适合企业协作的
 标准目录、职责边界和工程化交付形态。
 
 ## 项目定位
@@ -10,7 +10,7 @@ MyJob Admin Backend 是一个以仓库根为主应用入口的 GoFrame 单体后
 - HTTP 接口继续兼容既有后台路径，默认保持 `code / msg / data` 响应包裹
 - 内部职责按 `api -> controller -> service -> logic -> kernel/dao/model -> library`
   分层，避免再回到“大一统 app 层”
-- 旧的 `admin/` 目录目前只保留为迁移对照源，不再承担主运行入口职责
+- 当前仓库只保留一套主代码，运行入口和维护入口都在仓库根
 
 ## 快速开始
 
@@ -85,7 +85,6 @@ go build ./...
 │   ├── contract
 │   ├── integration
 │   └── fixture
-└── admin/
 ```
 
 ## 常用脚本与资源
@@ -102,10 +101,9 @@ go build ./...
 - `docs/module-map.md`：模块职责地图
 - `docs/development.md`：开发约束、配置、脚本和日常命令
 - `docs/testing.md`：测试分层和执行方式
-- `docs/migration.md`：旧 `admin/` 到新根应用的迁移说明
+- `docs/migration.md`：从旧实现迁到新根应用的迁移说明
 
 ## 迁移状态
 
-- 当前主运行入口已经切到仓库根
-- 旧 `admin/` 仍保留作迁移期对照和回归参考
-- 后续如果确认不再需要对照，可再单独做归档或删除动作
+- 当前仓库根已经是唯一主运行入口
+- 旧 `admin/` 历史代码已从仓库删除，后续只维护新代码
