@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	subjectv1 "myjob/api/admin/subject/v1"
+	subjectapi "myjob/api/subject"
 	"myjob/internal/kernel"
 	modelruntime "myjob/internal/model/runtime"
 )
@@ -21,7 +21,7 @@ func (l *SubjectLogic) List(ctx context.Context) (map[string]any, *modelruntime.
 	return map[string]any{"list": items}, nil
 }
 
-func (l *SubjectLogic) Add(ctx context.Context, req subjectv1.AddReq, actor kernel.AdminUser, ip string) (map[string]any, *modelruntime.APIError) {
+func (l *SubjectLogic) Add(ctx context.Context, req subjectapi.AddReq, actor kernel.AdminUser, ip string) (map[string]any, *modelruntime.APIError) {
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" || (req.HasTax != 0 && req.HasTax != 1) {
 		return nil, apiErr(http.StatusBadRequest, 400, "主体参数错误")
@@ -42,7 +42,7 @@ func (l *SubjectLogic) Add(ctx context.Context, req subjectv1.AddReq, actor kern
 	return map[string]any{"id": id}, nil
 }
 
-func (l *SubjectLogic) Edit(ctx context.Context, id int64, req subjectv1.EditReq, actor kernel.AdminUser, ip string) (map[string]any, *modelruntime.APIError) {
+func (l *SubjectLogic) Edit(ctx context.Context, id int64, req subjectapi.EditReq, actor kernel.AdminUser, ip string) (map[string]any, *modelruntime.APIError) {
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" || (req.HasTax != 0 && req.HasTax != 1) {
 		return nil, apiErr(http.StatusBadRequest, 400, "主体参数错误")

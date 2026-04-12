@@ -1,7 +1,7 @@
 package admincontroller
 
 import (
-	configv1 "myjob/api/admin/config/v1"
+	configapi "myjob/api/config"
 	"myjob/internal/library/response"
 	"myjob/internal/model/entity"
 	modelruntime "myjob/internal/model/runtime"
@@ -22,7 +22,7 @@ func (c *ConfigController) GetSMS(r *ghttp.Request, _ modelruntime.Principal, _ 
 	response.Success(r, data)
 }
 func (c *ConfigController) SaveSMS(r *ghttp.Request, _ modelruntime.Principal, actor entity.AdminUser) {
-	var req configv1.SMSConfigSaveReq
+	var req configapi.SMSConfigSaveReq
 	if err := r.Parse(&req); err != nil {
 		response.Error(r, &modelruntime.APIError{HTTPStatus: 400, Code: 400, Message: "参数错误"})
 		return

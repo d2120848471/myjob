@@ -1,7 +1,7 @@
 package admincontroller
 
 import (
-	groupv1 "myjob/api/admin/group/v1"
+	groupapi "myjob/api/group"
 	"myjob/internal/library/response"
 	"myjob/internal/model/entity"
 	modelruntime "myjob/internal/model/runtime"
@@ -14,7 +14,7 @@ type GroupController struct{ svc service.GroupService }
 
 func NewGroup(svc service.GroupService) *GroupController { return &GroupController{svc: svc} }
 func (c *GroupController) List(r *ghttp.Request, _ modelruntime.Principal, _ entity.AdminUser) {
-	var req groupv1.ListReq
+	var req groupapi.ListReq
 	_ = r.Parse(&req)
 	data, apiErr := c.svc.List(r.Context(), req)
 	if apiErr != nil {
@@ -24,7 +24,7 @@ func (c *GroupController) List(r *ghttp.Request, _ modelruntime.Principal, _ ent
 	response.Success(r, data)
 }
 func (c *GroupController) Add(r *ghttp.Request, _ modelruntime.Principal, actor entity.AdminUser) {
-	var req groupv1.AddReq
+	var req groupapi.AddReq
 	if err := r.Parse(&req); err != nil {
 		response.Error(r, &modelruntime.APIError{HTTPStatus: 400, Code: 400, Message: "参数错误"})
 		return
@@ -37,7 +37,7 @@ func (c *GroupController) Add(r *ghttp.Request, _ modelruntime.Principal, actor 
 	response.Success(r, data)
 }
 func (c *GroupController) Edit(r *ghttp.Request, _ modelruntime.Principal, actor entity.AdminUser) {
-	var req groupv1.EditReq
+	var req groupapi.EditReq
 	if err := r.Parse(&req); err != nil {
 		response.Error(r, &modelruntime.APIError{HTTPStatus: 400, Code: 400, Message: "参数错误"})
 		return
@@ -58,7 +58,7 @@ func (c *GroupController) Delete(r *ghttp.Request, _ modelruntime.Principal, act
 	response.Success(r, data)
 }
 func (c *GroupController) Status(r *ghttp.Request, _ modelruntime.Principal, actor entity.AdminUser) {
-	var req groupv1.StatusReq
+	var req groupapi.StatusReq
 	if err := r.Parse(&req); err != nil {
 		response.Error(r, &modelruntime.APIError{HTTPStatus: 400, Code: 400, Message: "参数错误"})
 		return
@@ -79,7 +79,7 @@ func (c *GroupController) AuthGet(r *ghttp.Request, _ modelruntime.Principal, _ 
 	response.Success(r, data)
 }
 func (c *GroupController) AuthSave(r *ghttp.Request, _ modelruntime.Principal, actor entity.AdminUser) {
-	var req groupv1.AuthSaveReq
+	var req groupapi.AuthSaveReq
 	if err := r.Parse(&req); err != nil {
 		response.Error(r, &modelruntime.APIError{HTTPStatus: 400, Code: 400, Message: "参数错误"})
 		return

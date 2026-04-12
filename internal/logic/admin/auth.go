@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	authv1 "myjob/api/admin/auth/v1"
+	authapi "myjob/api/auth"
 	"myjob/internal/kernel"
 	authlib "myjob/internal/library/auth"
 	modelruntime "myjob/internal/model/runtime"
@@ -20,7 +20,7 @@ import (
 
 type AuthLogic struct{ core *kernel.Core }
 
-func (l *AuthLogic) Login(ctx context.Context, req authv1.LoginReq, ip string) (map[string]any, *modelruntime.APIError) {
+func (l *AuthLogic) Login(ctx context.Context, req authapi.LoginReq, ip string) (map[string]any, *modelruntime.APIError) {
 	req.Username = strings.TrimSpace(req.Username)
 	req.Password = strings.TrimSpace(req.Password)
 	if req.Username == "" || req.Password == "" {
@@ -58,7 +58,7 @@ func (l *AuthLogic) Login(ctx context.Context, req authv1.LoginReq, ip string) (
 	return map[string]any{"need_sms_verify": false, "token": token, "user": l.core.BuildLoginUser(ctx, user), "permissions": perms}, nil
 }
 
-func (l *AuthLogic) LoginSMSSend(ctx context.Context, req authv1.LoginSMSSendReq) (map[string]any, *modelruntime.APIError) {
+func (l *AuthLogic) LoginSMSSend(ctx context.Context, req authapi.LoginSMSSendReq) (map[string]any, *modelruntime.APIError) {
 	if strings.TrimSpace(req.LoginToken) == "" {
 		return nil, apiErr(http.StatusBadRequest, 400, "login_token不能为空")
 	}
@@ -95,7 +95,7 @@ func (l *AuthLogic) LoginSMSSend(ctx context.Context, req authv1.LoginSMSSendReq
 	return map[string]any{}, nil
 }
 
-func (l *AuthLogic) LoginSMSVerify(ctx context.Context, req authv1.LoginSMSVerifyReq) (map[string]any, *modelruntime.APIError) {
+func (l *AuthLogic) LoginSMSVerify(ctx context.Context, req authapi.LoginSMSVerifyReq) (map[string]any, *modelruntime.APIError) {
 	if strings.TrimSpace(req.LoginToken) == "" || !kernel.SMSCodeRegexp().MatchString(req.SMSCode) {
 		return nil, apiErr(http.StatusBadRequest, 400, "验证码格式错误")
 	}

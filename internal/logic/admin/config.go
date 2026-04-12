@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	configv1 "myjob/api/admin/config/v1"
+	configapi "myjob/api/config"
 	"myjob/internal/kernel"
 	authlib "myjob/internal/library/auth"
 	modelruntime "myjob/internal/model/runtime"
@@ -17,19 +17,19 @@ import (
 
 type SMSConfigLogic struct{ core *kernel.Core }
 
-func (l *SMSConfigLogic) Get(ctx context.Context) (configv1.SMSConfigGetRes, *modelruntime.APIError) {
+func (l *SMSConfigLogic) Get(ctx context.Context) (configapi.SMSConfigGetRes, *modelruntime.APIError) {
 	state, err := l.core.LoadSMSConfigState(ctx)
 	if err != nil {
-		return configv1.SMSConfigGetRes{}, apiErr(http.StatusInternalServerError, 500, "短信配置读取失败")
+		return configapi.SMSConfigGetRes{}, apiErr(http.StatusInternalServerError, 500, "短信配置读取失败")
 	}
-	resp := configv1.SMSConfigGetRes{AccessKeyMasked: kernel.MaskAccessKey(state.Config.AccessKey), AccessKeySecretMasked: kernel.MaskSecret(state.Config.AccessKeySecret), AccessKeyConfigured: state.AccessKeyConfigured, AccessKeySecretConfigured: state.AccessKeySecretConfigured, SignName: state.Config.SignName, TemplateCode: state.Config.TemplateCode, ExpireMinutes: state.Config.ExpireMinutes, IntervalMinutes: state.Config.IntervalMinutes}
+	resp := configapi.SMSConfigGetRes{AccessKeyMasked: kernel.MaskAccessKey(state.Config.AccessKey), AccessKeySecretMasked: kernel.MaskSecret(state.Config.AccessKeySecret), AccessKeyConfigured: state.AccessKeyConfigured, AccessKeySecretConfigured: state.AccessKeySecretConfigured, SignName: state.Config.SignName, TemplateCode: state.Config.TemplateCode, ExpireMinutes: state.Config.ExpireMinutes, IntervalMinutes: state.Config.IntervalMinutes}
 	if !state.UpdatedAt.IsZero() {
 		resp.UpdatedAt = state.UpdatedAt.In(time.Local).Format("2006-01-02 15:04:05")
 	}
 	return resp, nil
 }
 
-func (l *SMSConfigLogic) Save(ctx context.Context, req configv1.SMSConfigSaveReq, actor kernel.AdminUser, ip string) (map[string]any, *modelruntime.APIError) {
+func (l *SMSConfigLogic) Save(ctx context.Context, req configapi.SMSConfigSaveReq, actor kernel.AdminUser, ip string) (map[string]any, *modelruntime.APIError) {
 	state, err := l.core.LoadSMSConfigState(ctx)
 	if err != nil {
 		return nil, apiErr(http.StatusInternalServerError, 500, "短信配置读取失败")
@@ -46,7 +46,7 @@ func (l *SMSConfigLogic) Save(ctx context.Context, req configv1.SMSConfigSaveReq
 	return map[string]any{}, nil
 }
 
-func mergeSMSConfigSave(current modelruntime.SMSConfigState, req configv1.SMSConfigSaveReq) (modelruntime.SMSConfig, string, *modelruntime.APIError) {
+func mergeSMSConfigSave(current modelruntime.SMSConfigState, req configapi.SMSConfigSaveReq) (modelruntime.SMSConfig, string, *modelruntime.APIError) {
 	req.AccessKey = strings.TrimSpace(req.AccessKey)
 	req.AccessKeySecret = strings.TrimSpace(req.AccessKeySecret)
 	req.SignName = strings.TrimSpace(req.SignName)

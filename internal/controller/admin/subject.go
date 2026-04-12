@@ -1,7 +1,7 @@
 package admincontroller
 
 import (
-	subjectv1 "myjob/api/admin/subject/v1"
+	subjectapi "myjob/api/subject"
 	"myjob/internal/library/response"
 	"myjob/internal/model/entity"
 	modelruntime "myjob/internal/model/runtime"
@@ -22,7 +22,7 @@ func (c *SubjectController) List(r *ghttp.Request, _ modelruntime.Principal, _ e
 	response.Success(r, data)
 }
 func (c *SubjectController) Add(r *ghttp.Request, _ modelruntime.Principal, actor entity.AdminUser) {
-	var req subjectv1.AddReq
+	var req subjectapi.AddReq
 	if err := r.Parse(&req); err != nil {
 		response.Error(r, &modelruntime.APIError{HTTPStatus: 400, Code: 400, Message: "参数错误"})
 		return
@@ -35,7 +35,7 @@ func (c *SubjectController) Add(r *ghttp.Request, _ modelruntime.Principal, acto
 	response.Success(r, data)
 }
 func (c *SubjectController) Edit(r *ghttp.Request, _ modelruntime.Principal, actor entity.AdminUser) {
-	var req subjectv1.EditReq
+	var req subjectapi.EditReq
 	if err := r.Parse(&req); err != nil {
 		response.Error(r, &modelruntime.APIError{HTTPStatus: 400, Code: 400, Message: "参数错误"})
 		return

@@ -1,4 +1,4 @@
-package v1
+package group
 
 type ListReq struct {
 	Page     int `json:"page"`

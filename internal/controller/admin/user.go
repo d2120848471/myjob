@@ -1,7 +1,7 @@
 package admincontroller
 
 import (
-	userv1 "myjob/api/admin/user/v1"
+	userapi "myjob/api/user"
 	"myjob/internal/library/response"
 	"myjob/internal/model/entity"
 	modelruntime "myjob/internal/model/runtime"
@@ -14,7 +14,7 @@ type UserController struct{ svc service.UserService }
 
 func NewUser(svc service.UserService) *UserController { return &UserController{svc: svc} }
 func (c *UserController) List(r *ghttp.Request, _ modelruntime.Principal, _ entity.AdminUser) {
-	var req userv1.ListReq
+	var req userapi.ListReq
 	_ = r.Parse(&req)
 	data, apiErr := c.svc.List(r.Context(), req)
 	if apiErr != nil {
@@ -24,7 +24,7 @@ func (c *UserController) List(r *ghttp.Request, _ modelruntime.Principal, _ enti
 	response.Success(r, data)
 }
 func (c *UserController) Trash(r *ghttp.Request, _ modelruntime.Principal, _ entity.AdminUser) {
-	var req userv1.ListReq
+	var req userapi.ListReq
 	_ = r.Parse(&req)
 	data, apiErr := c.svc.Trash(r.Context(), req)
 	if apiErr != nil {
@@ -34,7 +34,7 @@ func (c *UserController) Trash(r *ghttp.Request, _ modelruntime.Principal, _ ent
 	response.Success(r, data)
 }
 func (c *UserController) Add(r *ghttp.Request, _ modelruntime.Principal, actor entity.AdminUser) {
-	var req userv1.AddReq
+	var req userapi.AddReq
 	if err := r.Parse(&req); err != nil {
 		response.Error(r, &modelruntime.APIError{HTTPStatus: 400, Code: 400, Message: "参数错误"})
 		return
@@ -47,7 +47,7 @@ func (c *UserController) Add(r *ghttp.Request, _ modelruntime.Principal, actor e
 	response.Success(r, data)
 }
 func (c *UserController) Edit(r *ghttp.Request, _ modelruntime.Principal, actor entity.AdminUser) {
-	var req userv1.EditReq
+	var req userapi.EditReq
 	if err := r.Parse(&req); err != nil {
 		response.Error(r, &modelruntime.APIError{HTTPStatus: 400, Code: 400, Message: "参数错误"})
 		return
@@ -76,7 +76,7 @@ func (c *UserController) Restore(r *ghttp.Request, _ modelruntime.Principal, act
 	response.Success(r, data)
 }
 func (c *UserController) Status(r *ghttp.Request, _ modelruntime.Principal, actor entity.AdminUser) {
-	var req userv1.StatusReq
+	var req userapi.StatusReq
 	if err := r.Parse(&req); err != nil {
 		response.Error(r, &modelruntime.APIError{HTTPStatus: 400, Code: 400, Message: "参数错误"})
 		return
@@ -89,7 +89,7 @@ func (c *UserController) Status(r *ghttp.Request, _ modelruntime.Principal, acto
 	response.Success(r, data)
 }
 func (c *UserController) Notify(r *ghttp.Request, _ modelruntime.Principal, actor entity.AdminUser) {
-	var req userv1.NotifyReq
+	var req userapi.NotifyReq
 	if err := r.Parse(&req); err != nil {
 		response.Error(r, &modelruntime.APIError{HTTPStatus: 400, Code: 400, Message: "参数错误"})
 		return
@@ -102,7 +102,7 @@ func (c *UserController) Notify(r *ghttp.Request, _ modelruntime.Principal, acto
 	response.Success(r, data)
 }
 func (c *UserController) SetBusiness(r *ghttp.Request, _ modelruntime.Principal, actor entity.AdminUser) {
-	var req userv1.BusinessReq
+	var req userapi.BusinessReq
 	if err := r.Parse(&req); err != nil {
 		response.Error(r, &modelruntime.APIError{HTTPStatus: 400, Code: 400, Message: "参数错误"})
 		return
@@ -115,7 +115,7 @@ func (c *UserController) SetBusiness(r *ghttp.Request, _ modelruntime.Principal,
 	response.Success(r, data)
 }
 func (c *UserController) CancelBusiness(r *ghttp.Request, _ modelruntime.Principal, actor entity.AdminUser) {
-	var req userv1.BusinessReq
+	var req userapi.BusinessReq
 	if err := r.Parse(&req); err != nil {
 		response.Error(r, &modelruntime.APIError{HTTPStatus: 400, Code: 400, Message: "参数错误"})
 		return

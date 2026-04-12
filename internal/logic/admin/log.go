@@ -5,14 +5,14 @@ import (
 	"net/http"
 	"strings"
 
-	logv1 "myjob/api/admin/log/v1"
+	logapi "myjob/api/log"
 	"myjob/internal/kernel"
 	modelruntime "myjob/internal/model/runtime"
 )
 
 type AuditLogLogic struct{ core *kernel.Core }
 
-func (l *AuditLogLogic) OperationList(ctx context.Context, req logv1.ListReq) (map[string]any, *modelruntime.APIError) {
+func (l *AuditLogLogic) OperationList(ctx context.Context, req logapi.ListReq) (map[string]any, *modelruntime.APIError) {
 	page, pageSize := kernel.ParsePagination(req.Page, req.PageSize)
 	args := []any{}
 	conditions := []string{"1=1"}
@@ -40,7 +40,7 @@ func (l *AuditLogLogic) OperationList(ctx context.Context, req logv1.ListReq) (m
 	return map[string]any{"list": items, "pagination": map[string]any{"page": page, "page_size": pageSize, "total": total.Int()}}, nil
 }
 
-func (l *AuditLogLogic) LoginList(ctx context.Context, req logv1.ListReq) (map[string]any, *modelruntime.APIError) {
+func (l *AuditLogLogic) LoginList(ctx context.Context, req logapi.ListReq) (map[string]any, *modelruntime.APIError) {
 	page, pageSize := kernel.ParsePagination(req.Page, req.PageSize)
 	args := []any{}
 	conditions := []string{"1=1"}

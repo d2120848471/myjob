@@ -1,4 +1,4 @@
-package v1
+package auth
 
 type LoginReq struct {
 	Username string `json:"username"`

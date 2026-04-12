@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	userv1 "myjob/api/admin/user/v1"
+	userapi "myjob/api/user"
 	"myjob/internal/model/dto/admin"
 	modelruntime "myjob/internal/model/runtime"
 
@@ -18,7 +18,7 @@ import (
 
 type UserLogic struct{ core *kernel.Core }
 
-func (l *UserLogic) List(ctx context.Context, req userv1.ListReq) (map[string]any, *modelruntime.APIError) {
+func (l *UserLogic) List(ctx context.Context, req userapi.ListReq) (map[string]any, *modelruntime.APIError) {
 	page, pageSize := kernel.ParsePagination(req.Page, req.PageSize)
 	totalVal, err := l.core.DB().GetCore().GetValue(ctx, `SELECT COUNT(*) FROM admin_user WHERE is_deleted = 0`)
 	if err != nil {
@@ -39,7 +39,7 @@ LIMIT ? OFFSET ?
 	return map[string]any{"list": items, "pagination": admin.Pagination{Page: page, PageSize: pageSize, Total: totalVal.Int()}}, nil
 }
 
-func (l *UserLogic) Trash(ctx context.Context, req userv1.ListReq) (map[string]any, *modelruntime.APIError) {
+func (l *UserLogic) Trash(ctx context.Context, req userapi.ListReq) (map[string]any, *modelruntime.APIError) {
 	page, pageSize := kernel.ParsePagination(req.Page, req.PageSize)
 	totalVal, err := l.core.DB().GetCore().GetValue(ctx, `SELECT COUNT(*) FROM admin_user WHERE is_deleted = 1`)
 	if err != nil {
@@ -60,7 +60,7 @@ LIMIT ? OFFSET ?
 	return map[string]any{"list": items, "pagination": admin.Pagination{Page: page, PageSize: pageSize, Total: totalVal.Int()}}, nil
 }
 
-func (l *UserLogic) Add(ctx context.Context, req userv1.AddReq, actor kernel.AdminUser, ip string) (map[string]any, *modelruntime.APIError) {
+func (l *UserLogic) Add(ctx context.Context, req userapi.AddReq, actor kernel.AdminUser, ip string) (map[string]any, *modelruntime.APIError) {
 	req.Username = strings.TrimSpace(req.Username)
 	req.RealName = strings.TrimSpace(req.RealName)
 	req.Phone = strings.TrimSpace(req.Phone)
@@ -95,7 +95,7 @@ func (l *UserLogic) Add(ctx context.Context, req userv1.AddReq, actor kernel.Adm
 	return map[string]any{"id": id}, nil
 }
 
-func (l *UserLogic) Edit(ctx context.Context, id int64, req userv1.EditReq, actor kernel.AdminUser, ip string) (map[string]any, *modelruntime.APIError) {
+func (l *UserLogic) Edit(ctx context.Context, id int64, req userapi.EditReq, actor kernel.AdminUser, ip string) (map[string]any, *modelruntime.APIError) {
 	user, err := l.core.GetUserByID(ctx, id)
 	if err != nil {
 		return nil, apiErr(http.StatusNotFound, 404, "员工不存在")
@@ -176,7 +176,7 @@ func (l *UserLogic) Restore(ctx context.Context, id int64, actor kernel.AdminUse
 	return map[string]any{}, nil
 }
 
-func (l *UserLogic) Status(ctx context.Context, id int64, req userv1.StatusReq, actor kernel.AdminUser, ip string) (map[string]any, *modelruntime.APIError) {
+func (l *UserLogic) Status(ctx context.Context, id int64, req userapi.StatusReq, actor kernel.AdminUser, ip string) (map[string]any, *modelruntime.APIError) {
 	user, err := l.core.GetUserByID(ctx, id)
 	if err != nil {
 		return nil, apiErr(http.StatusNotFound, 404, "员工不存在")
@@ -200,7 +200,7 @@ func (l *UserLogic) Status(ctx context.Context, id int64, req userv1.StatusReq, 
 	return map[string]any{}, nil
 }
 
-func (l *UserLogic) Notify(ctx context.Context, id int64, req userv1.NotifyReq, actor kernel.AdminUser, ip string) (map[string]any, *modelruntime.APIError) {
+func (l *UserLogic) Notify(ctx context.Context, id int64, req userapi.NotifyReq, actor kernel.AdminUser, ip string) (map[string]any, *modelruntime.APIError) {
 	if req.BalanceNotify != 0 && req.BalanceNotify != 1 {
 		return nil, apiErr(http.StatusBadRequest, 400, "余额通知值错误")
 	}
@@ -211,15 +211,15 @@ func (l *UserLogic) Notify(ctx context.Context, id int64, req userv1.NotifyReq, 
 	return map[string]any{}, nil
 }
 
-func (l *UserLogic) SetBusiness(ctx context.Context, req userv1.BusinessReq, actor kernel.AdminUser, ip string) (map[string]any, *modelruntime.APIError) {
+func (l *UserLogic) SetBusiness(ctx context.Context, req userapi.BusinessReq, actor kernel.AdminUser, ip string) (map[string]any, *modelruntime.APIError) {
 	return l.handleBusiness(ctx, req, actor, ip, 1)
 }
 
-func (l *UserLogic) CancelBusiness(ctx context.Context, req userv1.BusinessReq, actor kernel.AdminUser, ip string) (map[string]any, *modelruntime.APIError) {
+func (l *UserLogic) CancelBusiness(ctx context.Context, req userapi.BusinessReq, actor kernel.AdminUser, ip string) (map[string]any, *modelruntime.APIError) {
 	return l.handleBusiness(ctx, req, actor, ip, 0)
 }
 
-func (l *UserLogic) handleBusiness(ctx context.Context, req userv1.BusinessReq, actor kernel.AdminUser, ip string, flag int) (map[string]any, *modelruntime.APIError) {
+func (l *UserLogic) handleBusiness(ctx context.Context, req userapi.BusinessReq, actor kernel.AdminUser, ip string, flag int) (map[string]any, *modelruntime.APIError) {
 	if len(req.IDs) == 0 {
 		return nil, apiErr(http.StatusBadRequest, 400, "ID列表不能为空")
 	}

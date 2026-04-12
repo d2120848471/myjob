@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	groupv1 "myjob/api/admin/group/v1"
+	groupapi "myjob/api/group"
 	"myjob/internal/kernel"
 	"myjob/internal/model/dto/admin"
 	modelruntime "myjob/internal/model/runtime"
@@ -18,7 +18,7 @@ import (
 
 type GroupLogic struct{ core *kernel.Core }
 
-func (l *GroupLogic) List(ctx context.Context, req groupv1.ListReq) (map[string]any, *modelruntime.APIError) {
+func (l *GroupLogic) List(ctx context.Context, req groupapi.ListReq) (map[string]any, *modelruntime.APIError) {
 	page, pageSize := kernel.ParsePagination(req.Page, req.PageSize)
 	totalVal, err := l.core.DB().GetCore().GetValue(ctx, `SELECT COUNT(*) FROM admin_group`)
 	if err != nil {
@@ -31,7 +31,7 @@ func (l *GroupLogic) List(ctx context.Context, req groupv1.ListReq) (map[string]
 	return map[string]any{"list": items, "pagination": admin.Pagination{Page: page, PageSize: pageSize, Total: totalVal.Int()}}, nil
 }
 
-func (l *GroupLogic) Add(ctx context.Context, req groupv1.AddReq, actor kernel.AdminUser, ip string) (map[string]any, *modelruntime.APIError) {
+func (l *GroupLogic) Add(ctx context.Context, req groupapi.AddReq, actor kernel.AdminUser, ip string) (map[string]any, *modelruntime.APIError) {
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" {
 		return nil, apiErr(http.StatusBadRequest, 400, "请输入用户组名称")
@@ -52,7 +52,7 @@ func (l *GroupLogic) Add(ctx context.Context, req groupv1.AddReq, actor kernel.A
 	return map[string]any{"id": id}, nil
 }
 
-func (l *GroupLogic) Edit(ctx context.Context, id int64, req groupv1.EditReq, actor kernel.AdminUser, ip string) (map[string]any, *modelruntime.APIError) {
+func (l *GroupLogic) Edit(ctx context.Context, id int64, req groupapi.EditReq, actor kernel.AdminUser, ip string) (map[string]any, *modelruntime.APIError) {
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" {
 		return nil, apiErr(http.StatusBadRequest, 400, "请输入用户组名称")
@@ -95,7 +95,7 @@ func (l *GroupLogic) Delete(ctx context.Context, id int64, actor kernel.AdminUse
 	return map[string]any{}, nil
 }
 
-func (l *GroupLogic) Status(ctx context.Context, id int64, req groupv1.StatusReq, actor kernel.AdminUser, ip string) (map[string]any, *modelruntime.APIError) {
+func (l *GroupLogic) Status(ctx context.Context, id int64, req groupapi.StatusReq, actor kernel.AdminUser, ip string) (map[string]any, *modelruntime.APIError) {
 	if req.Status != 0 && req.Status != 1 {
 		return nil, apiErr(http.StatusBadRequest, 400, "状态错误")
 	}
@@ -119,7 +119,7 @@ func (l *GroupLogic) AuthGet(ctx context.Context, id int64) (map[string]any, *mo
 	return map[string]any{"menu_ids": ids}, nil
 }
 
-func (l *GroupLogic) AuthSave(ctx context.Context, id int64, req groupv1.AuthSaveReq, actor kernel.AdminUser, ip string) (map[string]any, *modelruntime.APIError) {
+func (l *GroupLogic) AuthSave(ctx context.Context, id int64, req groupapi.AuthSaveReq, actor kernel.AdminUser, ip string) (map[string]any, *modelruntime.APIError) {
 	allowed := make([]int64, 0, len(req.MenuIDs))
 	if err := l.core.DB().Transaction(ctx, func(ctx context.Context, tx gdb.TX) error {
 		if _, txErr := tx.Exec(`DELETE FROM admin_group_menu WHERE group_id = ?`, id); txErr != nil {
