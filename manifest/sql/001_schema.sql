@@ -75,6 +75,18 @@ CREATE TABLE IF NOT EXISTS admin_subject (
   updated_at DATETIME NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS product_template (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(100) NOT NULL,
+  template_type VARCHAR(32) NOT NULL DEFAULT 'local',
+  is_shared TINYINT NOT NULL DEFAULT 0,
+  account_name VARCHAR(100) NOT NULL DEFAULT '',
+  validate_type INT NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  KEY idx_product_template_type_share (template_type, is_shared, id)
+);
+
 CREATE TABLE IF NOT EXISTS system_config (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   config_key VARCHAR(64) NOT NULL UNIQUE,

@@ -24,6 +24,10 @@ type IndustryBrandRelationItem = entity.IndustryBrandRelationItem
 
 type BrandSelectorItem = entity.BrandSelectorItem
 
+type ProductTemplateListItem = entity.ProductTemplateListItem
+
+type ProductTemplateValidateTypeItem = entity.ProductTemplateValidateTypeItem
+
 type MenuItem = entity.AdminMenu
 
 type OperationLogItem = entity.OperationLog

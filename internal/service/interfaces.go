@@ -70,6 +70,15 @@ type IndustryService interface {
 	BrandSort(ctx context.Context, req *adminapi.IndustryBrandSortReq, actor entity.AdminUser, ip string) (*adminapi.IndustryBrandSortRes, error)
 }
 
+type ProductTemplateService interface {
+	List(ctx context.Context, req *adminapi.ProductTemplateListReq) (*adminapi.ProductTemplateListRes, error)
+	Add(ctx context.Context, req *adminapi.ProductTemplateCreateReq, actor entity.AdminUser, ip string) (*adminapi.ProductTemplateCreateRes, error)
+	Edit(ctx context.Context, req *adminapi.ProductTemplateUpdateReq, actor entity.AdminUser, ip string) (*adminapi.ProductTemplateUpdateRes, error)
+	Delete(ctx context.Context, req *adminapi.ProductTemplateDeleteReq, actor entity.AdminUser, ip string) (*adminapi.ProductTemplateDeleteRes, error)
+	BatchDelete(ctx context.Context, req *adminapi.ProductTemplateBatchDeleteReq, actor entity.AdminUser, ip string) (*adminapi.ProductTemplateBatchDeleteRes, error)
+	ValidateTypes(ctx context.Context, req *adminapi.ProductTemplateValidateTypeListReq) (*adminapi.ProductTemplateValidateTypeListRes, error)
+}
+
 type SMSConfigService interface {
 	Get(ctx context.Context, req *adminapi.SettingsSMSGetReq) (*adminapi.SettingsSMSGetRes, error)
 	Save(ctx context.Context, req *adminapi.SettingsSMSSaveReq, actor entity.AdminUser, ip string) (*adminapi.SettingsSMSSaveRes, error)

@@ -14,28 +14,30 @@ func apiErr(code gcode.Code, message string) error {
 }
 
 type Services struct {
-	Auth      service.AuthService
-	User      service.UserService
-	Group     service.GroupService
-	Subject   service.SubjectService
-	Brand     service.BrandService
-	Industry  service.IndustryService
-	SMSConfig service.SMSConfigService
-	System    service.SystemConfigService
-	AuditLog  service.AuditLogService
+	Auth            service.AuthService
+	User            service.UserService
+	Group           service.GroupService
+	Subject         service.SubjectService
+	Brand           service.BrandService
+	Industry        service.IndustryService
+	ProductTemplate service.ProductTemplateService
+	SMSConfig       service.SMSConfigService
+	System          service.SystemConfigService
+	AuditLog        service.AuditLogService
 }
 
 func NewServices(core *app.Core) *Services {
 	return &Services{
-		Auth:      &AuthLogic{core: core},
-		User:      &UserLogic{core: core},
-		Group:     &GroupLogic{core: core},
-		Subject:   &SubjectLogic{core: core},
-		Brand:     &BrandLogic{core: core},
-		Industry:  &IndustryLogic{core: core},
-		SMSConfig: &SMSConfigLogic{core: core},
-		System:    &SystemConfigLogic{core: core},
-		AuditLog:  &AuditLogLogic{core: core},
+		Auth:            &AuthLogic{core: core},
+		User:            &UserLogic{core: core},
+		Group:           &GroupLogic{core: core},
+		Subject:         &SubjectLogic{core: core},
+		Brand:           &BrandLogic{core: core},
+		Industry:        &IndustryLogic{core: core},
+		ProductTemplate: &ProductTemplateLogic{core: core},
+		SMSConfig:       &SMSConfigLogic{core: core},
+		System:          &SystemConfigLogic{core: core},
+		AuditLog:        &AuditLogLogic{core: core},
 	}
 }
 

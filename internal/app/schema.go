@@ -109,6 +109,18 @@ CREATE INDEX IF NOT EXISTS idx_product_industry_brand_sort
     ON product_industry_brand(industry_id, sort, id);
 CREATE INDEX IF NOT EXISTS idx_product_industry_brand_brand
     ON product_industry_brand(brand_id);
+CREATE TABLE IF NOT EXISTS product_template (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    template_type TEXT NOT NULL DEFAULT 'local',
+    is_shared INTEGER NOT NULL DEFAULT 0,
+    account_name TEXT NOT NULL DEFAULT '',
+    validate_type INTEGER NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_product_template_type_share
+    ON product_template(template_type, is_shared, id);
 CREATE TABLE IF NOT EXISTS system_config (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     config_key TEXT NOT NULL UNIQUE,
@@ -228,6 +240,17 @@ CREATE TABLE IF NOT EXISTS product_industry_brand (
     UNIQUE KEY uk_product_industry_brand (industry_id, brand_id),
     KEY idx_product_industry_brand_sort (industry_id, sort, id),
     KEY idx_product_industry_brand_brand (brand_id)
+);
+CREATE TABLE IF NOT EXISTS product_template (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(100) NOT NULL,
+    template_type VARCHAR(32) NOT NULL DEFAULT 'local',
+    is_shared TINYINT NOT NULL DEFAULT 0,
+    account_name VARCHAR(100) NOT NULL DEFAULT '',
+    validate_type INT NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    KEY idx_product_template_type_share (template_type, is_shared, id)
 );
 CREATE TABLE IF NOT EXISTS system_config (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
