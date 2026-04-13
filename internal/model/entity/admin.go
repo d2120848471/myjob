@@ -130,6 +130,36 @@ type IndustryBrandRelationItem struct {
 	Sort      int    `db:"sort" json:"sort"`
 }
 
+type ProductTemplate struct {
+	ID           int64     `db:"id" json:"id"`
+	Title        string    `db:"title" json:"title"`
+	TemplateType string    `db:"template_type" json:"type"`
+	IsShared     int       `db:"is_shared" json:"is_shared"`
+	AccountName  string    `db:"account_name" json:"account_name"`
+	ValidateType int       `db:"validate_type" json:"validate_type"`
+	CreatedAt    time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt    time.Time `db:"updated_at" json:"updated_at"`
+}
+
+type ProductTemplateListItem struct {
+	ID                int64     `db:"id" json:"id"`
+	Title             string    `db:"title" json:"title"`
+	Type              string    `db:"type" json:"type"`
+	TypeLabel         string    `db:"type_label" json:"type_label"`
+	IsShared          int       `db:"is_shared" json:"is_shared"`
+	IsSharedLabel     string    `db:"is_shared_label" json:"is_shared_label"`
+	AccountName       string    `db:"account_name" json:"account_name"`
+	ValidateType      int       `db:"validate_type" json:"validate_type"`
+	ValidateTypeLabel string    `db:"validate_type_label" json:"validate_type_label"`
+	CreatedAt         time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt         time.Time `db:"updated_at" json:"updated_at"`
+}
+
+type ProductTemplateValidateTypeItem struct {
+	ID    int    `json:"id"`
+	Title string `json:"title"`
+}
+
 type BrandSelectorItem struct {
 	ID   int64  `db:"id" json:"id"`
 	Name string `db:"name" json:"name"`

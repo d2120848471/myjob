@@ -82,6 +82,7 @@ func assemble(core *app.Core) (*Application, error) {
 	subjectCtrl := admincontroller.NewSubject(services.Subject)
 	brandCtrl := admincontroller.NewBrand(services.Brand)
 	industryCtrl := admincontroller.NewIndustry(services.Industry)
+	productTemplateCtrl := admincontroller.NewProductTemplate(services.ProductTemplate)
 	settingsCtrl := admincontroller.NewSettings(services.SMSConfig, services.System)
 	operationLogCtrl := admincontroller.NewOperationLog(services.AuditLog)
 	loginLogCtrl := admincontroller.NewLoginLog(services.AuditLog)
@@ -123,6 +124,10 @@ func assemble(core *app.Core) (*Application, error) {
 		group.Group("", func(group *ghttp.RouterGroup) {
 			group.Middleware(guard.Require("product.industry", false))
 			group.Bind(industryCtrl)
+		})
+		group.Group("", func(group *ghttp.RouterGroup) {
+			group.Middleware(guard.Require("product.template", false))
+			group.Bind(productTemplateCtrl)
 		})
 		group.Group("", func(group *ghttp.RouterGroup) {
 			group.Middleware(guard.Require("", true))

@@ -36,6 +36,8 @@ func TestOpenAPI_ProductModulePathsExposed(t *testing.T) {
 	require.Contains(t, res.body, "/api/admin/brands")
 	require.Contains(t, res.body, "/api/admin/industries")
 	require.Contains(t, res.body, "/api/admin/brands/upload")
+	require.Contains(t, res.body, "/api/admin/product-templates")
+	require.Contains(t, res.body, "/api/admin/product-templates/validate-types")
 }
 
 func TestProductBrandFlows(t *testing.T) {
@@ -433,6 +435,225 @@ func TestBrandUploadFlows(t *testing.T) {
 
 	invalidExtRes := h.multipartPost(t, "/api/admin/brands/upload", token, "credential", "note.txt", []byte("not-an-image"))
 	require.Equal(t, 400, invalidExtRes.Code)
+}
+
+func TestProductTemplateFlows(t *testing.T) {
+	h := newTestHarness(t)
+	token := h.loginAdmin(t)
+
+	validateTypesRaw := h.rawRequest(http.MethodGet, "/api/admin/product-templates/validate-types", nil, token)
+	require.Equal(t, http.StatusOK, validateTypesRaw.status)
+	validateTypesRes := validateTypesRaw.env
+	require.Equal(t, 0, validateTypesRes.Code)
+
+	var validateTypesData struct {
+		List []struct {
+			ID    int    `json:"id"`
+			Title string `json:"title"`
+		} `json:"list"`
+	}
+	require.NoError(t, json.Unmarshal(validateTypesRes.Data, &validateTypesData))
+	require.Len(t, validateTypesData.List, 12)
+	require.Equal(t, 1, validateTypesData.List[0].ID)
+	require.Equal(t, "手机号", validateTypesData.List[0].Title)
+	require.Equal(t, 12, validateTypesData.List[11].ID)
+	require.Equal(t, "禁止填写邮箱", validateTypesData.List[11].Title)
+
+	invalidTitle := h.postJSON("/api/admin/product-templates", map[string]any{
+		"title":         "   ",
+		"type":          "local",
+		"is_shared":     1,
+		"account_name":  "账号",
+		"validate_type": 1,
+	}, token)
+	require.Equal(t, 400, invalidTitle.Code)
+
+	invalidAccount := h.postJSON("/api/admin/product-templates", map[string]any{
+		"title":         "模板A",
+		"type":          "local",
+		"is_shared":     1,
+		"account_name":  " ",
+		"validate_type": 1,
+	}, token)
+	require.Equal(t, 400, invalidAccount.Code)
+
+	invalidShared := h.postJSON("/api/admin/product-templates", map[string]any{
+		"title":         "模板A",
+		"type":          "local",
+		"is_shared":     2,
+		"account_name":  "账号",
+		"validate_type": 1,
+	}, token)
+	require.Equal(t, 400, invalidShared.Code)
+
+	invalidValidateType := h.postJSON("/api/admin/product-templates", map[string]any{
+		"title":         "模板A",
+		"type":          "local",
+		"is_shared":     1,
+		"account_name":  "账号",
+		"validate_type": 99,
+	}, token)
+	require.Equal(t, 400, invalidValidateType.Code)
+
+	createShared := h.postJSON("/api/admin/product-templates", map[string]any{
+		"title":         "即梦ID",
+		"type":          "local",
+		"is_shared":     1,
+		"account_name":  "即梦账号",
+		"validate_type": 6,
+	}, token)
+	require.Equal(t, 0, createShared.Code)
+
+	var createSharedData struct {
+		ID int64 `json:"id"`
+	}
+	require.NoError(t, json.Unmarshal(createShared.Data, &createSharedData))
+	require.NotZero(t, createSharedData.ID)
+
+	createPrivate := h.postJSON("/api/admin/product-templates", map[string]any{
+		"title":         "手机号模板",
+		"type":          "local",
+		"is_shared":     0,
+		"account_name":  "手机号",
+		"validate_type": 1,
+	}, token)
+	require.Equal(t, 0, createPrivate.Code)
+
+	var createPrivateData struct {
+		ID int64 `json:"id"`
+	}
+	require.NoError(t, json.Unmarshal(createPrivate.Data, &createPrivateData))
+	require.NotZero(t, createPrivateData.ID)
+
+	createBatchDelete := h.postJSON("/api/admin/product-templates", map[string]any{
+		"title":         "QQ模板",
+		"type":          "local",
+		"is_shared":     0,
+		"account_name":  "QQ号",
+		"validate_type": 2,
+	}, token)
+	require.Equal(t, 0, createBatchDelete.Code)
+
+	var createBatchDeleteData struct {
+		ID int64 `json:"id"`
+	}
+	require.NoError(t, json.Unmarshal(createBatchDelete.Data, &createBatchDeleteData))
+	require.NotZero(t, createBatchDeleteData.ID)
+
+	listRes := h.getJSON("/api/admin/product-templates?page=1&page_size=20&keyword=模板&type=local&is_shared=0", token)
+	require.Equal(t, 0, listRes.Code)
+
+	var listData struct {
+		List []struct {
+			ID            int64  `json:"id"`
+			Title         string `json:"title"`
+			Type          string `json:"type"`
+			TypeLabel     string `json:"type_label"`
+			IsShared      int    `json:"is_shared"`
+			IsSharedLabel string `json:"is_shared_label"`
+			AccountName   string `json:"account_name"`
+			ValidateType  int    `json:"validate_type"`
+		} `json:"list"`
+		Pagination struct {
+			Page     int `json:"page"`
+			PageSize int `json:"page_size"`
+			Total    int `json:"total"`
+		} `json:"pagination"`
+	}
+	require.NoError(t, json.Unmarshal(listRes.Data, &listData))
+	require.Equal(t, 1, listData.Pagination.Page)
+	require.Equal(t, 20, listData.Pagination.PageSize)
+	require.GreaterOrEqual(t, listData.Pagination.Total, 2)
+
+	foundPrivate := false
+	for _, item := range listData.List {
+		if item.ID == createPrivateData.ID {
+			foundPrivate = true
+			require.Equal(t, "手机号模板", item.Title)
+			require.Equal(t, "local", item.Type)
+			require.Equal(t, "本地模板", item.TypeLabel)
+			require.Equal(t, 0, item.IsShared)
+			require.Equal(t, "不共享", item.IsSharedLabel)
+			require.Equal(t, "手机号", item.AccountName)
+			require.Equal(t, 1, item.ValidateType)
+		}
+		require.NotEqual(t, createSharedData.ID, item.ID)
+	}
+	require.True(t, foundPrivate)
+
+	editRes := h.putJSON(fmt.Sprintf("/api/admin/product-templates/%d", createSharedData.ID), map[string]any{
+		"title":         "即梦数字ID",
+		"type":          "local",
+		"is_shared":     0,
+		"account_name":  "即梦ID账号",
+		"validate_type": 1,
+	}, token)
+	require.Equal(t, 0, editRes.Code)
+
+	afterEditRes := h.getJSON("/api/admin/product-templates?page=1&page_size=20&keyword=即梦数字&type=local&is_shared=0", token)
+	require.Equal(t, 0, afterEditRes.Code)
+
+	var afterEditData struct {
+		List []struct {
+			ID           int64  `json:"id"`
+			Title        string `json:"title"`
+			AccountName  string `json:"account_name"`
+			ValidateType int    `json:"validate_type"`
+			IsShared     int    `json:"is_shared"`
+		} `json:"list"`
+	}
+	require.NoError(t, json.Unmarshal(afterEditRes.Data, &afterEditData))
+	require.Len(t, afterEditData.List, 1)
+	require.Equal(t, createSharedData.ID, afterEditData.List[0].ID)
+	require.Equal(t, "即梦数字ID", afterEditData.List[0].Title)
+	require.Equal(t, "即梦ID账号", afterEditData.List[0].AccountName)
+	require.Equal(t, 1, afterEditData.List[0].ValidateType)
+	require.Equal(t, 0, afterEditData.List[0].IsShared)
+
+	deleteSingleRes := h.deleteJSON(fmt.Sprintf("/api/admin/product-templates/%d", createPrivateData.ID), token)
+	require.Equal(t, 0, deleteSingleRes.Code)
+
+	afterSingleDeleteRes := h.getJSON("/api/admin/product-templates?page=1&page_size=20&keyword=手机号模板", token)
+	require.Equal(t, 0, afterSingleDeleteRes.Code)
+
+	var afterSingleDeleteData struct {
+		List []struct {
+			ID int64 `json:"id"`
+		} `json:"list"`
+	}
+	require.NoError(t, json.Unmarshal(afterSingleDeleteRes.Data, &afterSingleDeleteData))
+	require.Empty(t, afterSingleDeleteData.List)
+
+	emptyBatchDelete := h.deleteJSONWithBody("/api/admin/product-templates", map[string]any{
+		"ids": []int64{},
+	}, token)
+	require.Equal(t, 400, emptyBatchDelete.Code)
+	require.Equal(t, "请至少选择一个商品模板", emptyBatchDelete.Message)
+
+	invalidBatchDelete := h.deleteJSONWithBody("/api/admin/product-templates", map[string]any{
+		"ids": []int64{createSharedData.ID, 0},
+	}, token)
+	require.Equal(t, 400, invalidBatchDelete.Code)
+	require.Equal(t, "模板ID必须是正整数", invalidBatchDelete.Message)
+
+	batchDeleteRes := h.deleteJSONWithBody("/api/admin/product-templates", map[string]any{
+		"ids": []int64{createSharedData.ID, createBatchDeleteData.ID},
+	}, token)
+	require.Equal(t, 0, batchDeleteRes.Code)
+
+	afterBatchDeleteRes := h.getJSON("/api/admin/product-templates?page=1&page_size=20&keyword=模板&type=local", token)
+	require.Equal(t, 0, afterBatchDeleteRes.Code)
+
+	var afterBatchDeleteData struct {
+		List []struct {
+			ID int64 `json:"id"`
+		} `json:"list"`
+	}
+	require.NoError(t, json.Unmarshal(afterBatchDeleteRes.Data, &afterBatchDeleteData))
+	for _, item := range afterBatchDeleteData.List {
+		require.NotEqual(t, createSharedData.ID, item.ID)
+		require.NotEqual(t, createBatchDeleteData.ID, item.ID)
+	}
 }
 
 func (h *testHarness) createTopLevelBrand(t *testing.T, token, name string) int64 {

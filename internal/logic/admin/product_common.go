@@ -49,11 +49,15 @@ func moveIDByAction(ids []int64, targetID int64, action string) []int64 {
 }
 
 func uniqueInt64s(ids []int64) ([]int64, error) {
+	return uniquePositiveInt64s(ids, "品牌ID")
+}
+
+func uniquePositiveInt64s(ids []int64, fieldName string) ([]int64, error) {
 	seen := make(map[int64]struct{}, len(ids))
 	result := make([]int64, 0, len(ids))
 	for _, id := range ids {
 		if id <= 0 {
-			return nil, fmt.Errorf("品牌ID必须是正整数")
+			return nil, fmt.Errorf("%s必须是正整数", fieldName)
 		}
 		if _, ok := seen[id]; ok {
 			continue
