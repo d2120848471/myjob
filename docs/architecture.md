@@ -146,7 +146,8 @@ POST /api/admin/auth/sms/verify
 - 超级管理员：`group_id = 0`
 - 普通用户：通过用户组读取菜单权限码
 - 菜单树和用户组授权只暴露 `super_only = 0` 的菜单
-- 短信配置接口独立走 super-only 保护，不依赖普通权限码
+- 短信配置接口和系统参数配置接口都独立走 super-only 保护，不依赖普通权限码
+- 系统参数配置当前内置 `finance`、`integration` 两组，支持单组读取和多组批量保存
 
 ## 运行时依赖
 

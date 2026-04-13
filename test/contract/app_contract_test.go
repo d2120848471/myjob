@@ -46,6 +46,12 @@ func TestAuthFlow_SessionSMSProfileLogout(t *testing.T) {
 	require.Equal(t, 0, profileRes.Code)
 	require.Equal(t, "OK", profileRes.Message)
 
+	var profileData struct {
+		Permissions []string `json:"permissions"`
+	}
+	require.NoError(t, json.Unmarshal(profileRes.Data, &profileData))
+	require.Contains(t, profileData.Permissions, "config.system")
+
 	smsUserID := h.createUserForSMSFlow(context.Background(), "need001", "Need_123", "13800001111")
 	require.NotZero(t, smsUserID)
 
