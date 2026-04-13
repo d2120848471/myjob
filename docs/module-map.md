@@ -128,6 +128,33 @@
   - 本期只做模板管理，不做模板内容渲染或动态表单配置
   - 当前只保存 `validate_type` 规则，不会据此校验某次真实输入值是不是微信号、QQ号、邮箱等
 
+### 商品购买数量限制策略
+
+- 协议：`api/purchase_limit.go`
+- controller：`internal/controller/admin/purchase_limit.go`
+- service：`PurchaseLimitService`
+- logic：`internal/logic/admin/purchase_limit.go`
+- 路由前缀：`/api/admin/purchase-limit-strategies*`
+- 主要能力：
+  - 分页列表、关键词搜索
+  - 新增 / 编辑 / 删除
+  - 启停状态切换
+  - 读取限制类型和周期类型枚举
+- 当前字段：
+  - `name`：策略名称
+  - `limit_type`：限制类型，当前支持同一会员 / 同一充值账号
+  - `period_type`：周期类型，当前支持按天 / 按区间(分钟)
+  - `period`：限制周期，必须大于 0
+  - `limit_nums`：限制数量，`0` 表示不限制
+  - `limit_times`：限制笔数，`0` 表示不限制
+  - `status`：启停状态
+- 权限边界：
+  - 商品购买数量限制策略接口统一要求 `product.purchase_limit`
+- 当前实现限制：
+  - 本期只做策略后台管理
+  - 不实现老站的“清空策略数据”
+  - 不接真实购买前校验链
+
 ### 短信配置
 
 - 协议：`api/settings.go`
@@ -269,6 +296,7 @@ HTTP 协议适配层，不直接写业务规则。
 | 品牌管理 | `/api/admin/brands*` | `product.brand` |
 | 行业管理 | `/api/admin/industries*` | `product.industry` |
 | 商品模板管理 | `/api/admin/product-templates*` | `product.template` |
+| 商品购买数量限制策略 | `/api/admin/purchase-limit-strategies*` | `product.purchase_limit` |
 | 短信配置 | `/api/admin/settings/sms` | super-only |
 | 系统参数配置 | `/api/admin/settings/system` | super-only |
 | 操作日志 | `/api/admin/logs/operations` | `admin.action` |

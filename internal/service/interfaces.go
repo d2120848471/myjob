@@ -79,6 +79,15 @@ type ProductTemplateService interface {
 	ValidateTypes(ctx context.Context, req *adminapi.ProductTemplateValidateTypeListReq) (*adminapi.ProductTemplateValidateTypeListRes, error)
 }
 
+type PurchaseLimitService interface {
+	List(ctx context.Context, req *adminapi.PurchaseLimitStrategyListReq) (*adminapi.PurchaseLimitStrategyListRes, error)
+	Add(ctx context.Context, req *adminapi.PurchaseLimitStrategyCreateReq, actor entity.AdminUser, ip string) (*adminapi.PurchaseLimitStrategyCreateRes, error)
+	Edit(ctx context.Context, req *adminapi.PurchaseLimitStrategyUpdateReq, actor entity.AdminUser, ip string) (*adminapi.PurchaseLimitStrategyUpdateRes, error)
+	Delete(ctx context.Context, req *adminapi.PurchaseLimitStrategyDeleteReq, actor entity.AdminUser, ip string) (*adminapi.PurchaseLimitStrategyDeleteRes, error)
+	Status(ctx context.Context, req *adminapi.PurchaseLimitStrategyStatusReq, actor entity.AdminUser, ip string) (*adminapi.PurchaseLimitStrategyStatusRes, error)
+	Enums(ctx context.Context, req *adminapi.PurchaseLimitStrategyEnumsReq) (*adminapi.PurchaseLimitStrategyEnumsRes, error)
+}
+
 type SMSConfigService interface {
 	Get(ctx context.Context, req *adminapi.SettingsSMSGetReq) (*adminapi.SettingsSMSGetRes, error)
 	Save(ctx context.Context, req *adminapi.SettingsSMSSaveReq, actor entity.AdminUser, ip string) (*adminapi.SettingsSMSSaveRes, error)

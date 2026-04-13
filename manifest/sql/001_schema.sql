@@ -87,6 +87,20 @@ CREATE TABLE IF NOT EXISTS product_template (
   KEY idx_product_template_type_share (template_type, is_shared, id)
 );
 
+CREATE TABLE IF NOT EXISTS product_purchase_limit_strategy (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  limit_type TINYINT NOT NULL DEFAULT 1,
+  period_type TINYINT NOT NULL DEFAULT 1,
+  period INT NOT NULL DEFAULT 1,
+  limit_nums INT NOT NULL DEFAULT 0,
+  limit_times INT NOT NULL DEFAULT 0,
+  status TINYINT NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  KEY idx_product_purchase_limit_strategy_keyword (name, id)
+);
+
 CREATE TABLE IF NOT EXISTS system_config (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   config_key VARCHAR(64) NOT NULL UNIQUE,
