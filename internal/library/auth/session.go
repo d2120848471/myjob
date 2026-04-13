@@ -95,3 +95,7 @@ func PermissionCacheKey(groupID int64) string {
 func SMSConfigCacheKey() string {
 	return "admin:config:sms"
 }
+
+func SystemConfigCacheKey(group string) string {
+	return fmt.Sprintf("admin:config:system:%s", group)
+}

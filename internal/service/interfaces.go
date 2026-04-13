@@ -75,6 +75,11 @@ type SMSConfigService interface {
 	Save(ctx context.Context, req *adminapi.SettingsSMSSaveReq, actor entity.AdminUser, ip string) (*adminapi.SettingsSMSSaveRes, error)
 }
 
+type SystemConfigService interface {
+	Get(ctx context.Context, req *adminapi.SettingsSystemGetReq) (*adminapi.SettingsSystemGetRes, error)
+	Save(ctx context.Context, req *adminapi.SettingsSystemSaveReq, actor entity.AdminUser, ip string) (*adminapi.SettingsSystemSaveRes, error)
+}
+
 type AuditLogService interface {
 	OperationList(ctx context.Context, req *adminapi.OperationLogListReq) (*adminapi.OperationLogListRes, error)
 	LoginList(ctx context.Context, req *adminapi.LoginLogListReq) (*adminapi.LoginLogListRes, error)

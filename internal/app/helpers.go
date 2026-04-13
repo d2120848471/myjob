@@ -281,6 +281,8 @@ func parseConfigUpdatedAt(raw any) (time.Time, bool) {
 			return time.Time{}, false
 		}
 		return value.Time, true
+	case interface{ String() string }:
+		return parseConfigUpdatedAtString(value.String())
 	default:
 		return time.Time{}, false
 	}
