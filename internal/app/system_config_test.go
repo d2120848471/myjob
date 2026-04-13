@@ -46,3 +46,17 @@ func TestLoadSystemConfigGroup_ReturnsUnconfiguredIntegrationItem(t *testing.T) 
 	require.False(t, state.Items[0].Configured)
 	require.Empty(t, state.Items[0].Value)
 }
+
+func TestLoadAllSystemConfigGroups_ReturnsOrderedGroups(t *testing.T) {
+	core, err := NewTestCore()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = core.Close() })
+
+	states, err := core.LoadAllSystemConfigGroups(context.Background())
+	require.NoError(t, err)
+	require.Len(t, states, 2)
+	require.Equal(t, "finance", states[0].Group)
+	require.Equal(t, "财务参数", states[0].Label)
+	require.Equal(t, "integration", states[1].Group)
+	require.Equal(t, "集成参数", states[1].Label)
+}
