@@ -61,3 +61,27 @@ type SMSConfigState struct {
 	AccessKeySecretConfigured bool      `json:"access_key_secret_configured"`
 	UpdatedAt                 time.Time `json:"updated_at,omitempty"`
 }
+
+type SystemConfigItem struct {
+	Key        string    `json:"key"`
+	Label      string    `json:"label"`
+	Value      string    `json:"value"`
+	ValueType  string    `json:"value_type"`
+	Unit       string    `json:"unit,omitempty"`
+	Required   bool      `json:"required"`
+	Configured bool      `json:"configured"`
+	UpdatedAt  time.Time `json:"updated_at,omitempty"`
+}
+
+type SystemConfigGroupState struct {
+	Version int                `json:"version"`
+	Group   string             `json:"group"`
+	Items   []SystemConfigItem `json:"items"`
+}
+
+type FinanceTaxConfig struct {
+	TaxExclusiveRate       string `json:"tax_exclusive_rate"`
+	TaxExclusiveRateScaled int64  `json:"tax_exclusive_rate_scaled"`
+	TaxInclusiveRate       string `json:"tax_inclusive_rate"`
+	TaxInclusiveRateScaled int64  `json:"tax_inclusive_rate_scaled"`
+}

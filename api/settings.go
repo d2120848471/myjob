@@ -31,3 +31,37 @@ type SettingsSMSSaveReq struct {
 }
 
 type SettingsSMSSaveRes struct{}
+
+type SettingsSystemGetReq struct {
+	g.Meta `path:"/settings/system" method:"get" tags:"设置" summary:"读取系统参数配置" security:"BearerAuth" dc:"按分组读取系统参数配置"`
+	Group  string `json:"group" v:"required#group不能为空" dc:"配置分组"`
+}
+
+type SettingsSystemItem struct {
+	Key        string `json:"key" dc:"组内键名"`
+	Label      string `json:"label" dc:"展示名称"`
+	Value      string `json:"value" dc:"参数值"`
+	ValueType  string `json:"value_type" dc:"参数类型"`
+	Unit       string `json:"unit,omitempty" dc:"单位"`
+	Required   bool   `json:"required" dc:"是否必填"`
+	Configured bool   `json:"configured" dc:"是否已配置"`
+	UpdatedAt  string `json:"updated_at,omitempty" dc:"更新时间"`
+}
+
+type SettingsSystemGetRes struct {
+	Group string               `json:"group" dc:"配置分组"`
+	Items []SettingsSystemItem `json:"items" dc:"参数列表"`
+}
+
+type SettingsSystemSaveReq struct {
+	g.Meta `path:"/settings/system" method:"put" tags:"设置" summary:"保存系统参数配置" security:"BearerAuth" dc:"按分组批量保存系统参数配置"`
+	Group  string                   `json:"group" v:"required#group不能为空" dc:"配置分组"`
+	Items  []SettingsSystemSaveItem `json:"items" v:"required#items不能为空" dc:"参数列表"`
+}
+
+type SettingsSystemSaveItem struct {
+	Key   string `json:"key" v:"required#key不能为空" dc:"组内键名"`
+	Value string `json:"value" dc:"参数值"`
+}
+
+type SettingsSystemSaveRes struct{}

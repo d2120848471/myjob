@@ -21,6 +21,7 @@ type Services struct {
 	Brand     service.BrandService
 	Industry  service.IndustryService
 	SMSConfig service.SMSConfigService
+	System    service.SystemConfigService
 	AuditLog  service.AuditLogService
 }
 
@@ -33,6 +34,7 @@ func NewServices(core *app.Core) *Services {
 		Brand:     &BrandLogic{core: core},
 		Industry:  &IndustryLogic{core: core},
 		SMSConfig: &SMSConfigLogic{core: core},
+		System:    &SystemConfigLogic{core: core},
 		AuditLog:  &AuditLogLogic{core: core},
 	}
 }

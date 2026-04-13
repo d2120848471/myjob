@@ -82,7 +82,7 @@ func assemble(core *app.Core) (*Application, error) {
 	subjectCtrl := admincontroller.NewSubject(services.Subject)
 	brandCtrl := admincontroller.NewBrand(services.Brand)
 	industryCtrl := admincontroller.NewIndustry(services.Industry)
-	settingsCtrl := admincontroller.NewSettings(services.SMSConfig)
+	settingsCtrl := admincontroller.NewSettings(services.SMSConfig, services.System)
 	operationLogCtrl := admincontroller.NewOperationLog(services.AuditLog)
 	loginLogCtrl := admincontroller.NewLoginLog(services.AuditLog)
 	guard := middleware.NewAuthGuard(core)
