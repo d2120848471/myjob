@@ -20,6 +20,12 @@ type systemSettingItem struct {
 	UpdatedAt  string `json:"updated_at"`
 }
 
+type systemSettingGroup struct {
+	Group string              `json:"group"`
+	Label string              `json:"label"`
+	Items []systemSettingItem `json:"items"`
+}
+
 func TestSystemSettings_SaveAndGetFinanceConfig(t *testing.T) {
 	h := newTestHarness(t)
 	token := h.loginAdmin(t)
@@ -141,6 +147,115 @@ func TestSystemSettings_SaveRejectsInvalidRobotWebhookURL(t *testing.T) {
 	}, token)
 	require.Equal(t, http.StatusOK, saveRaw.status)
 	require.NotEqual(t, 0, saveRaw.env.Code)
+}
+
+func TestSystemSettings_SaveAndGetMultiGroupConfig(t *testing.T) {
+	h := newTestHarness(t)
+	token := h.loginAdmin(t)
+
+	saveRaw := h.rawRequest(http.MethodPut, "/api/admin/settings/system", map[string]any{
+		"groups": []map[string]any{
+			{
+				"group": "finance",
+				"items": []map[string]any{
+					{"key": "tax_exclusive_rate", "value": "4.5"},
+					{"key": "tax_inclusive_rate", "value": "3.8"},
+				},
+			},
+			{
+				"group": "integration",
+				"items": []map[string]any{
+					{"key": "robot_webhook_url", "value": "https://bot.example.com/hook"},
+				},
+			},
+		},
+	}, token)
+	require.Equal(t, http.StatusOK, saveRaw.status)
+	require.Equal(t, 0, saveRaw.env.Code)
+
+	getRaw := h.rawRequest(http.MethodGet, "/api/admin/settings/system", nil, token)
+	require.Equal(t, http.StatusOK, getRaw.status)
+	require.Equal(t, 0, getRaw.env.Code)
+
+	var data struct {
+		Groups []systemSettingGroup `json:"groups"`
+	}
+	require.NoError(t, json.Unmarshal(getRaw.env.Data, &data))
+	require.Len(t, data.Groups, 2)
+
+	groupMap := make(map[string]systemSettingGroup, len(data.Groups))
+	for _, group := range data.Groups {
+		groupMap[group.Group] = group
+	}
+
+	require.Equal(t, "财务参数", groupMap["finance"].Label)
+	require.Equal(t, "集成参数", groupMap["integration"].Label)
+
+	financeItems := make(map[string]systemSettingItem, len(groupMap["finance"].Items))
+	for _, item := range groupMap["finance"].Items {
+		financeItems[item.Key] = item
+	}
+	require.Equal(t, "4.5", financeItems["tax_exclusive_rate"].Value)
+	require.Equal(t, "3.8", financeItems["tax_inclusive_rate"].Value)
+
+	integrationItems := make(map[string]systemSettingItem, len(groupMap["integration"].Items))
+	for _, item := range groupMap["integration"].Items {
+		integrationItems[item.Key] = item
+	}
+	require.Equal(t, "https://bot.example.com/hook", integrationItems["robot_webhook_url"].Value)
+	require.True(t, integrationItems["robot_webhook_url"].Configured)
+}
+
+func TestSystemSettings_BatchSaveRollsBackAcrossGroups(t *testing.T) {
+	h := newTestHarness(t)
+	token := h.loginAdmin(t)
+
+	saveRaw := h.rawRequest(http.MethodPut, "/api/admin/settings/system", map[string]any{
+		"groups": []map[string]any{
+			{
+				"group": "finance",
+				"items": []map[string]any{
+					{"key": "tax_exclusive_rate", "value": "4.5"},
+					{"key": "tax_inclusive_rate", "value": "3.8"},
+				},
+			},
+			{
+				"group": "integration",
+				"items": []map[string]any{
+					{"key": "robot_webhook_url", "value": "ftp://bad.example.com"},
+				},
+			},
+		},
+	}, token)
+	require.Equal(t, http.StatusOK, saveRaw.status)
+	require.NotEqual(t, 0, saveRaw.env.Code)
+
+	getRaw := h.rawRequest(http.MethodGet, "/api/admin/settings/system", nil, token)
+	require.Equal(t, http.StatusOK, getRaw.status)
+	require.Equal(t, 0, getRaw.env.Code)
+
+	var data struct {
+		Groups []systemSettingGroup `json:"groups"`
+	}
+	require.NoError(t, json.Unmarshal(getRaw.env.Data, &data))
+
+	groupMap := make(map[string]systemSettingGroup, len(data.Groups))
+	for _, group := range data.Groups {
+		groupMap[group.Group] = group
+	}
+
+	financeItems := make(map[string]systemSettingItem, len(groupMap["finance"].Items))
+	for _, item := range groupMap["finance"].Items {
+		financeItems[item.Key] = item
+	}
+	require.False(t, financeItems["tax_exclusive_rate"].Configured)
+	require.False(t, financeItems["tax_inclusive_rate"].Configured)
+
+	integrationItems := make(map[string]systemSettingItem, len(groupMap["integration"].Items))
+	for _, item := range groupMap["integration"].Items {
+		integrationItems[item.Key] = item
+	}
+	require.False(t, integrationItems["robot_webhook_url"].Configured)
 }
 
 func loginTestUser(t *testing.T, h *testHarness, username, password, phone string) string {

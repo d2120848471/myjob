@@ -76,6 +76,7 @@ type SystemConfigItem struct {
 type SystemConfigGroupState struct {
 	Version int                `json:"version"`
 	Group   string             `json:"group"`
+	Label   string             `json:"label,omitempty"`
 	Items   []SystemConfigItem `json:"items"`
 }
 

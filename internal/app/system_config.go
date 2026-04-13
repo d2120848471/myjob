@@ -82,6 +82,8 @@ var systemConfigRegistry = map[string]systemConfigGroupDefinition{
 	},
 }
 
+var systemConfigGroupOrder = []string{"finance", "integration"}
+
 func SystemConfigSpecs(group string) ([]SystemConfigSpec, bool) {
 	definition, ok := systemConfigRegistry[strings.TrimSpace(group)]
 	if !ok {
@@ -111,6 +113,12 @@ func LookupSystemConfigSpec(group, key string) (SystemConfigSpec, bool) {
 		}
 	}
 	return SystemConfigSpec{}, false
+}
+
+func SystemConfigGroups() []string {
+	groups := make([]string, len(systemConfigGroupOrder))
+	copy(groups, systemConfigGroupOrder)
+	return groups
 }
 
 func (c *Core) LoadSystemConfigGroup(ctx context.Context, group string) (modelruntime.SystemConfigGroupState, error) {
@@ -144,6 +152,7 @@ func (c *Core) LoadSystemConfigGroup(ctx context.Context, group string) (modelru
 	state := modelruntime.SystemConfigGroupState{
 		Version: systemConfigCacheVersion,
 		Group:   group,
+		Label:   definition.Label,
 		Items:   make([]modelruntime.SystemConfigItem, 0, len(definition.Items)),
 	}
 	for _, spec := range definition.Items {
@@ -167,6 +176,19 @@ func (c *Core) LoadSystemConfigGroup(ctx context.Context, group string) (modelru
 	data, _ := json.Marshal(state)
 	_ = c.RedisSetString(ctx, authlib.SystemConfigCacheKey(group), string(data), 30*time.Minute)
 	return state, nil
+}
+
+func (c *Core) LoadAllSystemConfigGroups(ctx context.Context) ([]modelruntime.SystemConfigGroupState, error) {
+	groups := SystemConfigGroups()
+	result := make([]modelruntime.SystemConfigGroupState, 0, len(groups))
+	for _, group := range groups {
+		state, err := c.LoadSystemConfigGroup(ctx, group)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, state)
+	}
+	return result, nil
 }
 
 func (c *Core) LoadFinanceTaxConfig(ctx context.Context) (modelruntime.FinanceTaxConfig, error) {
