@@ -120,6 +120,7 @@ func defaultMenus() []menuSeed {
 		{ID: 6, ParentID: 0, Name: "短信配置", Code: "config.sms", MenuLevel: 1, Status: 1, SuperOnly: 1, Sort: 6},
 		{ID: 7, ParentID: 0, Name: "品牌管理", Code: "product.brand", MenuLevel: 1, Status: 1, SuperOnly: 0, Sort: 7},
 		{ID: 8, ParentID: 0, Name: "行业管理", Code: "product.industry", MenuLevel: 1, Status: 1, SuperOnly: 0, Sort: 8},
+		{ID: 9, ParentID: 0, Name: "系统参数配置", Code: "config.system", MenuLevel: 1, Status: 1, SuperOnly: 1, Sort: 9},
 	}
 }
 

@@ -4,7 +4,8 @@ INSERT INTO admin_menu (id, parent_id, name, code, menu_type, menu_level, status
 (3, 0, '操作日志', 'admin.action', 'permission', 1, 1, 0, 3, NOW(), NOW()),
 (4, 0, '登录日志', 'admin.loginlog', 'permission', 1, 1, 0, 4, NOW(), NOW()),
 (5, 0, '主体配置', 'subject.manage', 'permission', 1, 1, 0, 5, NOW(), NOW()),
-(6, 0, '短信配置', 'config.sms', 'permission', 1, 1, 1, 6, NOW(), NOW())
+(6, 0, '短信配置', 'config.sms', 'permission', 1, 1, 1, 6, NOW(), NOW()),
+(9, 0, '系统参数配置', 'config.system', 'permission', 1, 1, 1, 9, NOW(), NOW())
 ON DUPLICATE KEY UPDATE
   parent_id = VALUES(parent_id),
   name = VALUES(name),

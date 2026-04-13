@@ -103,6 +103,21 @@
   - 该模块是 super-only 接口
   - 普通用户组不会获得 `config.sms` 菜单权限
 
+### 系统参数配置
+
+- 协议：`api/settings.go`
+- controller：`internal/controller/admin/settings.go`
+- service：`SystemConfigService`
+- logic：`internal/logic/admin/system_config.go`
+- 路由前缀：`/api/admin/settings/system`
+- 主要能力：
+  - 按分组读取单组系统参数，或一次返回全部分组
+  - 兼容旧单组写法，同时支持多分组批量保存
+  - 当前内置 `finance`、`integration` 两组参数
+- 权限边界：
+  - 该模块是 super-only 接口
+  - 普通用户组不会获得 `config.system` 菜单权限
+
 ### 审计日志
 
 - 协议：`api/log.go`
@@ -213,5 +228,6 @@ HTTP 协议适配层，不直接写业务规则。
 | 品牌管理 | `/api/admin/brands*` | `product.brand` |
 | 行业管理 | `/api/admin/industries*` | `product.industry` |
 | 短信配置 | `/api/admin/settings/sms` | super-only |
+| 系统参数配置 | `/api/admin/settings/system` | super-only |
 | 操作日志 | `/api/admin/logs/operations` | `admin.action` |
 | 登录日志 | `/api/admin/logs/logins` | `admin.loginlog` |
