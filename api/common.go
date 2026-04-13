@@ -28,6 +28,10 @@ type ProductTemplateListItem = entity.ProductTemplateListItem
 
 type ProductTemplateValidateTypeItem = entity.ProductTemplateValidateTypeItem
 
+type PurchaseLimitStrategyListItem = entity.PurchaseLimitStrategyListItem
+
+type PurchaseLimitEnumItem = entity.PurchaseLimitEnumItem
+
 type MenuItem = entity.AdminMenu
 
 type OperationLogItem = entity.OperationLog

@@ -83,6 +83,7 @@ func assemble(core *app.Core) (*Application, error) {
 	brandCtrl := admincontroller.NewBrand(services.Brand)
 	industryCtrl := admincontroller.NewIndustry(services.Industry)
 	productTemplateCtrl := admincontroller.NewProductTemplate(services.ProductTemplate)
+	purchaseLimitCtrl := admincontroller.NewPurchaseLimit(services.PurchaseLimit)
 	settingsCtrl := admincontroller.NewSettings(services.SMSConfig, services.System)
 	operationLogCtrl := admincontroller.NewOperationLog(services.AuditLog)
 	loginLogCtrl := admincontroller.NewLoginLog(services.AuditLog)
@@ -128,6 +129,10 @@ func assemble(core *app.Core) (*Application, error) {
 		group.Group("", func(group *ghttp.RouterGroup) {
 			group.Middleware(guard.Require("product.template", false))
 			group.Bind(productTemplateCtrl)
+		})
+		group.Group("", func(group *ghttp.RouterGroup) {
+			group.Middleware(guard.Require("product.purchase_limit", false))
+			group.Bind(purchaseLimitCtrl)
 		})
 		group.Group("", func(group *ghttp.RouterGroup) {
 			group.Middleware(guard.Require("", true))

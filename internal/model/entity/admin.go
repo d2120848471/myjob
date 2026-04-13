@@ -160,6 +160,39 @@ type ProductTemplateValidateTypeItem struct {
 	Title string `json:"title"`
 }
 
+type PurchaseLimitStrategy struct {
+	ID         int64     `db:"id" json:"id"`
+	Name       string    `db:"name" json:"name"`
+	LimitType  int       `db:"limit_type" json:"limit_type"`
+	PeriodType int       `db:"period_type" json:"period_type"`
+	Period     int       `db:"period" json:"period"`
+	LimitNums  int       `db:"limit_nums" json:"limit_nums"`
+	LimitTimes int       `db:"limit_times" json:"limit_times"`
+	Status     int       `db:"status" json:"status"`
+	CreatedAt  time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt  time.Time `db:"updated_at" json:"updated_at"`
+}
+
+type PurchaseLimitStrategyListItem struct {
+	ID              int64     `db:"id" json:"id"`
+	Name            string    `db:"name" json:"name"`
+	LimitType       int       `db:"limit_type" json:"limit_type"`
+	LimitTypeLabel  string    `db:"limit_type_label" json:"limit_type_label"`
+	PeriodType      int       `db:"period_type" json:"period_type"`
+	PeriodTypeLabel string    `db:"period_type_label" json:"period_type_label"`
+	Period          int       `db:"period" json:"period"`
+	LimitNums       int       `db:"limit_nums" json:"limit_nums"`
+	LimitTimes      int       `db:"limit_times" json:"limit_times"`
+	Status          int       `db:"status" json:"status"`
+	CreatedAt       time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt       time.Time `db:"updated_at" json:"updated_at"`
+}
+
+type PurchaseLimitEnumItem struct {
+	ID    int    `json:"id"`
+	Title string `json:"title"`
+}
+
 type BrandSelectorItem struct {
 	ID   int64  `db:"id" json:"id"`
 	Name string `db:"name" json:"name"`
