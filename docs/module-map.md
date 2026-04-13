@@ -91,6 +91,43 @@
   - 行业接口统一要求 `product.industry`
   - 行业只接受一级品牌关联，二级和三级品牌不会出现在选择器里，也不能被保存
 
+### 商品模板管理
+
+- 协议：`api/product_template.go`
+- controller：`internal/controller/admin/product_template.go`
+- service：`ProductTemplateService`
+- logic：`internal/logic/admin/product_template.go`
+- 路由前缀：`/api/admin/product-templates*`
+- 主要能力：
+  - 本地模板分页查询、关键词搜索
+  - 模板类型筛选、共享状态筛选
+  - 新增 / 编辑 / 单删 / 批删
+  - 读取验证方式枚举 `/api/admin/product-templates/validate-types`
+- 当前字段：
+  - `title`：模板名称
+  - `type`：模板类型，本期仅支持 `local`
+  - `is_shared`：共享状态，仅允许 `0` 或 `1`
+  - `account_name`：充值账号名称
+  - `validate_type`：验证方式枚举 ID
+- 当前内置验证方式枚举：
+  - `1` 手机号
+  - `2` QQ号
+  - `3` 手机号或者QQ号
+  - `4` 邮箱
+  - `5` 网址
+  - `6` 纯数字
+  - `7` 微信号
+  - `8` 手机号或者微信号
+  - `9` QQ号或者微信号
+  - `10` 手机号或者QQ号或微信号
+  - `11` 禁止填写手机号
+  - `12` 禁止填写邮箱
+- 权限边界：
+  - 商品模板接口统一要求 `product.template`
+- 当前实现限制：
+  - 本期只做模板管理，不做模板内容渲染或动态表单配置
+  - 当前只保存 `validate_type` 规则，不会据此校验某次真实输入值是不是微信号、QQ号、邮箱等
+
 ### 短信配置
 
 - 协议：`api/settings.go`
@@ -145,6 +182,7 @@
 - `group.go`
 - `industry.go`
 - `log.go`
+- `product_template.go`
 - `settings.go`
 - `subject.go`
 - `user.go`
@@ -176,6 +214,7 @@ HTTP 协议适配层，不直接写业务规则。
 - `subject.go`
 - `brand.go`
 - `industry.go`
+- `product_template.go`
 - `config.go`
 - `log.go`
 
@@ -229,6 +268,7 @@ HTTP 协议适配层，不直接写业务规则。
 | 主体管理 | `/api/admin/subjects*` | `subject.manage` |
 | 品牌管理 | `/api/admin/brands*` | `product.brand` |
 | 行业管理 | `/api/admin/industries*` | `product.industry` |
+| 商品模板管理 | `/api/admin/product-templates*` | `product.template` |
 | 短信配置 | `/api/admin/settings/sms` | super-only |
 | 系统参数配置 | `/api/admin/settings/system` | super-only |
 | 操作日志 | `/api/admin/logs/operations` | `admin.action` |
