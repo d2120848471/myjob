@@ -37,6 +37,7 @@ type normalizedProductGoodsInput struct {
 	IsExport                int
 	IsDouyin                int
 	HasTax                  int
+	SubjectID               *int64
 	ExceptionNotify         int
 	ProductTemplateID       *int64
 	PurchaseLimitStrategyID *int64
@@ -190,6 +191,8 @@ SELECT
     p.is_export,
     p.is_douyin,
     p.has_tax,
+    p.subject_id,
+    COALESCE(sub.name, '') AS subject_name,
     p.exception_notify,
     p.product_template_id,
     t.title AS product_template_title,
@@ -207,6 +210,7 @@ SELECT
     p.updated_at
 FROM product_goods p
 	LEFT JOIN product_brand b ON b.id = p.brand_id
+	LEFT JOIN admin_subject sub ON sub.id = p.subject_id
 	LEFT JOIN product_template t ON t.id = p.product_template_id
 	LEFT JOIN product_purchase_limit_strategy s ON s.id = p.purchase_limit_strategy_id
 	WHERE p.id = ? AND p.is_deleted = 0
@@ -229,6 +233,8 @@ FROM product_goods p
 		IsExport:                    row["is_export"].Int(),
 		IsDouyin:                    row["is_douyin"].Int(),
 		HasTax:                      row["has_tax"].Int(),
+		SubjectID:                   nullableInt64Pointer(productGoodsRecordNullInt64(row, "subject_id")),
+		SubjectName:                 productGoodsRecordString(row, "subject_name"),
 		ExceptionNotify:             row["exception_notify"].Int(),
 		ProductTemplateID:           nullableInt64Pointer(productGoodsRecordNullInt64(row, "product_template_id")),
 		ProductTemplateTitle:        productGoodsRecordString(row, "product_template_title"),
@@ -277,10 +283,23 @@ func (l *ProductGoodsLogic) FormOptions(ctx context.Context, _ *adminapi.Product
 		strategies = append(strategies, adminapi.ProductGoodsStrategyOption{ID: row.ID, Name: row.Name})
 	}
 
+	subjectRows := make([]struct {
+		ID   int64  `db:"id"`
+		Name string `db:"name"`
+	}, 0)
+	if err = l.core.DB().GetCore().GetScan(ctx, &subjectRows, `SELECT id, name FROM admin_subject WHERE has_tax = 1 ORDER BY id DESC`); err != nil {
+		return nil, apiErr(consts.CodeInternalError, "商品表单下拉查询失败")
+	}
+	subjects := make([]adminapi.ProductGoodsSubjectOption, 0, len(subjectRows))
+	for _, row := range subjectRows {
+		subjects = append(subjects, adminapi.ProductGoodsSubjectOption{ID: row.ID, Name: row.Name})
+	}
+
 	return &adminapi.ProductGoodsFormOptionsRes{
 		Brands:                  buildProductBrandTree(brandRows),
 		Templates:               templates,
 		PurchaseLimitStrategies: strategies,
+		Subjects:                subjects,
 		GoodsTypes: []adminapi.ProductGoodsStringOption{
 			{Value: productGoodsTypeCardSecret, Label: productGoodsTypeLabels[productGoodsTypeCardSecret]},
 			{Value: productGoodsTypeDirectRecharge, Label: productGoodsTypeLabels[productGoodsTypeDirectRecharge]},
@@ -300,7 +319,7 @@ func (l *ProductGoodsLogic) FormOptions(ctx context.Context, _ *adminapi.Product
 }
 
 func (l *ProductGoodsLogic) Add(ctx context.Context, req *adminapi.ProductGoodsCreateReq, actor entity.AdminUser, ip string) (*adminapi.ProductGoodsCreateRes, error) {
-	normalized, err := l.normalizeProductGoodsInput(ctx, req.BrandID, req.Name, req.GoodsType, req.SupplyType, req.IsExport, req.IsDouyin, req.HasTax, req.ExceptionNotify, req.ProductTemplateID, req.PurchaseLimitStrategyID, req.PurchaseNotice, req.TerminalPriceLimit, req.BalanceLimit, req.DefaultSellPrice, req.MinPurchaseQty, req.MaxPurchaseQty, req.Status, nil)
+	normalized, err := l.normalizeProductGoodsInput(ctx, req.BrandID, req.Name, req.GoodsType, req.SupplyType, req.IsExport, req.IsDouyin, req.HasTax, req.SubjectID, req.ExceptionNotify, req.ProductTemplateID, req.PurchaseLimitStrategyID, req.PurchaseNotice, req.TerminalPriceLimit, req.BalanceLimit, req.DefaultSellPrice, req.MinPurchaseQty, req.MaxPurchaseQty, req.Status, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -312,11 +331,11 @@ func (l *ProductGoodsLogic) Add(ctx context.Context, req *adminapi.ProductGoodsC
 		tempGoodsCode := temporaryProductGoodsCode(now)
 		result, txErr := tx.Exec(`
 INSERT INTO product_goods (
-    goods_code, brand_id, name, goods_type, supply_type, is_export, is_douyin, has_tax, exception_notify,
+    goods_code, brand_id, name, goods_type, supply_type, is_export, is_douyin, has_tax, subject_id, exception_notify,
     product_template_id, purchase_limit_strategy_id, purchase_notice, terminal_price_limit, balance_limit,
     default_sell_price, min_purchase_qty, max_purchase_qty, status, is_deleted, created_at, updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
-`, tempGoodsCode, normalized.BrandID, normalized.Name, normalized.GoodsType, normalized.SupplyType, normalized.IsExport, normalized.IsDouyin, normalized.HasTax, normalized.ExceptionNotify, nullableInt64Arg(normalized.ProductTemplateID), nullableInt64Arg(normalized.PurchaseLimitStrategyID), nullableStringArg(normalized.PurchaseNotice), nullableMoneyArg(normalized.TerminalPriceLimit), normalized.BalanceLimit, nullableMoneyArg(normalized.DefaultSellPrice), normalized.MinPurchaseQty, normalized.MaxPurchaseQty, normalized.Status, now, now)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+`, tempGoodsCode, normalized.BrandID, normalized.Name, normalized.GoodsType, normalized.SupplyType, normalized.IsExport, normalized.IsDouyin, normalized.HasTax, nullableInt64Arg(normalized.SubjectID), normalized.ExceptionNotify, nullableInt64Arg(normalized.ProductTemplateID), nullableInt64Arg(normalized.PurchaseLimitStrategyID), nullableStringArg(normalized.PurchaseNotice), nullableMoneyArg(normalized.TerminalPriceLimit), normalized.BalanceLimit, nullableMoneyArg(normalized.DefaultSellPrice), normalized.MinPurchaseQty, normalized.MaxPurchaseQty, normalized.Status, now, now)
 		if txErr != nil {
 			return txErr
 		}
@@ -346,7 +365,7 @@ func (l *ProductGoodsLogic) Edit(ctx context.Context, req *adminapi.ProductGoods
 	}
 
 	currentStrategyID := nullableInt64Pointer(current.PurchaseLimitStrategyID)
-	normalized, err := l.normalizeProductGoodsInput(ctx, req.BrandID, req.Name, req.GoodsType, req.SupplyType, req.IsExport, req.IsDouyin, req.HasTax, req.ExceptionNotify, req.ProductTemplateID, req.PurchaseLimitStrategyID, req.PurchaseNotice, req.TerminalPriceLimit, req.BalanceLimit, req.DefaultSellPrice, req.MinPurchaseQty, req.MaxPurchaseQty, req.Status, currentStrategyID)
+	normalized, err := l.normalizeProductGoodsInput(ctx, req.BrandID, req.Name, req.GoodsType, req.SupplyType, req.IsExport, req.IsDouyin, req.HasTax, req.SubjectID, req.ExceptionNotify, req.ProductTemplateID, req.PurchaseLimitStrategyID, req.PurchaseNotice, req.TerminalPriceLimit, req.BalanceLimit, req.DefaultSellPrice, req.MinPurchaseQty, req.MaxPurchaseQty, req.Status, currentStrategyID)
 	if err != nil {
 		return nil, err
 	}
@@ -356,11 +375,11 @@ func (l *ProductGoodsLogic) Edit(ctx context.Context, req *adminapi.ProductGoods
 		// 先确认商品仍是未删除状态，再处理品牌计数，避免并发软删把 goods_count 改漂。
 		result, txErr := tx.Exec(`
 UPDATE product_goods
-SET brand_id = ?, name = ?, goods_type = ?, supply_type = ?, is_export = ?, is_douyin = ?, has_tax = ?, exception_notify = ?,
+SET brand_id = ?, name = ?, goods_type = ?, supply_type = ?, is_export = ?, is_douyin = ?, has_tax = ?, subject_id = ?, exception_notify = ?,
     product_template_id = ?, purchase_limit_strategy_id = ?, purchase_notice = ?, terminal_price_limit = ?, balance_limit = ?,
     default_sell_price = ?, min_purchase_qty = ?, max_purchase_qty = ?, status = ?, updated_at = ?
 WHERE id = ? AND is_deleted = 0
-`, normalized.BrandID, normalized.Name, normalized.GoodsType, normalized.SupplyType, normalized.IsExport, normalized.IsDouyin, normalized.HasTax, normalized.ExceptionNotify, nullableInt64Arg(normalized.ProductTemplateID), nullableInt64Arg(normalized.PurchaseLimitStrategyID), nullableStringArg(normalized.PurchaseNotice), nullableMoneyArg(normalized.TerminalPriceLimit), normalized.BalanceLimit, nullableMoneyArg(normalized.DefaultSellPrice), normalized.MinPurchaseQty, normalized.MaxPurchaseQty, normalized.Status, now, req.ID)
+`, normalized.BrandID, normalized.Name, normalized.GoodsType, normalized.SupplyType, normalized.IsExport, normalized.IsDouyin, normalized.HasTax, nullableInt64Arg(normalized.SubjectID), normalized.ExceptionNotify, nullableInt64Arg(normalized.ProductTemplateID), nullableInt64Arg(normalized.PurchaseLimitStrategyID), nullableStringArg(normalized.PurchaseNotice), nullableMoneyArg(normalized.TerminalPriceLimit), normalized.BalanceLimit, nullableMoneyArg(normalized.DefaultSellPrice), normalized.MinPurchaseQty, normalized.MaxPurchaseQty, normalized.Status, now, req.ID)
 		if txErr != nil {
 			return txErr
 		}
@@ -428,6 +447,7 @@ SELECT
     is_export,
     is_douyin,
     has_tax,
+    subject_id,
     exception_notify,
     product_template_id,
     purchase_limit_strategy_id,
@@ -460,6 +480,7 @@ WHERE id = ? AND is_deleted = 0
 	product.IsExport = row["is_export"].Int()
 	product.IsDouyin = row["is_douyin"].Int()
 	product.HasTax = row["has_tax"].Int()
+	product.SubjectID = productGoodsRecordNullInt64(row, "subject_id")
 	product.ExceptionNotify = row["exception_notify"].Int()
 	product.ProductTemplateID = productGoodsRecordNullInt64(row, "product_template_id")
 	product.PurchaseLimitStrategyID = productGoodsRecordNullInt64(row, "purchase_limit_strategy_id")
@@ -477,7 +498,7 @@ WHERE id = ? AND is_deleted = 0
 	return product, nil
 }
 
-func (l *ProductGoodsLogic) normalizeProductGoodsInput(ctx context.Context, brandID int64, name, goodsType, supplyType string, isExport, isDouyin, hasTax, exceptionNotify int, productTemplateID, purchaseLimitStrategyID *int64, purchaseNotice, terminalPriceLimit, balanceLimit, defaultSellPrice string, minPurchaseQty, maxPurchaseQty, status int, allowDisabledCurrentStrategyID *int64) (normalizedProductGoodsInput, error) {
+func (l *ProductGoodsLogic) normalizeProductGoodsInput(ctx context.Context, brandID int64, name, goodsType, supplyType string, isExport, isDouyin, hasTax int, subjectID *int64, exceptionNotify int, productTemplateID, purchaseLimitStrategyID *int64, purchaseNotice, terminalPriceLimit, balanceLimit, defaultSellPrice string, minPurchaseQty, maxPurchaseQty, status int, allowDisabledCurrentStrategyID *int64) (normalizedProductGoodsInput, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return normalizedProductGoodsInput{}, apiErr(consts.CodeBadRequest, "商品名称不能为空")
@@ -506,6 +527,20 @@ func (l *ProductGoodsLogic) normalizeProductGoodsInput(ctx context.Context, bran
 	}
 	if _, err := l.validateLeafBrand(ctx, brandID); err != nil {
 		return normalizedProductGoodsInput{}, err
+	}
+
+	normalizedSubjectID := normalizeOptionalID(subjectID)
+	if hasTax == 1 {
+		if normalizedSubjectID == nil {
+			return normalizedProductGoodsInput{}, apiErr(consts.CodeBadRequest, "含税商品必须选择主体")
+		}
+		// 含税商品后续会走开票链路，这里提前锁死主体存在且可开票。
+		if err := l.ensureTaxSubjectUsable(ctx, *normalizedSubjectID); err != nil {
+			return normalizedProductGoodsInput{}, err
+		}
+	} else {
+		// 不含税商品不保留主体，避免后续出现脏数据。
+		normalizedSubjectID = nil
 	}
 
 	normalizedTemplateID := normalizeOptionalID(productTemplateID)
@@ -550,6 +585,7 @@ func (l *ProductGoodsLogic) normalizeProductGoodsInput(ctx context.Context, bran
 		IsExport:                isExport,
 		IsDouyin:                isDouyin,
 		HasTax:                  hasTax,
+		SubjectID:               normalizedSubjectID,
 		ExceptionNotify:         exceptionNotify,
 		ProductTemplateID:       normalizedTemplateID,
 		PurchaseLimitStrategyID: normalizedStrategyID,
@@ -588,6 +624,20 @@ func (l *ProductGoodsLogic) ensureTemplateExists(ctx context.Context, id int64) 
 	}
 	if count.Int() == 0 {
 		return apiErr(consts.CodeBadRequest, "商品模板不存在")
+	}
+	return nil
+}
+
+func (l *ProductGoodsLogic) ensureTaxSubjectUsable(ctx context.Context, id int64) error {
+	row := struct {
+		ID     int64 `db:"id"`
+		HasTax int   `db:"has_tax"`
+	}{}
+	if err := l.core.DB().GetCore().GetScan(ctx, &row, `SELECT id, has_tax FROM admin_subject WHERE id = ?`, id); err != nil {
+		return apiErr(consts.CodeBadRequest, "主体不存在")
+	}
+	if row.HasTax != 1 {
+		return apiErr(consts.CodeBadRequest, "含税商品必须选择含税主体")
 	}
 	return nil
 }
