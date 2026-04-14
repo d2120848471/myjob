@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"strings"
 
+	supplierprovider "myjob/internal/library/supplierplatform/provider"
+
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -42,6 +44,9 @@ func (c *Core) bootstrap(ctx context.Context) error {
 		return err
 	}
 	if err := c.ensureDefaultGroupAuth(ctx); err != nil {
+		return err
+	}
+	if err := c.ensureSupplierPlatformTypes(ctx); err != nil {
 		return err
 	}
 	if err := c.ensureSMSConfig(ctx); err != nil {
@@ -123,6 +128,7 @@ func defaultMenus() []menuSeed {
 		{ID: 9, ParentID: 0, Name: "系统参数配置", Code: "config.system", MenuLevel: 1, Status: 1, SuperOnly: 1, Sort: 9},
 		{ID: 10, ParentID: 0, Name: "商品模板管理", Code: "product.template", MenuLevel: 1, Status: 1, SuperOnly: 0, Sort: 10},
 		{ID: 11, ParentID: 0, Name: "商品购买数量限制策略", Code: "product.purchase_limit", MenuLevel: 1, Status: 1, SuperOnly: 0, Sort: 11},
+		{ID: 12, ParentID: 0, Name: "第三方对接", Code: "supplier.index", MenuLevel: 1, Status: 1, SuperOnly: 0, Sort: 12},
 	}
 }
 
@@ -146,7 +152,7 @@ func (c *Core) ensureMenus(ctx context.Context) error {
 }
 
 func (c *Core) ensureDefaultGroupAuth(ctx context.Context) error {
-	for _, menuID := range []int64{1, 2, 3, 4, 5, 7, 8, 10, 11} {
+	for _, menuID := range []int64{1, 2, 3, 4, 5, 7, 8, 10, 11, 12} {
 		exists, err := c.DB().GetCore().GetValue(ctx, `SELECT COUNT(*) FROM admin_group_menu WHERE group_id = 1 AND menu_id = ?`, menuID)
 		if err != nil {
 			return err
@@ -155,6 +161,25 @@ func (c *Core) ensureDefaultGroupAuth(ctx context.Context) error {
 			continue
 		}
 		if _, err = c.DB().Exec(ctx, `INSERT INTO admin_group_menu (group_id, menu_id, created_at) VALUES (1, ?, ?)`, menuID, c.now()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *Core) ensureSupplierPlatformTypes(ctx context.Context) error {
+	for _, item := range supplierprovider.DefaultTypes() {
+		exists, err := c.DB().GetCore().GetValue(ctx, `SELECT COUNT(*) FROM supplier_platform_type WHERE id = ?`, item.ID)
+		if err != nil {
+			return err
+		}
+		if exists.Int() == 0 {
+			if _, err = c.DB().Exec(ctx, `INSERT INTO supplier_platform_type (id, type_name, default_provider_code, status, sort, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, item.ID, item.TypeName, item.ProviderCode, item.Status, item.Sort, c.now(), c.now()); err != nil {
+				return err
+			}
+			continue
+		}
+		if _, err = c.DB().Exec(ctx, `UPDATE supplier_platform_type SET type_name = ?, default_provider_code = ?, status = ?, sort = ?, updated_at = ? WHERE id = ?`, item.TypeName, item.ProviderCode, item.Status, item.Sort, c.now(), item.ID); err != nil {
 			return err
 		}
 	}
