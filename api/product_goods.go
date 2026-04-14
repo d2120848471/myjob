@@ -132,6 +132,9 @@ type ProductGoodsListItem struct {
 	GoodsCode                 string `json:"goods_code" dc:"商品业务编码"`
 	BrandID                   int64  `json:"brand_id" dc:"品牌ID"`
 	BrandName                 string `json:"brand_name" dc:"品牌名称"`
+	BrandIcon                 string `json:"brand_icon" dc:"品牌图片"`
+	SubjectID                 *int64 `json:"subject_id" dc:"主体ID"`
+	SubjectName               string `json:"subject_name" dc:"主体名称"`
 	Name                      string `json:"name" dc:"商品名称"`
 	GoodsType                 string `json:"goods_type" dc:"商品类型"`
 	SupplyType                string `json:"supply_type" dc:"供货方式"`
