@@ -59,6 +59,24 @@
   - 新增主体
   - 编辑主体
 
+### 第三方对接
+
+- 协议：`api/supplier_platform.go`
+- controller：`internal/controller/admin/supplier_platform.go`
+- service：`SupplierPlatformService`
+- logic：`internal/logic/admin/supplier_platform.go`、`internal/logic/admin/supplier_platform_balance.go`
+- provider 适配层：`internal/library/supplierplatform/provider/*`
+- 路由前缀：`/api/admin/supplier-platform-types`、`/api/admin/supplier-platforms*`
+- 主要能力：
+  - 平台类型字典
+  - 平台账号分页、详情、增删改
+  - 主体关联与平台侧 `has_tax`
+  - 手动余额刷新
+  - 余额刷新日志落库
+- 权限边界：
+  - 第三方对接接口统一要求 `supplier.index`
+  - 一期只写余额日志，不开放日志查询 HTTP 接口
+
 ### 品牌管理
 
 - 协议：`api/brand.go`
@@ -211,6 +229,7 @@
 - `log.go`
 - `product_template.go`
 - `settings.go`
+- `supplier_platform.go`
 - `subject.go`
 - `user.go`
 
@@ -238,6 +257,8 @@ HTTP 协议适配层，不直接写业务规则。
 - `auth.go`
 - `user.go`
 - `group.go`
+- `supplier_platform.go`
+- `supplier_platform_balance.go`
 - `subject.go`
 - `brand.go`
 - `industry.go`
@@ -276,13 +297,19 @@ HTTP 协议适配层，不直接写业务规则。
 
 数据库 schema、菜单种子、超级管理员模板和系统配置种子。
 
+- `001_schema.sql`：基础表结构
+- `002_seed_menu.sql`：菜单与权限种子
+- `003_seed_admin.sql.tmpl`：超级管理员初始化模板
+- `004_seed_config.sql`：系统参数初始值
+- `005_supplier_platform.sql`：第三方平台类型、账号和余额日志结构
+
 ### `test/contract`
 
 契约测试目录，覆盖接口兼容和核心业务流。
 
 ### `test/integration`
 
-集成测试目录，当前只有 runtime smoke test。
+集成测试目录，当前包括 runtime smoke test、第三方平台余额刷新回归和可选 live 验证。
 
 ## 当前路由与权限摘要
 

@@ -22,11 +22,16 @@
 当前对外协议已经统一到根目录 `api/*.go`：
 
 - `api/auth.go`
+- `api/brand.go`
 - `api/common.go`
 - `api/group.go`
+- `api/industry.go`
 - `api/log.go`
+- `api/product_template.go`
+- `api/purchase_limit.go`
 - `api/settings.go`
 - `api/subject.go`
+- `api/supplier_platform.go`
 - `api/user.go`
 
 当前测试也明确约束不能再回到历史 历史嵌套协议包路径。
@@ -46,11 +51,17 @@
 当前业务实现已经按模块拆分到 `internal/logic/admin`：
 
 - `auth.go`
+- `brand.go`
+- `industry.go`
 - `user.go`
 - `group.go`
 - `subject.go`
 - `config.go`
 - `log.go`
+- `product_template.go`
+- `purchase_limit.go`
+- `supplier_platform.go`
+- `supplier_platform_balance.go`
 
 ## 当前保留的兼容面
 

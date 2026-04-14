@@ -22,6 +22,7 @@ type Services struct {
 	Industry        service.IndustryService
 	ProductTemplate service.ProductTemplateService
 	PurchaseLimit   service.PurchaseLimitService
+	SupplierPlatform service.SupplierPlatformService
 	SMSConfig       service.SMSConfigService
 	System          service.SystemConfigService
 	AuditLog        service.AuditLogService
@@ -37,6 +38,7 @@ func NewServices(core *app.Core) *Services {
 		Industry:        &IndustryLogic{core: core},
 		ProductTemplate: &ProductTemplateLogic{core: core},
 		PurchaseLimit:   &PurchaseLimitLogic{core: core},
+		SupplierPlatform: NewSupplierPlatformLogic(core),
 		SMSConfig:       &SMSConfigLogic{core: core},
 		System:          &SystemConfigLogic{core: core},
 		AuditLog:        &AuditLogLogic{core: core},

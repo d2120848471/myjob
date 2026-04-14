@@ -32,6 +32,10 @@ type PurchaseLimitStrategyListItem = entity.PurchaseLimitStrategyListItem
 
 type PurchaseLimitEnumItem = entity.PurchaseLimitEnumItem
 
+type SupplierPlatformTypeItem = entity.SupplierPlatformTypeItem
+
+type SupplierPlatformListItem = entity.SupplierPlatformListItem
+
 type MenuItem = entity.AdminMenu
 
 type OperationLogItem = entity.OperationLog

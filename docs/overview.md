@@ -33,6 +33,7 @@
 - 普通后台账号通过用户组拿到权限码
 - 菜单授权和菜单树默认过滤 `super_only = 1` 的菜单
 - 短信配置和系统参数配置接口都属于 super-only 功能，不向普通用户组开放
+- 第三方对接一期接口使用独立权限码 `supplier.index`
 
 ### 后台业务域
 
@@ -45,9 +46,26 @@
 - 品牌管理与本地图片上传
 - 行业管理与品牌关联
 - 商品模板管理
+- 第三方平台接入一期
 - 短信配置
 - 系统参数配置
 - 操作日志 / 登录日志
+
+### 第三方平台接入一期
+
+当前第三方对接业务域已经落地以下后端能力：
+
+- 平台类型字典 `/api/admin/supplier-platform-types`
+- 平台账号 CRUD `/api/admin/supplier-platforms*`
+- 手动余额刷新 `/api/admin/supplier-platforms/{id}/balance/refresh`
+- 平台余额日志落库 `supplier_platform_balance_log`
+
+当前实现边界：
+
+- `provider_code` 由后端根据平台类型和域名解析后持久化
+- 平台账号详情允许回显 `token_id` 和 `secret_key`
+- 删除采用软删除
+- 一期只保留余额日志写入能力，不开放日志查询接口
 
 ## 当前兼容约束
 

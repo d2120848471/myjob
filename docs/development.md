@@ -66,13 +66,26 @@ go test ./... -count=1 -timeout 60s
 go test ./test/contract -count=1 -timeout 60s
 ```
 
-### 集成 smoke test
+### 集成测试
 
 ```bash
 export MYJOB_RUN_INTEGRATION=1
 export SUPER_ADMIN_PHONE=13800000000
 export SUPER_ADMIN_PASSWORD=Admin_123
 go test ./test/integration -count=1 -timeout 60s
+```
+
+### 第三方平台 live 验证
+
+```bash
+export MYJOB_RUN_SUPPLIER_LIVE=1
+export SUPPLIER_LIVE_TYPE_ID=35
+export SUPPLIER_LIVE_NAME='木木（星权益未税）'
+export SUPPLIER_LIVE_DOMAIN=xqy.api.xqy1.cn
+export SUPPLIER_LIVE_BACKUP_DOMAIN=xqy.api.xqy1.cn
+export SUPPLIER_LIVE_TOKEN_ID=74
+export SUPPLIER_LIVE_SECRET_KEY='***'
+go test ./test/integration -run TestSupplierPlatformRefresh_LiveProviderBalance -count=1 -v
 ```
 
 ### 构建
@@ -109,6 +122,7 @@ bootstrap:
 - `manifest/sql/002_seed_menu.sql`：菜单与权限种子
 - `manifest/sql/003_seed_admin.sql.tmpl`：超级管理员 SQL 模板
 - `manifest/sql/004_seed_config.sql`：系统配置初始值
+- `manifest/sql/005_supplier_platform.sql`：第三方平台类型、账号和余额日志结构
 
 如需生成超级管理员初始化 SQL：
 

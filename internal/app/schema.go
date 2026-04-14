@@ -135,6 +135,68 @@ CREATE TABLE IF NOT EXISTS product_purchase_limit_strategy (
 );
 CREATE INDEX IF NOT EXISTS idx_product_purchase_limit_strategy_keyword
     ON product_purchase_limit_strategy(name, id);
+CREATE TABLE IF NOT EXISTS supplier_platform_type (
+    id INTEGER PRIMARY KEY,
+    type_name TEXT NOT NULL,
+    default_provider_code TEXT NOT NULL DEFAULT '',
+    status INTEGER NOT NULL DEFAULT 1,
+    sort INTEGER NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL
+);
+CREATE TABLE IF NOT EXISTS supplier_platform_account (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    provider_code TEXT NOT NULL,
+    provider_name TEXT NOT NULL,
+    type_id INTEGER NOT NULL,
+    subject_id INTEGER NOT NULL,
+    has_tax INTEGER NOT NULL DEFAULT 0,
+    domain TEXT NOT NULL,
+    backup_domain TEXT NOT NULL DEFAULT '',
+    token_id TEXT NOT NULL,
+    secret_key TEXT NOT NULL,
+    extra_config TEXT NOT NULL DEFAULT '{}',
+    threshold_amount TEXT NOT NULL DEFAULT '0.0000',
+    sort INTEGER NOT NULL DEFAULT 0,
+    crowd_name TEXT NOT NULL DEFAULT '',
+    last_balance TEXT NULL,
+    last_balance_status INTEGER NOT NULL DEFAULT 0,
+    last_balance_message TEXT NOT NULL DEFAULT '',
+    last_balance_at DATETIME NULL,
+    last_balance_trace_id TEXT NOT NULL DEFAULT '',
+    is_deleted INTEGER NOT NULL DEFAULT 0,
+    deleted_at DATETIME NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    UNIQUE(provider_code, subject_id, has_tax, token_id, is_deleted)
+);
+CREATE INDEX IF NOT EXISTS idx_supplier_platform_filter
+    ON supplier_platform_account(type_id, subject_id, has_tax, last_balance_status, is_deleted, sort, id);
+CREATE INDEX IF NOT EXISTS idx_supplier_platform_name
+    ON supplier_platform_account(name, is_deleted);
+CREATE TABLE IF NOT EXISTS supplier_platform_balance_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    platform_id INTEGER NOT NULL,
+    operator_id INTEGER NOT NULL DEFAULT 0,
+    operator_name TEXT NOT NULL DEFAULT '',
+    provider_code TEXT NOT NULL,
+    request_url TEXT NOT NULL,
+    request_method TEXT NOT NULL DEFAULT 'POST',
+    request_snapshot TEXT NOT NULL,
+    response_snapshot TEXT NOT NULL,
+    http_status INTEGER NOT NULL DEFAULT 0,
+    success INTEGER NOT NULL DEFAULT 0,
+    balance_amount TEXT NULL,
+    message TEXT NOT NULL DEFAULT '',
+    duration_ms INTEGER NOT NULL DEFAULT 0,
+    trace_id TEXT NOT NULL DEFAULT '',
+    created_at DATETIME NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_supplier_platform_balance_log_platform
+    ON supplier_platform_balance_log(platform_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_supplier_platform_balance_log_trace
+    ON supplier_platform_balance_log(trace_id);
 CREATE TABLE IF NOT EXISTS system_config (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     config_key TEXT NOT NULL UNIQUE,
@@ -278,6 +340,64 @@ CREATE TABLE IF NOT EXISTS product_purchase_limit_strategy (
     created_at DATETIME NOT NULL,
     updated_at DATETIME NOT NULL,
     KEY idx_product_purchase_limit_strategy_keyword (name, id)
+);
+CREATE TABLE IF NOT EXISTS supplier_platform_type (
+    id INT NOT NULL PRIMARY KEY,
+    type_name VARCHAR(64) NOT NULL,
+    default_provider_code VARCHAR(32) NOT NULL DEFAULT '',
+    status TINYINT NOT NULL DEFAULT 1,
+    sort INT NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL
+);
+CREATE TABLE IF NOT EXISTS supplier_platform_account (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(128) NOT NULL,
+    provider_code VARCHAR(32) NOT NULL,
+    provider_name VARCHAR(64) NOT NULL,
+    type_id INT NOT NULL,
+    subject_id BIGINT UNSIGNED NOT NULL,
+    has_tax TINYINT NOT NULL DEFAULT 0,
+    domain VARCHAR(255) NOT NULL,
+    backup_domain VARCHAR(255) NOT NULL DEFAULT '',
+    token_id VARCHAR(128) NOT NULL,
+    secret_key VARCHAR(255) NOT NULL,
+    extra_config TEXT NOT NULL,
+    threshold_amount DECIMAL(18,4) NOT NULL DEFAULT 0.0000,
+    sort INT NOT NULL DEFAULT 0,
+    crowd_name VARCHAR(128) NOT NULL DEFAULT '',
+    last_balance DECIMAL(18,4) NULL,
+    last_balance_status TINYINT NOT NULL DEFAULT 0,
+    last_balance_message VARCHAR(255) NOT NULL DEFAULT '',
+    last_balance_at DATETIME NULL,
+    last_balance_trace_id VARCHAR(64) NOT NULL DEFAULT '',
+    is_deleted TINYINT NOT NULL DEFAULT 0,
+    deleted_at DATETIME NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    UNIQUE KEY uk_supplier_platform_account_active (provider_code, subject_id, has_tax, token_id, is_deleted),
+    KEY idx_supplier_platform_filter (type_id, subject_id, has_tax, last_balance_status, is_deleted, sort, id),
+    KEY idx_supplier_platform_name (name, is_deleted)
+);
+CREATE TABLE IF NOT EXISTS supplier_platform_balance_log (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    platform_id BIGINT UNSIGNED NOT NULL,
+    operator_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    operator_name VARCHAR(64) NOT NULL DEFAULT '',
+    provider_code VARCHAR(32) NOT NULL,
+    request_url VARCHAR(512) NOT NULL,
+    request_method VARCHAR(16) NOT NULL DEFAULT 'POST',
+    request_snapshot TEXT NOT NULL,
+    response_snapshot TEXT NOT NULL,
+    http_status INT NOT NULL DEFAULT 0,
+    success TINYINT NOT NULL DEFAULT 0,
+    balance_amount DECIMAL(18,4) NULL,
+    message VARCHAR(255) NOT NULL DEFAULT '',
+    duration_ms INT NOT NULL DEFAULT 0,
+    trace_id VARCHAR(64) NOT NULL DEFAULT '',
+    created_at DATETIME NOT NULL,
+    KEY idx_supplier_platform_balance_log_platform (platform_id, created_at),
+    KEY idx_supplier_platform_balance_log_trace (trace_id)
 );
 CREATE TABLE IF NOT EXISTS system_config (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
