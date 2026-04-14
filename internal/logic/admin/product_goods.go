@@ -121,6 +121,9 @@ SELECT
     p.goods_code,
     p.brand_id,
     COALESCE(b.name, '') AS brand_name,
+    COALESCE(NULLIF(b.icon, ''), NULLIF(pb.icon, ''), NULLIF(gb.icon, ''), '') AS brand_icon,
+    p.subject_id,
+    COALESCE(sub.name, '') AS subject_name,
     p.name,
     p.goods_type,
     p.supply_type,
@@ -138,6 +141,9 @@ SELECT
     p.created_at
 FROM product_goods p
 LEFT JOIN product_brand b ON b.id = p.brand_id
+LEFT JOIN product_brand pb ON pb.id = b.parent_id
+LEFT JOIN product_brand gb ON gb.id = pb.parent_id
+LEFT JOIN admin_subject sub ON sub.id = p.subject_id
 LEFT JOIN product_template t ON t.id = p.product_template_id
 LEFT JOIN product_purchase_limit_strategy s ON s.id = p.purchase_limit_strategy_id
 WHERE `+whereClause+`
@@ -154,6 +160,9 @@ LIMIT ? OFFSET ?
 			GoodsCode:                 row["goods_code"].String(),
 			BrandID:                   row["brand_id"].Int64(),
 			BrandName:                 row["brand_name"].String(),
+			BrandIcon:                 productGoodsRecordString(row, "brand_icon"),
+			SubjectID:                 nullableInt64Pointer(productGoodsRecordNullInt64(row, "subject_id")),
+			SubjectName:               productGoodsRecordString(row, "subject_name"),
 			Name:                      row["name"].String(),
 			GoodsType:                 row["goods_type"].String(),
 			SupplyType:                row["supply_type"].String(),

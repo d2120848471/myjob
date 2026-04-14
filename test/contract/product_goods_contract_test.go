@@ -86,6 +86,16 @@ func TestProductGoodsCRUDAndFilters(t *testing.T) {
 	_, _, leafB := h.createBrandPath(t, token, "音乐会员", "网易云音乐", "网易云黑胶月卡")
 	taxSubjectID := h.createSubject(t, token, "开票主体A", 1)
 	nonTaxSubjectID := h.createSubject(t, token, "普通主体B", 0)
+	brandIconURL := "/uploads/brands/tencent-video.png"
+
+	updateBrandIcon := h.putJSON("/api/admin/brands/"+int64ToString(topA), map[string]any{
+		"name":             "视频会员",
+		"icon":             brandIconURL,
+		"credential_image": "",
+		"description":      "",
+		"is_visible":       1,
+	}, token)
+	require.Equal(t, 0, updateBrandIcon.Code)
 
 	templateA := h.createProductTemplate(t, token, "腾讯视频模板")
 	templateB := h.createProductTemplate(t, token, "网易云模板")
@@ -452,6 +462,9 @@ func TestProductGoodsCRUDAndFilters(t *testing.T) {
 			GoodsCode                 string `json:"goods_code"`
 			BrandID                   int64  `json:"brand_id"`
 			BrandName                 string `json:"brand_name"`
+			BrandIcon                 string `json:"brand_icon"`
+			SubjectID                 *int64 `json:"subject_id"`
+			SubjectName               string `json:"subject_name"`
 			Name                      string `json:"name"`
 			GoodsType                 string `json:"goods_type"`
 			ProductTemplateTitle      string `json:"product_template_title"`
@@ -472,6 +485,12 @@ func TestProductGoodsCRUDAndFilters(t *testing.T) {
 	require.Equal(t, 2, listAllData.Pagination.Total)
 	require.Equal(t, "网易云月卡商品", listAllData.List[0].Name)
 	require.Equal(t, "腾讯视频周卡商品-改", listAllData.List[1].Name)
+	require.Nil(t, listAllData.List[0].SubjectID)
+	require.Equal(t, "", listAllData.List[0].SubjectName)
+	require.Equal(t, brandIconURL, listAllData.List[1].BrandIcon)
+	require.NotNil(t, listAllData.List[1].SubjectID)
+	require.Equal(t, taxSubjectID, *listAllData.List[1].SubjectID)
+	require.Equal(t, "开票主体A", listAllData.List[1].SubjectName)
 
 	listByGoodsCode := h.getJSON("/api/admin/products?page=1&page_size=20&keyword="+createData.GoodsCode, token)
 	require.Equal(t, 0, listByGoodsCode.Code)
