@@ -15,6 +15,7 @@ type ProductGoods struct {
 	IsExport                int            `db:"is_export" json:"is_export"`
 	IsDouyin                int            `db:"is_douyin" json:"is_douyin"`
 	HasTax                  int            `db:"has_tax" json:"has_tax"`
+	SubjectID               sql.NullInt64  `db:"subject_id" json:"subject_id"`
 	ExceptionNotify         int            `db:"exception_notify" json:"exception_notify"`
 	ProductTemplateID       sql.NullInt64  `db:"product_template_id" json:"product_template_id"`
 	PurchaseLimitStrategyID sql.NullInt64  `db:"purchase_limit_strategy_id" json:"purchase_limit_strategy_id"`

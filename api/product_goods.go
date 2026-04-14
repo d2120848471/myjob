@@ -35,6 +35,8 @@ type ProductGoodsDetailRes struct {
 	IsDouyin                    int    `json:"is_douyin" dc:"是否可抖音"`
 	HasTax                      int    `json:"has_tax" dc:"是否含税"`
 	ExceptionNotify             int    `json:"exception_notify" dc:"是否异常提醒"`
+	SubjectID                   *int64 `json:"subject_id" dc:"主体ID"`
+	SubjectName                 string `json:"subject_name" dc:"主体名称"`
 	ProductTemplateID           *int64 `json:"product_template_id" dc:"商品模板ID"`
 	ProductTemplateTitle        string `json:"product_template_title" dc:"商品模板标题"`
 	PurchaseLimitStrategyID     *int64 `json:"purchase_limit_strategy_id" dc:"购买数量限制策略ID"`
@@ -60,6 +62,7 @@ type ProductGoodsCreateReq struct {
 	IsExport                int    `json:"is_export" dc:"是否可导出"`
 	IsDouyin                int    `json:"is_douyin" dc:"是否可抖音"`
 	HasTax                  int    `json:"has_tax" dc:"是否含税"`
+	SubjectID               *int64 `json:"subject_id" dc:"主体ID"`
 	ExceptionNotify         int    `json:"exception_notify" dc:"是否异常提醒"`
 	ProductTemplateID       *int64 `json:"product_template_id" dc:"商品模板ID"`
 	PurchaseLimitStrategyID *int64 `json:"purchase_limit_strategy_id" dc:"购买数量限制策略ID"`
@@ -87,6 +90,7 @@ type ProductGoodsUpdateReq struct {
 	IsExport                int    `json:"is_export" dc:"是否可导出"`
 	IsDouyin                int    `json:"is_douyin" dc:"是否可抖音"`
 	HasTax                  int    `json:"has_tax" dc:"是否含税"`
+	SubjectID               *int64 `json:"subject_id" dc:"主体ID"`
 	ExceptionNotify         int    `json:"exception_notify" dc:"是否异常提醒"`
 	ProductTemplateID       *int64 `json:"product_template_id" dc:"商品模板ID"`
 	PurchaseLimitStrategyID *int64 `json:"purchase_limit_strategy_id" dc:"购买数量限制策略ID"`
@@ -116,6 +120,7 @@ type ProductGoodsFormOptionsRes struct {
 	Brands                  []ProductGoodsBrandTreeItem  `json:"brands" dc:"品牌树"`
 	Templates               []ProductGoodsTemplateOption `json:"templates" dc:"模板下拉"`
 	PurchaseLimitStrategies []ProductGoodsStrategyOption `json:"purchase_limit_strategies" dc:"策略下拉"`
+	Subjects                []ProductGoodsSubjectOption  `json:"subjects" dc:"主体下拉"`
 	GoodsTypes              []ProductGoodsStringOption   `json:"goods_types" dc:"商品类型"`
 	SupplyTypes             []ProductGoodsStringOption   `json:"supply_types" dc:"供货方式"`
 	BooleanOptions          []ProductGoodsIntOption      `json:"boolean_options" dc:"布尔选项"`
@@ -159,6 +164,11 @@ type ProductGoodsTemplateOption struct {
 type ProductGoodsStrategyOption struct {
 	ID   int64  `json:"id" dc:"策略ID"`
 	Name string `json:"name" dc:"策略名称"`
+}
+
+type ProductGoodsSubjectOption struct {
+	ID   int64  `json:"id" dc:"主体ID"`
+	Name string `json:"name" dc:"主体名称"`
 }
 
 type ProductGoodsStringOption struct {

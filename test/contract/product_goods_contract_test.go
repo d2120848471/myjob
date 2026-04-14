@@ -84,6 +84,8 @@ func TestProductGoodsCRUDAndFilters(t *testing.T) {
 
 	topA, _, leafA := h.createBrandPath(t, token, "视频会员", "腾讯视频", "腾讯视频周卡")
 	_, _, leafB := h.createBrandPath(t, token, "音乐会员", "网易云音乐", "网易云黑胶月卡")
+	taxSubjectID := h.createSubject(t, token, "开票主体A", 1)
+	nonTaxSubjectID := h.createSubject(t, token, "普通主体B", 0)
 
 	templateA := h.createProductTemplate(t, token, "腾讯视频模板")
 	templateB := h.createProductTemplate(t, token, "网易云模板")
@@ -118,6 +120,10 @@ func TestProductGoodsCRUDAndFilters(t *testing.T) {
 			ID   int64  `json:"id"`
 			Name string `json:"name"`
 		} `json:"purchase_limit_strategies"`
+		Subjects []struct {
+			ID   int64  `json:"id"`
+			Name string `json:"name"`
+		} `json:"subjects"`
 		GoodsTypes []struct {
 			Value string `json:"value"`
 			Label string `json:"label"`
@@ -153,6 +159,13 @@ func TestProductGoodsCRUDAndFilters(t *testing.T) {
 	}{ID: strategyEnabled, Name: "启用策略A"})
 	for _, item := range formOptionsData.PurchaseLimitStrategies {
 		require.NotEqual(t, strategyDisabled, item.ID)
+	}
+	require.Contains(t, formOptionsData.Subjects, struct {
+		ID   int64  `json:"id"`
+		Name string `json:"name"`
+	}{ID: taxSubjectID, Name: "开票主体A"})
+	for _, item := range formOptionsData.Subjects {
+		require.NotEqual(t, nonTaxSubjectID, item.ID)
 	}
 	require.Len(t, formOptionsData.GoodsTypes, 2)
 	require.Len(t, formOptionsData.SupplyTypes, 1)
@@ -210,6 +223,39 @@ func TestProductGoodsCRUDAndFilters(t *testing.T) {
 	}, token)
 	require.Equal(t, 400, invalidDisabledStrategy.Code)
 
+	missingTaxSubject := h.postJSON("/api/admin/products", map[string]any{
+		"brand_id":         leafA,
+		"name":             "缺少主体商品",
+		"goods_type":       "card_secret",
+		"supply_type":      "channel",
+		"is_export":        1,
+		"is_douyin":        0,
+		"has_tax":          1,
+		"exception_notify": 1,
+		"balance_limit":    "0",
+		"min_purchase_qty": 1,
+		"max_purchase_qty": 1,
+		"status":           1,
+	}, token)
+	require.Equal(t, 400, missingTaxSubject.Code)
+
+	invalidNonTaxSubject := h.postJSON("/api/admin/products", map[string]any{
+		"brand_id":         leafA,
+		"name":             "非含税主体商品",
+		"goods_type":       "card_secret",
+		"supply_type":      "channel",
+		"is_export":        1,
+		"is_douyin":        0,
+		"has_tax":          1,
+		"subject_id":       nonTaxSubjectID,
+		"exception_notify": 1,
+		"balance_limit":    "0",
+		"min_purchase_qty": 1,
+		"max_purchase_qty": 1,
+		"status":           1,
+	}, token)
+	require.Equal(t, 400, invalidNonTaxSubject.Code)
+
 	createRes := h.postJSON("/api/admin/products", map[string]any{
 		"brand_id":                   leafA,
 		"name":                       "腾讯视频周卡商品",
@@ -218,6 +264,7 @@ func TestProductGoodsCRUDAndFilters(t *testing.T) {
 		"is_export":                  1,
 		"is_douyin":                  0,
 		"has_tax":                    1,
+		"subject_id":                 taxSubjectID,
 		"exception_notify":           1,
 		"product_template_id":        templateA,
 		"purchase_limit_strategy_id": strategyEnabled,
@@ -261,6 +308,8 @@ func TestProductGoodsCRUDAndFilters(t *testing.T) {
 		PurchaseLimitStrategyName   string `json:"purchase_limit_strategy_name"`
 		PurchaseLimitStrategyStatus int    `json:"purchase_limit_strategy_status"`
 		HasTax                      int    `json:"has_tax"`
+		SubjectID                   *int64 `json:"subject_id"`
+		SubjectName                 string `json:"subject_name"`
 		DefaultSellPrice            string `json:"default_sell_price"`
 	}
 	require.NoError(t, json.Unmarshal(detailRes.Data, &detailData))
@@ -279,6 +328,9 @@ func TestProductGoodsCRUDAndFilters(t *testing.T) {
 	require.Equal(t, "启用策略A", detailData.PurchaseLimitStrategyName)
 	require.Equal(t, 0, detailData.PurchaseLimitStrategyStatus)
 	require.Equal(t, 1, detailData.HasTax)
+	require.NotNil(t, detailData.SubjectID)
+	require.Equal(t, taxSubjectID, *detailData.SubjectID)
+	require.Equal(t, "开票主体A", detailData.SubjectName)
 	require.Equal(t, "19.9000", detailData.DefaultSellPrice)
 
 	updateKeepDisabledStrategy := h.putJSON("/api/admin/products/"+int64ToString(createData.ID), map[string]any{
@@ -289,6 +341,7 @@ func TestProductGoodsCRUDAndFilters(t *testing.T) {
 		"is_export":                  1,
 		"is_douyin":                  1,
 		"has_tax":                    1,
+		"subject_id":                 taxSubjectID,
 		"exception_notify":           0,
 		"product_template_id":        templateA,
 		"purchase_limit_strategy_id": strategyEnabled,
@@ -310,6 +363,7 @@ func TestProductGoodsCRUDAndFilters(t *testing.T) {
 		"is_export":                  0,
 		"is_douyin":                  0,
 		"has_tax":                    0,
+		"subject_id":                 taxSubjectID,
 		"exception_notify":           1,
 		"product_template_id":        nil,
 		"purchase_limit_strategy_id": nil,
@@ -336,10 +390,14 @@ func TestProductGoodsCRUDAndFilters(t *testing.T) {
 	var secondDetailData struct {
 		ProductTemplateID       *int64 `json:"product_template_id"`
 		PurchaseLimitStrategyID *int64 `json:"purchase_limit_strategy_id"`
+		SubjectID               *int64 `json:"subject_id"`
+		SubjectName             string `json:"subject_name"`
 	}
 	require.NoError(t, json.Unmarshal(secondDetailRes.Data, &secondDetailData))
 	require.Nil(t, secondDetailData.ProductTemplateID)
 	require.Nil(t, secondDetailData.PurchaseLimitStrategyID)
+	require.Nil(t, secondDetailData.SubjectID)
+	require.Equal(t, "", secondDetailData.SubjectName)
 
 	updateSecondStrategy := h.putJSON("/api/admin/products/"+int64ToString(createSecondData.ID), map[string]any{
 		"brand_id":                   leafB,
@@ -349,6 +407,7 @@ func TestProductGoodsCRUDAndFilters(t *testing.T) {
 		"is_export":                  0,
 		"is_douyin":                  0,
 		"has_tax":                    0,
+		"subject_id":                 taxSubjectID,
 		"exception_notify":           1,
 		"product_template_id":        templateB,
 		"purchase_limit_strategy_id": strategyEnabledB,
@@ -370,6 +429,7 @@ func TestProductGoodsCRUDAndFilters(t *testing.T) {
 		"is_export":                  0,
 		"is_douyin":                  0,
 		"has_tax":                    0,
+		"subject_id":                 taxSubjectID,
 		"exception_notify":           1,
 		"product_template_id":        templateB,
 		"purchase_limit_strategy_id": strategyDisabled,
@@ -487,6 +547,7 @@ func TestProductGoodsReferenceConflicts(t *testing.T) {
 	_, _, leaf := h.createBrandPath(t, token, "视频权益", "优酷会员", "优酷会员周卡")
 	templateID := h.createProductTemplate(t, token, "优酷模板")
 	strategyID := h.createPurchaseLimitStrategy(t, token, "优酷策略", 1)
+	subjectID := h.createSubject(t, token, "优酷开票主体", 1)
 
 	createRes := h.postJSON("/api/admin/products", map[string]any{
 		"brand_id":                   leaf,
@@ -496,6 +557,7 @@ func TestProductGoodsReferenceConflicts(t *testing.T) {
 		"is_export":                  1,
 		"is_douyin":                  0,
 		"has_tax":                    1,
+		"subject_id":                 subjectID,
 		"exception_notify":           1,
 		"product_template_id":        templateID,
 		"purchase_limit_strategy_id": strategyID,
@@ -609,6 +671,22 @@ func (h *testHarness) createPurchaseLimitStrategy(t *testing.T, token, name stri
 		}, token)
 		require.Equal(t, 0, statusRes.Code)
 	}
+	return data.ID
+}
+
+func (h *testHarness) createSubject(t *testing.T, token, name string, hasTax int) int64 {
+	t.Helper()
+	res := h.postJSON("/api/admin/subjects", map[string]any{
+		"name":    name,
+		"has_tax": hasTax,
+	}, token)
+	require.Equal(t, 0, res.Code)
+
+	var data struct {
+		ID int64 `json:"id"`
+	}
+	require.NoError(t, json.Unmarshal(res.Data, &data))
+	require.NotZero(t, data.ID)
 	return data.ID
 }
 

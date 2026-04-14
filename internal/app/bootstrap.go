@@ -37,6 +37,9 @@ func (c *Core) bootstrap(ctx context.Context) error {
 	if err := c.ensureMenuSchema(ctx); err != nil {
 		return err
 	}
+	if err := c.ensureProductGoodsSchema(ctx); err != nil {
+		return err
+	}
 	if err := c.ensureDefaultGroup(ctx); err != nil {
 		return err
 	}
@@ -101,6 +104,38 @@ func (c *Core) ensureMenuSchema(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+func (c *Core) ensureProductGoodsSchema(ctx context.Context) error {
+	if c.driver == "sqlite" {
+		rows := make([]struct {
+			Name string `db:"name"`
+		}, 0)
+		if err := c.DB().GetCore().GetScan(ctx, &rows, `PRAGMA table_info(product_goods)`); err != nil {
+			return err
+		}
+		for _, row := range rows {
+			if row.Name == "subject_id" {
+				return nil
+			}
+		}
+		_, err := c.DB().Exec(ctx, `ALTER TABLE product_goods ADD COLUMN subject_id INTEGER NULL`)
+		return err
+	}
+
+	rows := make([]struct {
+		Field string `db:"Field"`
+	}, 0)
+	if err := c.DB().GetCore().GetScan(ctx, &rows, `SHOW COLUMNS FROM product_goods`); err != nil {
+		return err
+	}
+	for _, row := range rows {
+		if row.Field == "subject_id" {
+			return nil
+		}
+	}
+	_, err := c.DB().Exec(ctx, `ALTER TABLE product_goods ADD COLUMN subject_id BIGINT UNSIGNED NULL`)
+	return err
 }
 
 func (c *Core) ensureDefaultGroup(ctx context.Context) error {
