@@ -14,6 +14,7 @@ const (
 	TableAdminOperationLog = "admin_operation_log"
 	TableAdminLoginLog     = "admin_login_log"
 	TableAdminSubject      = "admin_subject"
+	TableProductGoods      = "product_goods"
 	TableSystemConfig      = "system_config"
 )
 
@@ -37,6 +38,9 @@ func AdminLoginLogModel(db gdb.DB, ctx context.Context) *gdb.Model {
 }
 func AdminSubjectModel(db gdb.DB, ctx context.Context) *gdb.Model {
 	return db.Model(TableAdminSubject).Ctx(ctx).Safe()
+}
+func ProductGoodsModel(db gdb.DB, ctx context.Context) *gdb.Model {
+	return db.Model(TableProductGoods).Ctx(ctx).Safe()
 }
 func SystemConfigModel(db gdb.DB, ctx context.Context) *gdb.Model {
 	return db.Model(TableSystemConfig).Ctx(ctx).Safe()

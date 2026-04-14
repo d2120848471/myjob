@@ -156,6 +156,13 @@ func (l *ProductTemplateLogic) Delete(ctx context.Context, req *adminapi.Product
 	if err != nil {
 		return nil, apiErr(consts.CodeBadRequest, "商品模板不存在")
 	}
+	goodsRefCount, err := countActiveGoodsReference(ctx, l.core.DB(), "product_template_id", req.ID)
+	if err != nil {
+		return nil, apiErr(consts.CodeInternalError, "商品模板删除校验失败")
+	}
+	if goodsRefCount > 0 {
+		return nil, apiErr(consts.CodeConflict, "该商品模板已被商品引用，请先处理关联商品")
+	}
 	if _, err = l.core.DB().Exec(ctx, `DELETE FROM product_template WHERE id = ?`, req.ID); err != nil {
 		return nil, apiErr(consts.CodeInternalError, "商品模板删除失败")
 	}
@@ -177,6 +184,13 @@ func (l *ProductTemplateLogic) BatchDelete(ctx context.Context, req *adminapi.Pr
 	}
 	if len(existing) != len(ids) {
 		return nil, apiErr(consts.CodeBadRequest, "商品模板不存在")
+	}
+	referenced, err := hasActiveGoodsReferences(ctx, l.core.DB(), "product_template_id", ids)
+	if err != nil {
+		return nil, apiErr(consts.CodeInternalError, "商品模板删除校验失败")
+	}
+	if referenced {
+		return nil, apiErr(consts.CodeConflict, "选中的商品模板中存在被商品引用的记录，请先处理关联商品")
 	}
 
 	// 批量删除前先做全量存在性校验，避免部分删除成功、部分模板不存在导致结果不确定。

@@ -88,6 +88,15 @@ type PurchaseLimitService interface {
 	Enums(ctx context.Context, req *adminapi.PurchaseLimitStrategyEnumsReq) (*adminapi.PurchaseLimitStrategyEnumsRes, error)
 }
 
+type ProductGoodsService interface {
+	List(ctx context.Context, req *adminapi.ProductGoodsListReq) (*adminapi.ProductGoodsListRes, error)
+	Detail(ctx context.Context, req *adminapi.ProductGoodsDetailReq) (*adminapi.ProductGoodsDetailRes, error)
+	FormOptions(ctx context.Context, req *adminapi.ProductGoodsFormOptionsReq) (*adminapi.ProductGoodsFormOptionsRes, error)
+	Add(ctx context.Context, req *adminapi.ProductGoodsCreateReq, actor entity.AdminUser, ip string) (*adminapi.ProductGoodsCreateRes, error)
+	Edit(ctx context.Context, req *adminapi.ProductGoodsUpdateReq, actor entity.AdminUser, ip string) (*adminapi.ProductGoodsUpdateRes, error)
+	Delete(ctx context.Context, req *adminapi.ProductGoodsDeleteReq, actor entity.AdminUser, ip string) (*adminapi.ProductGoodsDeleteRes, error)
+}
+
 type SupplierPlatformService interface {
 	TypeList(ctx context.Context, req *adminapi.SupplierPlatformTypeListReq) (*adminapi.SupplierPlatformTypeListRes, error)
 	List(ctx context.Context, req *adminapi.SupplierPlatformListReq) (*adminapi.SupplierPlatformListRes, error)

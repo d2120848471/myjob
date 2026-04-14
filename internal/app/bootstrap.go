@@ -129,6 +129,7 @@ func defaultMenus() []menuSeed {
 		{ID: 10, ParentID: 0, Name: "商品模板管理", Code: "product.template", MenuLevel: 1, Status: 1, SuperOnly: 0, Sort: 10},
 		{ID: 11, ParentID: 0, Name: "商品购买数量限制策略", Code: "product.purchase_limit", MenuLevel: 1, Status: 1, SuperOnly: 0, Sort: 11},
 		{ID: 12, ParentID: 0, Name: "第三方对接", Code: "supplier.index", MenuLevel: 1, Status: 1, SuperOnly: 0, Sort: 12},
+		{ID: 13, ParentID: 0, Name: "商品管理", Code: "product.goods", MenuLevel: 1, Status: 1, SuperOnly: 0, Sort: 13},
 	}
 }
 
@@ -152,7 +153,7 @@ func (c *Core) ensureMenus(ctx context.Context) error {
 }
 
 func (c *Core) ensureDefaultGroupAuth(ctx context.Context) error {
-	for _, menuID := range []int64{1, 2, 3, 4, 5, 7, 8, 10, 11, 12} {
+	for _, menuID := range []int64{1, 2, 3, 4, 5, 7, 8, 10, 11, 12, 13} {
 		exists, err := c.DB().GetCore().GetValue(ctx, `SELECT COUNT(*) FROM admin_group_menu WHERE group_id = 1 AND menu_id = ?`, menuID)
 		if err != nil {
 			return err
