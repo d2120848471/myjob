@@ -143,6 +143,13 @@ func (l *PurchaseLimitLogic) Delete(ctx context.Context, req *adminapi.PurchaseL
 	if err != nil {
 		return nil, apiErr(consts.CodeBadRequest, "商品购买数量限制策略不存在")
 	}
+	goodsRefCount, err := countActiveGoodsReference(ctx, l.core.DB(), "purchase_limit_strategy_id", req.ID)
+	if err != nil {
+		return nil, apiErr(consts.CodeInternalError, "商品购买数量限制策略删除校验失败")
+	}
+	if goodsRefCount > 0 {
+		return nil, apiErr(consts.CodeConflict, "该商品购买数量限制策略已被商品引用，请先处理关联商品")
+	}
 	if _, err = l.core.DB().Exec(ctx, `DELETE FROM product_purchase_limit_strategy WHERE id = ?`, req.ID); err != nil {
 		return nil, apiErr(consts.CodeInternalError, "商品购买数量限制策略删除失败")
 	}

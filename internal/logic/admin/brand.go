@@ -242,6 +242,13 @@ func (l *BrandLogic) Delete(ctx context.Context, req *adminapi.BrandDeleteReq, a
 	if industryRefCount.Int() > 0 {
 		return nil, apiErr(consts.CodeConflict, "该品牌已被行业关联，请先解除关联")
 	}
+	goodsRefCount, err := countActiveGoodsReference(ctx, l.core.DB(), "brand_id", req.ID)
+	if err != nil {
+		return nil, apiErr(consts.CodeInternalError, "品牌删除校验失败")
+	}
+	if goodsRefCount > 0 {
+		return nil, apiErr(consts.CodeConflict, "该品牌已被商品引用，请先处理关联商品")
+	}
 	if err = l.core.DB().Transaction(ctx, func(ctx context.Context, tx gdb.TX) error {
 		if _, txErr := tx.Exec(`DELETE FROM product_brand WHERE id = ?`, req.ID); txErr != nil {
 			return txErr
