@@ -31,3 +31,21 @@ func TestEnsureMutationAffected(t *testing.T) {
 		}
 	})
 }
+
+func TestProductGoodsStatusSelectSQL(t *testing.T) {
+	t.Run("mysql 需要锁定目标商品行", func(t *testing.T) {
+		sqlText := productGoodsStatusSelectSQL("mysql", 2)
+		expected := "SELECT id FROM product_goods WHERE is_deleted = 0 AND id IN (?,?) FOR UPDATE"
+		if sqlText != expected {
+			t.Fatalf("expected %q, got %q", expected, sqlText)
+		}
+	})
+
+	t.Run("sqlite 不追加 for update", func(t *testing.T) {
+		sqlText := productGoodsStatusSelectSQL("sqlite", 1)
+		expected := "SELECT id FROM product_goods WHERE is_deleted = 0 AND id IN (?)"
+		if sqlText != expected {
+			t.Fatalf("expected %q, got %q", expected, sqlText)
+		}
+	})
+}

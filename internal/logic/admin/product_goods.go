@@ -443,6 +443,67 @@ func (l *ProductGoodsLogic) Delete(ctx context.Context, req *adminapi.ProductGoo
 	return &adminapi.ProductGoodsDeleteRes{}, nil
 }
 
+func (l *ProductGoodsLogic) Status(ctx context.Context, req *adminapi.ProductGoodsStatusReq, actor entity.AdminUser, ip string) (*adminapi.ProductGoodsStatusRes, error) {
+	if len(req.IDs) == 0 {
+		return nil, apiErr(consts.CodeBadRequest, "请至少选择一个商品")
+	}
+	ids, err := uniquePositiveInt64s(req.IDs, "商品ID")
+	if err != nil {
+		return nil, apiErr(consts.CodeBadRequest, err.Error())
+	}
+	if req.Status != consts.StatusEnabled && req.Status != consts.StatusDisabled {
+		return nil, apiErr(consts.CodeBadRequest, "状态错误")
+	}
+
+	successIDs := make([]int64, 0, len(ids))
+	failed := make([]adminapi.ProductGoodsStatusFailedItem, 0)
+	now := l.core.Now()
+	if err := l.core.DB().Transaction(ctx, func(ctx context.Context, tx gdb.TX) error {
+		existingIDs, txErr := loadActiveProductIDSetTx(tx, ids, l.core.Config().Database.Driver)
+		if txErr != nil {
+			return txErr
+		}
+		for _, id := range ids {
+			if _, ok := existingIDs[id]; ok {
+				successIDs = append(successIDs, id)
+				continue
+			}
+			failed = append(failed, adminapi.ProductGoodsStatusFailedItem{
+				ID:     id,
+				Reason: "商品不存在",
+			})
+		}
+		if len(successIDs) == 0 {
+			return nil
+		}
+
+		args := make([]any, 0, len(successIDs)+2)
+		args = append(args, req.Status, now)
+		for _, id := range successIDs {
+			args = append(args, id)
+		}
+		// 事务内先锁定、再更新，避免并发软删把未命中的商品误算进 success_ids。
+		if _, txErr = tx.Exec(`
+UPDATE product_goods
+SET status = ?, updated_at = ?
+WHERE is_deleted = 0 AND id IN (`+sqlPlaceholders(len(successIDs))+`)
+`, args...); txErr != nil {
+			return txErr
+		}
+		return nil
+	}); err != nil {
+		return nil, apiErr(consts.CodeInternalError, "商品状态更新失败")
+	}
+
+	l.core.WriteOperation(ctx, actor, fmt.Sprintf("批量修改商品状态：status=%d, total=%d, success=%d, failed=%d", req.Status, len(ids), len(successIDs), len(failed)), ip)
+	return &adminapi.ProductGoodsStatusRes{
+		SuccessIDs:   successIDs,
+		SuccessCount: len(successIDs),
+		FailedCount:  len(failed),
+		Failed:       failed,
+	}, nil
+}
+
 func (l *ProductGoodsLogic) getActiveProduct(ctx context.Context, id int64) (entity.ProductGoods, error) {
 	product := entity.ProductGoods{}
 	row, err := l.core.DB().GetCore().GetOne(ctx, `
@@ -505,6 +566,32 @@ WHERE id = ? AND is_deleted = 0
 	product.CreatedAt = parseRecordTime(row, "created_at")
 	product.UpdatedAt = parseRecordTime(row, "updated_at")
 	return product, nil
+}
+
+func loadActiveProductIDSetTx(tx gdb.TX, ids []int64, driver string) (map[int64]struct{}, error) {
+	rows := make([]struct {
+		ID int64 `db:"id"`
+	}, 0, len(ids))
+	args := make([]any, 0, len(ids))
+	for _, id := range ids {
+		args = append(args, id)
+	}
+	if err := tx.GetScan(&rows, productGoodsStatusSelectSQL(driver, len(ids)), args...); err != nil {
+		return nil, err
+	}
+	result := make(map[int64]struct{}, len(rows))
+	for _, row := range rows {
+		result[row.ID] = struct{}{}
+	}
+	return result, nil
+}
+
+func productGoodsStatusSelectSQL(driver string, idCount int) string {
+	query := `SELECT id FROM product_goods WHERE is_deleted = 0 AND id IN (` + sqlPlaceholders(idCount) + `)`
+	if strings.EqualFold(strings.TrimSpace(driver), "mysql") {
+		return query + ` FOR UPDATE`
+	}
+	return query
 }
 
 func (l *ProductGoodsLogic) normalizeProductGoodsInput(ctx context.Context, brandID int64, name, goodsType, supplyType string, isExport, isDouyin, hasTax int, subjectID *int64, exceptionNotify int, productTemplateID, purchaseLimitStrategyID *int64, purchaseNotice, terminalPriceLimit, balanceLimit, defaultSellPrice string, minPurchaseQty, maxPurchaseQty, status int, allowDisabledCurrentStrategyID *int64) (normalizedProductGoodsInput, error) {

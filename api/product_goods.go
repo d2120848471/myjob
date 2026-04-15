@@ -112,6 +112,24 @@ type ProductGoodsDeleteReq struct {
 
 type ProductGoodsDeleteRes struct{}
 
+type ProductGoodsStatusReq struct {
+	g.Meta `path:"/products/status" method:"patch" tags:"商品管理" summary:"批量修改商品状态" security:"BearerAuth" dc:"支持单个和多个商品统一修改状态"`
+	IDs    []int64 `json:"ids" dc:"商品ID列表"`
+	Status int     `json:"status" dc:"状态"`
+}
+
+type ProductGoodsStatusRes struct {
+	SuccessIDs   []int64                        `json:"success_ids" dc:"修改成功的商品ID"`
+	SuccessCount int                            `json:"success_count" dc:"成功数量"`
+	FailedCount  int                            `json:"failed_count" dc:"失败数量"`
+	Failed       []ProductGoodsStatusFailedItem `json:"failed" dc:"失败明细"`
+}
+
+type ProductGoodsStatusFailedItem struct {
+	ID     int64  `json:"id" dc:"失败商品ID"`
+	Reason string `json:"reason" dc:"失败原因"`
+}
+
 type ProductGoodsFormOptionsReq struct {
 	g.Meta `path:"/products/form-options" method:"get" tags:"商品管理" summary:"商品表单下拉数据" security:"BearerAuth" dc:"获取商品表单聚合下拉数据"`
 }
