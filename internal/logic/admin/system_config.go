@@ -15,6 +15,7 @@ import (
 	"github.com/gogf/gf/v2/database/gdb"
 )
 
+// SystemConfigLogic 提供系统参数配置管理相关业务能力。
 type SystemConfigLogic struct{ core *app.Core }
 
 type systemConfigMutation struct {
@@ -23,6 +24,9 @@ type systemConfigMutation struct {
 	Value string
 }
 
+// Get 读取系统参数配置：
+// - group 为空：返回所有分组
+// - group 非空：返回指定分组
 func (l *SystemConfigLogic) Get(ctx context.Context, req *adminapi.SettingsSystemGetReq) (*adminapi.SettingsSystemGetRes, error) {
 	group := strings.TrimSpace(req.Group)
 	if group == "" {
@@ -56,6 +60,7 @@ func (l *SystemConfigLogic) Get(ctx context.Context, req *adminapi.SettingsSyste
 	}, nil
 }
 
+// Save 保存系统参数配置，完成落库、清理缓存并写入操作日志。
 func (l *SystemConfigLogic) Save(ctx context.Context, req *adminapi.SettingsSystemSaveReq, actor app.AdminUser, ip string) (*adminapi.SettingsSystemSaveRes, error) {
 	mutations, groups, err := normalizeSystemSaveRequest(req)
 	if err != nil {
@@ -64,6 +69,7 @@ func (l *SystemConfigLogic) Save(ctx context.Context, req *adminapi.SettingsSyst
 	if err := saveSystemConfigMutations(ctx, l.core, mutations); err != nil {
 		return nil, apiErr(consts.CodeInternalError, "系统参数保存失败")
 	}
+	// 保存后按分组删除缓存，确保读取走最新配置。
 	cacheKeys := make([]string, 0, len(groups))
 	for _, group := range groups {
 		cacheKeys = append(cacheKeys, authlib.SystemConfigCacheKey(group))

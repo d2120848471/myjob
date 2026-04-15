@@ -10,6 +10,7 @@ import (
 	"github.com/lionsoul2014/ip2region/binding/golang/xdb"
 )
 
+// RegionResolver 提供 IP -> 归属地文本的解析能力。
 type RegionResolver interface {
 	Resolve(ip string) string
 }
@@ -25,6 +26,7 @@ type xdbResolver struct {
 	searcher *xdb.Searcher
 }
 
+// DefaultDBPaths 返回 ip2region 数据库文件的默认候选路径。
 func DefaultDBPaths() []string {
 	return []string{
 		"resource/ipdb/ip_region.xdb",
@@ -33,6 +35,9 @@ func DefaultDBPaths() []string {
 	}
 }
 
+// NewRegionResolver 从候选路径中加载 ip2region 数据库，并返回解析器实现。
+//
+// 若所有路径均不可用，则返回空实现（Resolve 永远返回空字符串）。
 func NewRegionResolver(dbPaths ...string) RegionResolver {
 	for _, path := range dbPaths {
 		if strings.TrimSpace(path) == "" {

@@ -1,5 +1,6 @@
 package supplierprovider
 
+// DefaultTypes 返回系统内置的第三方平台类型字典（用于启动时 seed）。
 func DefaultTypes() []PlatformType {
 	return []PlatformType{
 		{ID: 6, TypeName: "云发卡", ProviderCode: "kakayun", Status: 1, Sort: 6},

@@ -12,8 +12,10 @@ import (
 	"github.com/gogf/gf/v2/database/gdb"
 )
 
+// IndustryLogic 提供行业管理及行业-品牌关联管理相关业务能力。
 type IndustryLogic struct{ core *app.Core }
 
+// List 分页查询行业列表，支持按名称模糊搜索。
 func (l *IndustryLogic) List(ctx context.Context, req *adminapi.IndustryListReq) (*adminapi.IndustryListRes, error) {
 	page, pageSize := app.ParsePagination(req.Page, req.PageSize)
 	name := strings.TrimSpace(req.Name)
@@ -41,6 +43,7 @@ LIMIT ? OFFSET ?
 	return &adminapi.IndustryListRes{List: items, Pagination: adminapi.PaginationRes{Page: page, PageSize: pageSize, Total: total.Int()}}, nil
 }
 
+// Add 新增行业，并可同时绑定品牌（在同一事务内同步 brand_count）。
 func (l *IndustryLogic) Add(ctx context.Context, req *adminapi.IndustryCreateReq, actor app.AdminUser, ip string) (*adminapi.IndustryCreateRes, error) {
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" {
@@ -84,6 +87,7 @@ func (l *IndustryLogic) Add(ctx context.Context, req *adminapi.IndustryCreateReq
 	return &adminapi.IndustryCreateRes{ID: industryID}, nil
 }
 
+// Edit 编辑行业信息；当传入 BrandIDs 时会在事务内替换关联并同步 brand_count。
 func (l *IndustryLogic) Edit(ctx context.Context, req *adminapi.IndustryUpdateReq, actor app.AdminUser, ip string) (*adminapi.IndustryUpdateRes, error) {
 	industry, err := l.getIndustry(ctx, req.ID)
 	if err != nil {
@@ -128,6 +132,7 @@ func (l *IndustryLogic) Edit(ctx context.Context, req *adminapi.IndustryUpdateRe
 	return &adminapi.IndustryUpdateRes{}, nil
 }
 
+// Delete 删除行业（要求无关联品牌），并重新压实行业排序。
 func (l *IndustryLogic) Delete(ctx context.Context, req *adminapi.IndustryDeleteReq, actor app.AdminUser, ip string) (*adminapi.IndustryDeleteRes, error) {
 	industry, err := l.getIndustry(ctx, req.ID)
 	if err != nil {
@@ -156,6 +161,7 @@ func (l *IndustryLogic) Delete(ctx context.Context, req *adminapi.IndustryDelete
 	return &adminapi.IndustryDeleteRes{}, nil
 }
 
+// Sort 调整行业排序（top/up/down/bottom）。
 func (l *IndustryLogic) Sort(ctx context.Context, req *adminapi.IndustrySortReq, actor app.AdminUser, ip string) (*adminapi.IndustrySortRes, error) {
 	if _, err := l.getIndustry(ctx, req.ID); err != nil {
 		return nil, apiErr(consts.CodeBadRequest, "行业不存在")
@@ -178,6 +184,7 @@ func (l *IndustryLogic) Sort(ctx context.Context, req *adminapi.IndustrySortReq,
 	return &adminapi.IndustrySortRes{}, nil
 }
 
+// BrandSelector 查询可绑定的一级品牌选择器列表。
 func (l *IndustryLogic) BrandSelector(ctx context.Context, req *adminapi.IndustryBrandSelectorReq) (*adminapi.IndustryBrandSelectorRes, error) {
 	name := strings.TrimSpace(req.Name)
 	likeName := "%" + name + "%"
@@ -194,6 +201,7 @@ ORDER BY sort ASC, id ASC
 	return &adminapi.IndustryBrandSelectorRes{List: items}, nil
 }
 
+// BrandList 查询行业已绑定的品牌列表。
 func (l *IndustryLogic) BrandList(ctx context.Context, req *adminapi.IndustryBrandListReq) (*adminapi.IndustryBrandListRes, error) {
 	industry, err := l.getIndustry(ctx, req.ID)
 	if err != nil {
@@ -220,6 +228,7 @@ ORDER BY ib.sort ASC, ib.id ASC
 	return &adminapi.IndustryBrandListRes{IndustryID: industry.ID, IndustryName: industry.Name, List: items}, nil
 }
 
+// BrandAdd 批量为行业新增品牌关联，并同步 brand_count。
 func (l *IndustryLogic) BrandAdd(ctx context.Context, req *adminapi.IndustryBrandAddReq, actor app.AdminUser, ip string) (*adminapi.IndustryBrandAddRes, error) {
 	if _, err := l.getIndustry(ctx, req.ID); err != nil {
 		return nil, apiErr(consts.CodeBadRequest, "行业不存在")
@@ -271,6 +280,7 @@ func (l *IndustryLogic) BrandAdd(ctx context.Context, req *adminapi.IndustryBran
 	return &adminapi.IndustryBrandAddRes{}, nil
 }
 
+// BrandDelete 批量删除行业-品牌关联，并同步 brand_count 与关联排序。
 func (l *IndustryLogic) BrandDelete(ctx context.Context, req *adminapi.IndustryBrandDeleteReq, actor app.AdminUser, ip string) (*adminapi.IndustryBrandDeleteRes, error) {
 	if _, err := l.getIndustry(ctx, req.ID); err != nil {
 		return nil, apiErr(consts.CodeBadRequest, "行业不存在")
@@ -306,6 +316,7 @@ func (l *IndustryLogic) BrandDelete(ctx context.Context, req *adminapi.IndustryB
 	return &adminapi.IndustryBrandDeleteRes{}, nil
 }
 
+// BrandSort 调整行业下品牌关联的排序（top/up/down/bottom）。
 func (l *IndustryLogic) BrandSort(ctx context.Context, req *adminapi.IndustryBrandSortReq, actor app.AdminUser, ip string) (*adminapi.IndustryBrandSortRes, error) {
 	if _, err := l.getIndustry(ctx, req.ID); err != nil {
 		return nil, apiErr(consts.CodeBadRequest, "行业不存在")

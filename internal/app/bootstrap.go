@@ -10,6 +10,9 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// execStatements 将 schema 按分号拆分为多条 SQL 并依次执行。
+//
+// 用于执行内置建表语句，避免引入额外的 migration 依赖。
 func execStatements(ctx context.Context, exec func(string, ...any) (sql.Result, error), schema string) error {
 	parts := strings.Split(schema, ";")
 	for _, part := range parts {
@@ -24,8 +27,12 @@ func execStatements(ctx context.Context, exec func(string, ...any) (sql.Result, 
 	return nil
 }
 
+// bootstrap 执行启动引导：建表、补列、写入默认种子数据与默认配置。
+//
+// 该流程设计为幂等，可重复执行（用于首次启动或版本升级时补齐缺失数据）。
 func (c *Core) bootstrap(ctx context.Context) error {
 	if c.driver == "sqlite" {
+		// sqlite 与 mysql 的建表语法不同，按驱动选择对应 schema。
 		if err := execStatements(ctx, func(sql string, args ...any) (sql.Result, error) { return c.DB().Exec(ctx, sql, args...) }, sqliteSchema); err != nil {
 			return err
 		}
@@ -61,6 +68,7 @@ func (c *Core) bootstrap(ctx context.Context) error {
 	return nil
 }
 
+// ensureMenuSchema 为菜单表补齐历史版本可能缺失的列。
 func (c *Core) ensureMenuSchema(ctx context.Context) error {
 	definitions := map[string]string{"menu_level": "INTEGER NOT NULL DEFAULT 1", "status": "INTEGER NOT NULL DEFAULT 1", "super_only": "INTEGER NOT NULL DEFAULT 0"}
 	if c.driver == "sqlite" {
@@ -106,6 +114,7 @@ func (c *Core) ensureMenuSchema(ctx context.Context) error {
 	return nil
 }
 
+// ensureProductGoodsSchema 为商品表补齐 subject_id 字段（用于主体配置关联）。
 func (c *Core) ensureProductGoodsSchema(ctx context.Context) error {
 	if c.driver == "sqlite" {
 		rows := make([]struct {
@@ -138,6 +147,7 @@ func (c *Core) ensureProductGoodsSchema(ctx context.Context) error {
 	return err
 }
 
+// ensureDefaultGroup 确保默认用户组（id=1）存在。
 func (c *Core) ensureDefaultGroup(ctx context.Context) error {
 	count, err := c.DB().GetCore().GetValue(ctx, `SELECT COUNT(*) FROM admin_group WHERE id = 1`)
 	if err != nil {
@@ -150,6 +160,7 @@ func (c *Core) ensureDefaultGroup(ctx context.Context) error {
 	return err
 }
 
+// defaultMenus 返回系统内置菜单/权限点种子数据。
 func defaultMenus() []menuSeed {
 	return []menuSeed{
 		{ID: 1, ParentID: 0, Name: "员工管理", Code: "admin.list", MenuLevel: 1, Status: 1, SuperOnly: 0, Sort: 1},
@@ -168,6 +179,7 @@ func defaultMenus() []menuSeed {
 	}
 }
 
+// ensureMenus 写入或更新内置菜单数据（用于新增权限点或修正排序/名称）。
 func (c *Core) ensureMenus(ctx context.Context) error {
 	for _, item := range defaultMenus() {
 		exists, err := c.DB().GetCore().GetValue(ctx, `SELECT COUNT(*) FROM admin_menu WHERE id = ?`, item.ID)
@@ -187,6 +199,7 @@ func (c *Core) ensureMenus(ctx context.Context) error {
 	return nil
 }
 
+// ensureDefaultGroupAuth 为默认用户组补齐初始授权菜单。
 func (c *Core) ensureDefaultGroupAuth(ctx context.Context) error {
 	for _, menuID := range []int64{1, 2, 3, 4, 5, 7, 8, 10, 11, 12, 13} {
 		exists, err := c.DB().GetCore().GetValue(ctx, `SELECT COUNT(*) FROM admin_group_menu WHERE group_id = 1 AND menu_id = ?`, menuID)
@@ -203,6 +216,7 @@ func (c *Core) ensureDefaultGroupAuth(ctx context.Context) error {
 	return nil
 }
 
+// ensureSupplierPlatformTypes 初始化第三方平台类型字典（如不同供应商平台分类）。
 func (c *Core) ensureSupplierPlatformTypes(ctx context.Context) error {
 	for _, item := range supplierprovider.DefaultTypes() {
 		exists, err := c.DB().GetCore().GetValue(ctx, `SELECT COUNT(*) FROM supplier_platform_type WHERE id = ?`, item.ID)
@@ -222,6 +236,7 @@ func (c *Core) ensureSupplierPlatformTypes(ctx context.Context) error {
 	return nil
 }
 
+// ensureSMSConfig 初始化短信配置默认项（写入 system_config 表）。
 func (c *Core) ensureSMSConfig(ctx context.Context) error {
 	defaults := map[string]string{"sms_access_key": "", "sms_access_key_secret": "", "sms_sign_name": "玖权益", "sms_template_code": "SMS_000001", "sms_expire_minutes": "30", "sms_interval_minutes": "1"}
 	for key, value := range defaults {
@@ -239,6 +254,7 @@ func (c *Core) ensureSMSConfig(ctx context.Context) error {
 	return nil
 }
 
+// ensureSuperAdmin 确保超级管理员账号存在（group_id=0）。
 func (c *Core) ensureSuperAdmin(ctx context.Context) error {
 	username := c.cfg.Bootstrap.SuperAdminUsername
 	if username == "" {
@@ -264,6 +280,7 @@ INSERT INTO admin_user (
 	return err
 }
 
+// bcryptGenerate 生成 bcrypt 密码哈希（用于创建用户/测试用户等）。
 func bcryptGenerate(password string) (string, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {

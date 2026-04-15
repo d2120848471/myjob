@@ -32,8 +32,10 @@ var purchaseLimitPeriodTypeItems = []entity.PurchaseLimitEnumItem{
 var purchaseLimitTypeTitles = enumTitleMap(purchaseLimitTypeItems)
 var purchaseLimitPeriodTypeTitles = enumTitleMap(purchaseLimitPeriodTypeItems)
 
+// PurchaseLimitLogic 提供商品购买数量限制策略管理相关业务能力。
 type PurchaseLimitLogic struct{ core *app.Core }
 
+// List 分页查询购买数量限制策略列表，支持按名称关键字筛选。
 func (l *PurchaseLimitLogic) List(ctx context.Context, req *adminapi.PurchaseLimitStrategyListReq) (*adminapi.PurchaseLimitStrategyListRes, error) {
 	page, pageSize := app.ParsePagination(req.Page, req.PageSize)
 	keyword := strings.TrimSpace(req.Keyword)
@@ -98,6 +100,7 @@ LIMIT ? OFFSET ?
 	}, nil
 }
 
+// Add 新增购买数量限制策略，并写入操作日志。
 func (l *PurchaseLimitLogic) Add(ctx context.Context, req *adminapi.PurchaseLimitStrategyCreateReq, actor entity.AdminUser, ip string) (*adminapi.PurchaseLimitStrategyCreateRes, error) {
 	normalized, err := normalizePurchaseLimitInput(req.Name, req.LimitType, req.PeriodType, req.Period, req.LimitNums, req.LimitTimes)
 	if err != nil {
@@ -118,6 +121,7 @@ INSERT INTO product_purchase_limit_strategy (
 	return &adminapi.PurchaseLimitStrategyCreateRes{ID: id}, nil
 }
 
+// Edit 编辑购买数量限制策略，并写入操作日志。
 func (l *PurchaseLimitLogic) Edit(ctx context.Context, req *adminapi.PurchaseLimitStrategyUpdateReq, actor entity.AdminUser, ip string) (*adminapi.PurchaseLimitStrategyUpdateRes, error) {
 	if _, err := l.getStrategy(ctx, req.ID); err != nil {
 		return nil, apiErr(consts.CodeBadRequest, "商品购买数量限制策略不存在")
@@ -138,6 +142,7 @@ WHERE id = ?
 	return &adminapi.PurchaseLimitStrategyUpdateRes{}, nil
 }
 
+// Delete 删除购买数量限制策略（要求未被商品引用），并写入操作日志。
 func (l *PurchaseLimitLogic) Delete(ctx context.Context, req *adminapi.PurchaseLimitStrategyDeleteReq, actor entity.AdminUser, ip string) (*adminapi.PurchaseLimitStrategyDeleteRes, error) {
 	strategy, err := l.getStrategy(ctx, req.ID)
 	if err != nil {
@@ -157,6 +162,7 @@ func (l *PurchaseLimitLogic) Delete(ctx context.Context, req *adminapi.PurchaseL
 	return &adminapi.PurchaseLimitStrategyDeleteRes{}, nil
 }
 
+// Status 切换购买数量限制策略启用/禁用状态，并写入操作日志。
 func (l *PurchaseLimitLogic) Status(ctx context.Context, req *adminapi.PurchaseLimitStrategyStatusReq, actor entity.AdminUser, ip string) (*adminapi.PurchaseLimitStrategyStatusRes, error) {
 	strategy, err := l.getStrategy(ctx, req.ID)
 	if err != nil {
@@ -176,6 +182,7 @@ WHERE id = ?
 	return &adminapi.PurchaseLimitStrategyStatusRes{}, nil
 }
 
+// Enums 返回购买数量限制策略相关枚举（限制类型、周期类型）。
 func (l *PurchaseLimitLogic) Enums(ctx context.Context, _ *adminapi.PurchaseLimitStrategyEnumsReq) (*adminapi.PurchaseLimitStrategyEnumsRes, error) {
 	limitTypes := append([]entity.PurchaseLimitEnumItem(nil), purchaseLimitTypeItems...)
 	periodTypes := append([]entity.PurchaseLimitEnumItem(nil), purchaseLimitPeriodTypeItems...)

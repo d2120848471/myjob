@@ -10,6 +10,9 @@ import (
 	"github.com/gogf/gf/v2/net/ghttp"
 )
 
+// JSONResponse 是统一的 HTTP JSON 响应包装。
+//
+// 约定结构：{code, message, data}，便于前端统一处理。
 type JSONResponse struct {
 	Code    int    `json:"code" dc:"业务状态码"`
 	Message string `json:"message" dc:"业务消息"`
@@ -22,13 +25,18 @@ var streamContentTypes = map[string]struct{}{
 	"multipart/x-mixed-replace": {},
 }
 
+// Response 在 handler 执行后统一将结果包装为 JSONResponse。
+//
+// 若 handler 已自行写入响应，或响应为流式类型（如 SSE），则跳过包装。
 func Response(r *ghttp.Request) {
 	r.Middleware.Next()
 
+	// handler 已经写入响应（例如自定义输出/文件下载），则不再二次包装 JSON。
 	if r.Response.BufferLength() > 0 || r.Response.BytesWritten() > 0 {
 		return
 	}
 
+	// SSE/流式等场景不应强制包成 JSON，否则会破坏上游协议。
 	mediaType, _, _ := mime.ParseMediaType(r.Response.Header().Get("Content-Type"))
 	if _, ok := streamContentTypes[mediaType]; ok {
 		return
@@ -42,6 +50,7 @@ func Response(r *ghttp.Request) {
 	)
 
 	if err != nil {
+		// 业务错误：优先使用携带的 code；若没有则统一为内部错误。
 		if code == gcode.CodeNil {
 			code = consts.CodeInternalError
 		}
@@ -50,6 +59,7 @@ func Response(r *ghttp.Request) {
 			message = code.Message()
 		}
 	} else {
+		// 正常返回：统一 code=0，message 使用框架默认 OK 文案。
 		code = gcode.CodeOK
 		message = code.Message()
 	}

@@ -13,8 +13,10 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// UserLogic 提供员工账号管理相关业务能力。
 type UserLogic struct{ core *app.Core }
 
+// List 分页查询未删除的员工列表。
 func (l *UserLogic) List(ctx context.Context, req *adminapi.UserListReq) (*adminapi.UserListRes, error) {
 	page, pageSize := app.ParsePagination(req.Page, req.PageSize)
 	totalVal, err := l.core.DB().GetCore().GetValue(ctx, `SELECT COUNT(*) FROM admin_user WHERE is_deleted = 0`)
@@ -36,6 +38,7 @@ LIMIT ? OFFSET ?
 	return &adminapi.UserListRes{List: items, Pagination: adminapi.PaginationRes{Page: page, PageSize: pageSize, Total: totalVal.Int()}}, nil
 }
 
+// Trash 分页查询已删除的员工列表（回收站）。
 func (l *UserLogic) Trash(ctx context.Context, req *adminapi.UserTrashReq) (*adminapi.UserTrashRes, error) {
 	page, pageSize := app.ParsePagination(req.Page, req.PageSize)
 	totalVal, err := l.core.DB().GetCore().GetValue(ctx, `SELECT COUNT(*) FROM admin_user WHERE is_deleted = 1`)
@@ -57,6 +60,7 @@ LIMIT ? OFFSET ?
 	return &adminapi.UserTrashRes{List: items, Pagination: adminapi.PaginationRes{Page: page, PageSize: pageSize, Total: totalVal.Int()}}, nil
 }
 
+// Add 新增员工账号，并写入操作日志。
 func (l *UserLogic) Add(ctx context.Context, req *adminapi.UserCreateReq, actor app.AdminUser, ip string) (*adminapi.UserCreateRes, error) {
 	req.Username = strings.TrimSpace(req.Username)
 	req.RealName = strings.TrimSpace(req.RealName)
@@ -92,6 +96,7 @@ func (l *UserLogic) Add(ctx context.Context, req *adminapi.UserCreateReq, actor 
 	return &adminapi.UserCreateRes{ID: id}, nil
 }
 
+// Edit 编辑员工信息；当密码或用户组变更时会提升 token_version 并踢下线历史会话。
 func (l *UserLogic) Edit(ctx context.Context, req *adminapi.UserUpdateReq, actor app.AdminUser, ip string) (*adminapi.UserUpdateRes, error) {
 	user, err := l.core.GetUserByID(ctx, req.ID)
 	if err != nil {
@@ -129,6 +134,7 @@ func (l *UserLogic) Edit(ctx context.Context, req *adminapi.UserUpdateReq, actor
 	}); err != nil {
 		return nil, apiErr(consts.CodeInternalError, "员工编辑失败")
 	}
+	// token_version 变化表示旧 token 全量失效，需要删除该用户的所有 session。
 	if newVersion != user.TokenVersion {
 		_ = l.core.RemoveAllUserSessions(ctx, req.ID)
 	}
@@ -136,6 +142,7 @@ func (l *UserLogic) Edit(ctx context.Context, req *adminapi.UserUpdateReq, actor
 	return &adminapi.UserUpdateRes{}, nil
 }
 
+// Delete 软删除员工（写入删除后缀用户名以规避唯一索引），并踢下线其所有会话。
 func (l *UserLogic) Delete(ctx context.Context, req *adminapi.UserDeleteReq, actor app.AdminUser, ip string) (*adminapi.UserDeleteRes, error) {
 	user, err := l.core.GetUserByID(ctx, req.ID)
 	if err != nil {
@@ -153,6 +160,7 @@ func (l *UserLogic) Delete(ctx context.Context, req *adminapi.UserDeleteReq, act
 	return &adminapi.UserDeleteRes{}, nil
 }
 
+// Restore 将员工从回收站恢复，并踢下线其所有会话（避免旧 token 继续使用）。
 func (l *UserLogic) Restore(ctx context.Context, req *adminapi.UserRestoreReq, actor app.AdminUser, ip string) (*adminapi.UserRestoreRes, error) {
 	user, err := l.core.GetUserByID(ctx, req.ID)
 	if err != nil {
@@ -173,6 +181,7 @@ func (l *UserLogic) Restore(ctx context.Context, req *adminapi.UserRestoreReq, a
 	return &adminapi.UserRestoreRes{}, nil
 }
 
+// Status 切换员工启用/禁用状态；禁用时会提升 token_version 并踢下线该用户所有会话。
 func (l *UserLogic) Status(ctx context.Context, req *adminapi.UserStatusReq, actor app.AdminUser, ip string) (*adminapi.UserStatusRes, error) {
 	user, err := l.core.GetUserByID(ctx, req.ID)
 	if err != nil {
@@ -185,6 +194,7 @@ func (l *UserLogic) Status(ctx context.Context, req *adminapi.UserStatusReq, act
 		return nil, apiErr(consts.CodeBadRequest, "状态错误")
 	}
 	if req.Status == 0 {
+		// 禁用时提升 token_version，确保旧 token 立即失效。
 		_, err = l.core.DB().Exec(ctx, `UPDATE admin_user SET status = 0, token_version = token_version + 1, updated_at = ? WHERE id = ?`, l.core.Now(), req.ID)
 		_ = l.core.RemoveAllUserSessions(ctx, req.ID)
 	} else {
@@ -197,6 +207,7 @@ func (l *UserLogic) Status(ctx context.Context, req *adminapi.UserStatusReq, act
 	return &adminapi.UserStatusRes{}, nil
 }
 
+// Notify 设置员工余额变动通知开关，并写入操作日志。
 func (l *UserLogic) Notify(ctx context.Context, req *adminapi.UserNotifyReq, actor app.AdminUser, ip string) (*adminapi.UserNotifyRes, error) {
 	if req.BalanceNotify != 0 && req.BalanceNotify != 1 {
 		return nil, apiErr(consts.CodeBadRequest, "余额通知值错误")
@@ -208,6 +219,7 @@ func (l *UserLogic) Notify(ctx context.Context, req *adminapi.UserNotifyReq, act
 	return &adminapi.UserNotifyRes{}, nil
 }
 
+// SetBusiness 批量设置员工为商务角色。
 func (l *UserLogic) SetBusiness(ctx context.Context, req *adminapi.UserBusinessAssignReq, actor app.AdminUser, ip string) (*adminapi.UserBusinessAssignRes, error) {
 	if err := l.handleBusiness(ctx, req.IDs, actor, ip, 1); err != nil {
 		return nil, err
@@ -215,6 +227,7 @@ func (l *UserLogic) SetBusiness(ctx context.Context, req *adminapi.UserBusinessA
 	return &adminapi.UserBusinessAssignRes{}, nil
 }
 
+// CancelBusiness 批量取消员工商务角色。
 func (l *UserLogic) CancelBusiness(ctx context.Context, req *adminapi.UserBusinessCancelReq, actor app.AdminUser, ip string) (*adminapi.UserBusinessCancelRes, error) {
 	if err := l.handleBusiness(ctx, req.IDs, actor, ip, 0); err != nil {
 		return nil, err

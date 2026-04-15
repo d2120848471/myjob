@@ -13,8 +13,10 @@ import (
 	"github.com/gogf/gf/v2/database/gdb"
 )
 
+// GroupLogic 提供用户组与授权管理相关业务能力。
 type GroupLogic struct{ core *app.Core }
 
+// List 分页查询用户组列表。
 func (l *GroupLogic) List(ctx context.Context, req *adminapi.GroupListReq) (*adminapi.GroupListRes, error) {
 	page, pageSize := app.ParsePagination(req.Page, req.PageSize)
 	totalVal, err := l.core.DB().GetCore().GetValue(ctx, `SELECT COUNT(*) FROM admin_group`)
@@ -28,6 +30,7 @@ func (l *GroupLogic) List(ctx context.Context, req *adminapi.GroupListReq) (*adm
 	return &adminapi.GroupListRes{List: items, Pagination: adminapi.PaginationRes{Page: page, PageSize: pageSize, Total: totalVal.Int()}}, nil
 }
 
+// Add 新增用户组，并写入操作日志。
 func (l *GroupLogic) Add(ctx context.Context, req *adminapi.GroupCreateReq, actor app.AdminUser, ip string) (*adminapi.GroupCreateRes, error) {
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" {
@@ -49,6 +52,7 @@ func (l *GroupLogic) Add(ctx context.Context, req *adminapi.GroupCreateReq, acto
 	return &adminapi.GroupCreateRes{ID: id}, nil
 }
 
+// Edit 编辑用户组信息，并写入操作日志。
 func (l *GroupLogic) Edit(ctx context.Context, req *adminapi.GroupUpdateReq, actor app.AdminUser, ip string) (*adminapi.GroupUpdateRes, error) {
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" {
@@ -68,6 +72,7 @@ func (l *GroupLogic) Edit(ctx context.Context, req *adminapi.GroupUpdateReq, act
 	return &adminapi.GroupUpdateRes{}, nil
 }
 
+// Delete 删除用户组（需保证组内无员工），并清理授权与权限缓存。
 func (l *GroupLogic) Delete(ctx context.Context, req *adminapi.GroupDeleteReq, actor app.AdminUser, ip string) (*adminapi.GroupDeleteRes, error) {
 	userCount, err := l.core.DB().GetCore().GetValue(ctx, `SELECT COUNT(*) FROM admin_user WHERE group_id = ?`, req.ID)
 	if err != nil {
@@ -76,6 +81,7 @@ func (l *GroupLogic) Delete(ctx context.Context, req *adminapi.GroupDeleteReq, a
 	if userCount.Int() > 0 {
 		return nil, apiErr(consts.CodeConflict, fmt.Sprintf("该用户组下还有 %d 名员工，请先转移", userCount.Int()))
 	}
+	// 删除用户组与其授权关系需在同一事务中完成，避免出现孤儿授权数据。
 	if err = l.core.DB().Transaction(ctx, func(ctx context.Context, tx gdb.TX) error {
 		if _, txErr := tx.Exec(`DELETE FROM admin_group_menu WHERE group_id = ?`, req.ID); txErr != nil {
 			return txErr
@@ -92,6 +98,7 @@ func (l *GroupLogic) Delete(ctx context.Context, req *adminapi.GroupDeleteReq, a
 	return &adminapi.GroupDeleteRes{}, nil
 }
 
+// Status 切换用户组启用/禁用状态，并清理权限缓存。
 func (l *GroupLogic) Status(ctx context.Context, req *adminapi.GroupStatusReq, actor app.AdminUser, ip string) (*adminapi.GroupStatusRes, error) {
 	if req.Status != 0 && req.Status != 1 {
 		return nil, apiErr(consts.CodeBadRequest, "状态错误")
@@ -104,6 +111,7 @@ func (l *GroupLogic) Status(ctx context.Context, req *adminapi.GroupStatusReq, a
 	return &adminapi.GroupStatusRes{}, nil
 }
 
+// AuthGet 获取用户组当前已授权的菜单 id 列表（过滤超级管理员专属权限点）。
 func (l *GroupLogic) AuthGet(ctx context.Context, req *adminapi.GroupPermissionsGetReq) (*adminapi.GroupPermissionsGetRes, error) {
 	arr, err := l.core.DB().GetCore().GetArray(ctx, `SELECT gm.menu_id FROM admin_group_menu gm JOIN admin_menu m ON m.id = gm.menu_id WHERE gm.group_id = ? AND m.status = 1 AND m.super_only = 0 ORDER BY gm.menu_id ASC`, req.ID)
 	if err != nil {
@@ -116,8 +124,10 @@ func (l *GroupLogic) AuthGet(ctx context.Context, req *adminapi.GroupPermissions
 	return &adminapi.GroupPermissionsGetRes{MenuIDs: ids}, nil
 }
 
+// AuthSave 保存用户组授权菜单，并清理权限缓存。
 func (l *GroupLogic) AuthSave(ctx context.Context, req *adminapi.GroupPermissionsSaveReq, actor app.AdminUser, ip string) (*adminapi.GroupPermissionsSaveRes, error) {
 	allowed := make([]int64, 0, len(req.MenuIDs))
+	// 删除旧授权并写入新授权需同事务完成，避免中间态导致权限瞬时异常。
 	if err := l.core.DB().Transaction(ctx, func(ctx context.Context, tx gdb.TX) error {
 		if _, txErr := tx.Exec(`DELETE FROM admin_group_menu WHERE group_id = ?`, req.ID); txErr != nil {
 			return txErr
@@ -151,6 +161,7 @@ func (l *GroupLogic) AuthSave(ctx context.Context, req *adminapi.GroupPermission
 	return &adminapi.GroupPermissionsSaveRes{}, nil
 }
 
+// MenuTree 返回可授权的菜单树（过滤超级管理员专属权限点）。
 func (l *GroupLogic) MenuTree(ctx context.Context, _ *adminapi.MenuTreeReq) (*adminapi.MenuTreeRes, error) {
 	items := make([]app.AdminMenu, 0)
 	if err := l.core.DB().GetCore().GetScan(ctx, &items, `SELECT id, parent_id, name, code, menu_type, menu_level, status, super_only, sort FROM admin_menu WHERE status = 1 AND super_only = 0 ORDER BY sort ASC, id ASC`); err != nil {

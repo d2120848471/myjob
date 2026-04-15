@@ -5,6 +5,7 @@ import (
 	"strings"
 )
 
+// ResolveProvider 根据平台类型或域名/名称信息推断 provider_code 与展示名称。
 func ResolveProvider(typeID int, domain, backupDomain, name string) (string, string, error) {
 	switch typeID {
 	case 6:

@@ -7,6 +7,7 @@ import (
 	modelruntime "myjob/internal/model/runtime"
 )
 
+// Writer 将操作审计事件写入存储（支持同步/异步缓冲两种模式）。
 type Writer struct {
 	syncMode bool
 	insert   func(context.Context, modelruntime.OperationEvent) error
@@ -15,6 +16,10 @@ type Writer struct {
 	wg       sync.WaitGroup
 }
 
+// NewWriter 创建一个审计写入器。
+//
+// - syncMode=true：Write 直接同步落库
+// - syncMode=false：Write 写入缓冲队列，由后台协程落库
 func NewWriter(syncMode bool, bufferSize int, insert func(context.Context, modelruntime.OperationEvent) error) *Writer {
 	if bufferSize <= 0 {
 		bufferSize = 8
@@ -27,6 +32,7 @@ func NewWriter(syncMode bool, bufferSize int, insert func(context.Context, model
 	}
 }
 
+// Start 启动异步落库协程（syncMode=true 时为空操作）。
 func (w *Writer) Start() {
 	if w.syncMode {
 		return
@@ -46,6 +52,7 @@ func (w *Writer) Start() {
 	}()
 }
 
+// Write 写入一条操作审计事件。
 func (w *Writer) Write(ctx context.Context, evt modelruntime.OperationEvent) {
 	if w.syncMode {
 		_ = w.insert(ctx, evt)
@@ -59,6 +66,7 @@ func (w *Writer) Write(ctx context.Context, evt modelruntime.OperationEvent) {
 	}
 }
 
+// Close 停止异步写入并等待后台协程退出。
 func (w *Writer) Close() {
 	close(w.stop)
 	w.wg.Wait()

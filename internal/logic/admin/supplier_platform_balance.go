@@ -21,6 +21,7 @@ import (
 	"github.com/google/uuid"
 )
 
+// RefreshBalance 调用第三方平台适配器刷新余额，并落库记录请求/响应快照与结果状态。
 func (l *SupplierPlatformLogic) RefreshBalance(ctx context.Context, req *adminapi.SupplierPlatformRefreshBalanceReq, actor entity.AdminUser, ip string) (*adminapi.SupplierPlatformRefreshBalanceRes, error) {
 	account, err := l.getSupplierPlatform(ctx, req.ID)
 	if err != nil {
@@ -37,6 +38,7 @@ func (l *SupplierPlatformLogic) RefreshBalance(ctx context.Context, req *adminap
 	if err != nil {
 		return nil, apiErr(consts.CodeInternalError, "平台扩展配置解析失败")
 	}
+	// trace_id 用于串联一次刷新中候选地址的尝试过程及落库日志。
 	traceID := "spb_" + strings.ReplaceAll(uuid.NewString(), "-", "")
 	now := l.core.Now()
 	result := refreshExecutionResult{
@@ -147,6 +149,7 @@ func (l *SupplierPlatformLogic) RefreshBalance(ctx context.Context, req *adminap
 	}, nil
 }
 
+// shouldRetrySupplierCandidate 判断当前候选地址是否应继续尝试下一个候选（例如命中 HTML 首页而非 JSON API）。
 func shouldRetrySupplierCandidate(request *http.Request, response *http.Response, body []byte, parseErr error) bool {
 	if parseErr == nil || request == nil || request.URL == nil || response == nil {
 		return false
@@ -161,6 +164,7 @@ func shouldRetrySupplierCandidate(request *http.Request, response *http.Response
 	return strings.HasPrefix(trimmedBody, "<!doctype html") || strings.HasPrefix(trimmedBody, "<html")
 }
 
+// httpClientForProvider 根据 provider 特性返回定制的 HTTP client（避免因压缩/传输差异导致解析失败）。
 func (l *SupplierPlatformLogic) httpClientForProvider(providerCode string) *http.Client {
 	if providerCode != "kakayun" {
 		return l.httpClient

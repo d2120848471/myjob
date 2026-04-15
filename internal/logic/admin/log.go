@@ -9,8 +9,10 @@ import (
 	"myjob/internal/consts"
 )
 
+// AuditLogLogic 提供操作日志与登录日志查询相关业务能力。
 type AuditLogLogic struct{ core *app.Core }
 
+// OperationList 分页查询操作日志，支持按管理员/关键字/时间范围筛选。
 func (l *AuditLogLogic) OperationList(ctx context.Context, req *adminapi.OperationLogListReq) (*adminapi.OperationLogListRes, error) {
 	page, pageSize := app.ParsePagination(req.Page, req.PageSize)
 	args := []any{}
@@ -39,6 +41,7 @@ func (l *AuditLogLogic) OperationList(ctx context.Context, req *adminapi.Operati
 	return &adminapi.OperationLogListRes{List: items, Pagination: adminapi.PaginationRes{Page: page, PageSize: pageSize, Total: total.Int()}}, nil
 }
 
+// LoginList 分页查询登录日志，支持按管理员/时间范围筛选。
 func (l *AuditLogLogic) LoginList(ctx context.Context, req *adminapi.LoginLogListReq) (*adminapi.LoginLogListRes, error) {
 	page, pageSize := app.ParsePagination(req.Page, req.PageSize)
 	args := []any{}

@@ -13,6 +13,7 @@ func apiErr(code gcode.Code, message string) error {
 	return gerror.NewCode(code, message)
 }
 
+// Services 聚合后台各业务模块的 service 实现（由 logic 层提供具体实现）。
 type Services struct {
 	Auth             service.AuthService
 	User             service.UserService
@@ -29,6 +30,7 @@ type Services struct {
 	AuditLog         service.AuditLogService
 }
 
+// NewServices 基于 core 构建一组后台服务实现，供 controller 注入使用。
 func NewServices(core *app.Core) *Services {
 	return &Services{
 		Auth:             &AuthLogic{core: core},
