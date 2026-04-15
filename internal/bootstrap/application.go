@@ -22,13 +22,16 @@ import (
 	"github.com/gogf/gf/v2/net/goai"
 )
 
+// SMSConfig 是运行态短信配置快照的别名，便于测试与对外透出。
 type SMSConfig = modelruntime.SMSConfig
 
+// Application 表示 MyJob 后台应用实例，持有运行时 Core 与 HTTP Server，并提供测试辅助能力。
 type Application struct {
 	core   *app.Core
 	server *ghttp.Server
 }
 
+// NewApplicationFromConfig 基于显式配置创建应用实例（不会自动启动 HTTP Server）。
 func NewApplicationFromConfig(cfg modelconfig.Config) (*Application, error) {
 	core, err := app.NewCoreFromConfig(cfg)
 	if err != nil {
@@ -42,6 +45,7 @@ func NewApplicationFromConfig(cfg modelconfig.Config) (*Application, error) {
 	return appInstance, nil
 }
 
+// NewApplicationFromEnv 基于环境变量配置创建应用实例（不会自动启动 HTTP Server）。
 func NewApplicationFromEnv() (*Application, error) {
 	core, err := app.NewCoreFromEnv()
 	if err != nil {
@@ -55,6 +59,7 @@ func NewApplicationFromEnv() (*Application, error) {
 	return appInstance, nil
 }
 
+// NewTestApplication 创建用于集成测试的应用实例：使用测试 Core，绑定随机端口并启动 HTTP Server。
 func NewTestApplication() (*Application, error) {
 	core, err := app.NewTestCore()
 	if err != nil {

@@ -6,7 +6,7 @@
 
 - 协议：`api/auth.go`
 - controller：`internal/controller/admin/auth.go`、`internal/controller/admin/session.go`
-- service：`internal/service/interfaces.go` 中的 `AuthService`
+- service：`AuthService`（`internal/service/auth.go`）
 - logic：`internal/logic/admin/auth.go`
 - 路由前缀：`/api/admin/auth/*`
 - 主要能力：
@@ -64,7 +64,7 @@
 - 协议：`api/supplier_platform.go`
 - controller：`internal/controller/admin/supplier_platform.go`
 - service：`SupplierPlatformService`
-- logic：`internal/logic/admin/supplier_platform.go`、`internal/logic/admin/supplier_platform_balance.go`
+- logic：`internal/logic/admin/supplier_platform*.go`、`internal/logic/admin/supplier_platform_balance.go`
 - provider 适配层：`internal/library/supplierplatform/provider/*`
 - 路由前缀：`/api/admin/supplier-platform-types`、`/api/admin/supplier-platforms*`
 - 主要能力：
@@ -173,6 +173,15 @@
   - 不实现老站的“清空策略数据”
   - 不接真实购买前校验链
 
+### 商品管理
+
+- 协议：`api/product_goods.go`
+- controller：`internal/controller/admin/product_goods.go`
+- service：`ProductGoodsService`
+- logic：`internal/logic/admin/product_goods*.go`
+- 路由前缀：`/api/admin/products*`
+- 权限码：`product.goods`
+
 ### 短信配置
 
 - 协议：`api/settings.go`
@@ -222,12 +231,14 @@
 对外协议目录，当前是扁平文件结构：
 
 - `auth.go`
-- `common.go`
 - `brand.go`
+- `common.go`
 - `group.go`
 - `industry.go`
 - `log.go`
+- `product_goods.go`
 - `product_template.go`
+- `purchase_limit.go`
 - `settings.go`
 - `supplier_platform.go`
 - `subject.go`
@@ -257,13 +268,19 @@ HTTP 协议适配层，不直接写业务规则。
 - `auth.go`
 - `user.go`
 - `group.go`
-- `supplier_platform.go`
-- `supplier_platform_balance.go`
 - `subject.go`
 - `brand.go`
 - `industry.go`
+- `product_common.go`
+- `product_goods*.go`
 - `product_template.go`
+- `purchase_limit.go`
+- `supplier_platform*.go`
+- `supplier_platform_balance.go`
+- `money.go`
+- `db_record_time.go`
 - `config.go`
+- `system_config.go`
 - `log.go`
 
 ### `internal/app`
@@ -324,6 +341,8 @@ HTTP 协议适配层，不直接写业务规则。
 | 行业管理 | `/api/admin/industries*` | `product.industry` |
 | 商品模板管理 | `/api/admin/product-templates*` | `product.template` |
 | 商品购买数量限制策略 | `/api/admin/purchase-limit-strategies*` | `product.purchase_limit` |
+| 商品管理 | `/api/admin/products*` | `product.goods` |
+| 第三方对接 | `/api/admin/supplier-platform-types`、`/api/admin/supplier-platforms*` | `supplier.index` |
 | 短信配置 | `/api/admin/settings/sms` | super-only |
 | 系统参数配置 | `/api/admin/settings/system` | super-only |
 | 操作日志 | `/api/admin/logs/operations` | `admin.action` |

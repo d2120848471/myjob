@@ -1,8 +1,11 @@
 package adminlogic
 
 import (
+	"context"
 	"fmt"
 	"strings"
+
+	"github.com/gogf/gf/v2/database/gdb"
 )
 
 func normalizeSortAction(action string) (string, error) {
@@ -82,4 +85,29 @@ func sqlPlaceholders(count int) string {
 		return ""
 	}
 	return strings.TrimSuffix(strings.Repeat("?,", count), ",")
+}
+
+func countActiveGoodsReference(ctx context.Context, db gdb.DB, column string, id int64) (int, error) {
+	value, err := db.GetCore().GetValue(ctx, `SELECT COUNT(*) FROM product_goods WHERE is_deleted = 0 AND `+column+` = ?`, id)
+	if err != nil {
+		return 0, err
+	}
+	return value.Int(), nil
+}
+
+func hasActiveGoodsReferences(ctx context.Context, db gdb.DB, column string, ids []int64) (bool, error) {
+	if len(ids) == 0 {
+		return false, nil
+	}
+	rows := make([]struct {
+		ID int64 `db:"id"`
+	}, 0)
+	args := make([]any, 0, len(ids))
+	for _, id := range ids {
+		args = append(args, id)
+	}
+	if err := db.GetCore().GetScan(ctx, &rows, `SELECT DISTINCT `+column+` AS id FROM product_goods WHERE is_deleted = 0 AND `+column+` IN (`+sqlPlaceholders(len(ids))+`) LIMIT 1`, args...); err != nil {
+		return false, err
+	}
+	return len(rows) > 0, nil
 }
