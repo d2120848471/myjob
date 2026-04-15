@@ -8,33 +8,12 @@ import (
 	"github.com/gogf/gf/v2/database/gdb"
 )
 
-func nullableInt64(value sql.NullInt64) int64 {
-	if !value.Valid {
-		return 0
-	}
-	return value.Int64
-}
-
 func nullableInt64Pointer(value sql.NullInt64) *int64 {
 	if !value.Valid {
 		return nil
 	}
 	id := value.Int64
 	return &id
-}
-
-func nullableString(value sql.NullString) string {
-	if !value.Valid {
-		return ""
-	}
-	return value.String
-}
-
-func nullableMoney(value sql.NullString) string {
-	if !value.Valid {
-		return ""
-	}
-	return formatMoney(value.String)
 }
 
 func productGoodsRecordString(row gdb.Record, key string) string {

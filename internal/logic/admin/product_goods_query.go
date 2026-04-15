@@ -9,8 +9,6 @@ import (
 	"myjob/internal/app"
 	"myjob/internal/consts"
 	"myjob/internal/model/entity"
-
-	"github.com/gogf/gf/v2/database/gdb"
 )
 
 // List 分页查询商品列表，支持品牌/类型/含税/状态/关键字等筛选条件。
@@ -70,13 +68,12 @@ func (l *ProductGoodsLogic) List(ctx context.Context, req *adminapi.ProductGoods
 		return nil, apiErr(consts.CodeInternalError, "商品列表查询失败")
 	}
 
-	rows := make([]gdb.Record, 0)
 	queryArgs := append(append([]any{}, args...), pageSize, (page-1)*pageSize)
-	if rows, err = l.core.DB().GetCore().GetAll(ctx, `
-SELECT
-    p.id,
-    p.goods_code,
-    p.brand_id,
+	rows, err := l.core.DB().GetCore().GetAll(ctx, `
+	SELECT
+	    p.id,
+	    p.goods_code,
+	    p.brand_id,
     COALESCE(b.name, '') AS brand_name,
     COALESCE(NULLIF(b.icon, ''), NULLIF(pb.icon, ''), NULLIF(gb.icon, ''), '') AS brand_icon,
     p.subject_id,
@@ -104,9 +101,10 @@ LEFT JOIN admin_subject sub ON sub.id = p.subject_id
 LEFT JOIN product_template t ON t.id = p.product_template_id
 LEFT JOIN product_purchase_limit_strategy s ON s.id = p.purchase_limit_strategy_id
 WHERE `+whereClause+`
-ORDER BY p.created_at DESC, p.id DESC
-LIMIT ? OFFSET ?
-`, queryArgs...); err != nil {
+	ORDER BY p.created_at DESC, p.id DESC
+	LIMIT ? OFFSET ?
+	`, queryArgs...)
+	if err != nil {
 		return nil, apiErr(consts.CodeInternalError, "商品列表查询失败")
 	}
 
