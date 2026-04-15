@@ -20,6 +20,7 @@ func TestOpenAPI_ProductGoodsPathsExposed(t *testing.T) {
 	require.Contains(t, res.body, "/api/admin/products")
 	require.Contains(t, res.body, "/api/admin/products/{id}")
 	require.Contains(t, res.body, "/api/admin/products/form-options")
+	require.Contains(t, res.body, "/api/admin/products/status")
 }
 
 func TestProductGoodsSeedsStayInSync(t *testing.T) {
@@ -605,6 +606,118 @@ func TestProductGoodsReferenceConflicts(t *testing.T) {
 	require.Equal(t, 0, disableReferencedStrategy.Code)
 }
 
+func TestProductGoodsStatusBatch(t *testing.T) {
+	h := newTestHarness(t)
+	token := h.loginAdmin(t)
+
+	_, _, leafA := h.createBrandPath(t, token, "影视权益", "爱奇艺会员", "爱奇艺周卡")
+	_, _, leafB := h.createBrandPath(t, token, "音频权益", "QQ音乐", "QQ音乐绿钻月卡")
+
+	firstID := h.createProductGoods(t, token, leafA, "爱奇艺周卡商品", 1)
+	secondID := h.createProductGoods(t, token, leafB, "QQ音乐月卡商品", 0)
+
+	singleStatusRes := h.patchJSON("/api/admin/products/status", map[string]any{
+		"ids":    []int64{firstID},
+		"status": 0,
+	}, token)
+	require.Equal(t, 0, singleStatusRes.Code)
+
+	var singleStatusData struct {
+		SuccessIDs   []int64 `json:"success_ids"`
+		SuccessCount int     `json:"success_count"`
+		FailedCount  int     `json:"failed_count"`
+		Failed       []struct {
+			ID     int64  `json:"id"`
+			Reason string `json:"reason"`
+		} `json:"failed"`
+	}
+	require.NoError(t, json.Unmarshal(singleStatusRes.Data, &singleStatusData))
+	require.Equal(t, []int64{firstID}, singleStatusData.SuccessIDs)
+	require.Equal(t, 1, singleStatusData.SuccessCount)
+	require.Equal(t, 0, singleStatusData.FailedCount)
+	require.Empty(t, singleStatusData.Failed)
+
+	firstDetail := h.getJSON("/api/admin/products/"+int64ToString(firstID), token)
+	require.Equal(t, 0, firstDetail.Code)
+	var firstDetailData struct {
+		Status int `json:"status"`
+	}
+	require.NoError(t, json.Unmarshal(firstDetail.Data, &firstDetailData))
+	require.Equal(t, 0, firstDetailData.Status)
+
+	batchStatusRes := h.patchJSON("/api/admin/products/status", map[string]any{
+		"ids":    []int64{firstID, secondID, secondID},
+		"status": 1,
+	}, token)
+	require.Equal(t, 0, batchStatusRes.Code)
+
+	var batchStatusData struct {
+		SuccessIDs   []int64 `json:"success_ids"`
+		SuccessCount int     `json:"success_count"`
+		FailedCount  int     `json:"failed_count"`
+	}
+	require.NoError(t, json.Unmarshal(batchStatusRes.Data, &batchStatusData))
+	require.Equal(t, []int64{firstID, secondID}, batchStatusData.SuccessIDs)
+	require.Equal(t, 2, batchStatusData.SuccessCount)
+	require.Equal(t, 0, batchStatusData.FailedCount)
+
+	listByStatusEnabled := h.getJSON("/api/admin/products?page=1&page_size=20&status=1", token)
+	require.Equal(t, 0, listByStatusEnabled.Code)
+	requireProductListCount(t, listByStatusEnabled.Data, 2)
+
+	partialStatusRes := h.patchJSON("/api/admin/products/status", map[string]any{
+		"ids":    []int64{firstID, 999999},
+		"status": 0,
+	}, token)
+	require.Equal(t, 0, partialStatusRes.Code)
+
+	var partialStatusData struct {
+		SuccessIDs   []int64 `json:"success_ids"`
+		SuccessCount int     `json:"success_count"`
+		FailedCount  int     `json:"failed_count"`
+		Failed       []struct {
+			ID     int64  `json:"id"`
+			Reason string `json:"reason"`
+		} `json:"failed"`
+	}
+	require.NoError(t, json.Unmarshal(partialStatusRes.Data, &partialStatusData))
+	require.Equal(t, []int64{firstID}, partialStatusData.SuccessIDs)
+	require.Equal(t, 1, partialStatusData.SuccessCount)
+	require.Equal(t, 1, partialStatusData.FailedCount)
+	require.Len(t, partialStatusData.Failed, 1)
+	require.Equal(t, int64(999999), partialStatusData.Failed[0].ID)
+	require.Equal(t, "商品不存在", partialStatusData.Failed[0].Reason)
+
+	listByStatusDisabled := h.getJSON("/api/admin/products?page=1&page_size=20&status=0", token)
+	require.Equal(t, 0, listByStatusDisabled.Code)
+	requireProductListCount(t, listByStatusDisabled.Data, 1)
+
+	emptyIDsRes := h.patchJSON("/api/admin/products/status", map[string]any{
+		"ids":    []int64{},
+		"status": 1,
+	}, token)
+	require.Equal(t, 400, emptyIDsRes.Code)
+
+	invalidIDRes := h.patchJSON("/api/admin/products/status", map[string]any{
+		"ids":    []int64{0},
+		"status": 1,
+	}, token)
+	require.Equal(t, 400, invalidIDRes.Code)
+
+	invalidStatusRes := h.patchJSON("/api/admin/products/status", map[string]any{
+		"ids":    []int64{firstID},
+		"status": 2,
+	}, token)
+	require.Equal(t, 400, invalidStatusRes.Code)
+
+	limitedToken := h.createLimitedUserToken(t, token, 0)
+	forbiddenRes := h.patchJSON("/api/admin/products/status", map[string]any{
+		"ids":    []int64{firstID},
+		"status": 1,
+	}, limitedToken)
+	require.Equal(t, 403, forbiddenRes.Code)
+}
+
 func requireProductListCount(t *testing.T, raw json.RawMessage, want int) {
 	t.Helper()
 	var payload struct {
@@ -690,6 +803,32 @@ func (h *testHarness) createPurchaseLimitStrategy(t *testing.T, token, name stri
 		}, token)
 		require.Equal(t, 0, statusRes.Code)
 	}
+	return data.ID
+}
+
+func (h *testHarness) createProductGoods(t *testing.T, token string, brandID int64, name string, status int) int64 {
+	t.Helper()
+	res := h.postJSON("/api/admin/products", map[string]any{
+		"brand_id":         brandID,
+		"name":             name,
+		"goods_type":       "card_secret",
+		"supply_type":      "channel",
+		"is_export":        1,
+		"is_douyin":        0,
+		"has_tax":          0,
+		"exception_notify": 1,
+		"balance_limit":    "0",
+		"min_purchase_qty": 1,
+		"max_purchase_qty": 1,
+		"status":           status,
+	}, token)
+	require.Equal(t, 0, res.Code)
+
+	var data struct {
+		ID int64 `json:"id"`
+	}
+	require.NoError(t, json.Unmarshal(res.Data, &data))
+	require.NotZero(t, data.ID)
 	return data.ID
 }
 

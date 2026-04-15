@@ -39,3 +39,7 @@ func (c *ProductGoodsController) Update(ctx context.Context, req *adminapi.Produ
 func (c *ProductGoodsController) Delete(ctx context.Context, req *adminapi.ProductGoodsDeleteReq) (res *adminapi.ProductGoodsDeleteRes, err error) {
 	return c.svc.Delete(ctx, req, authctx.MustUserFromCtx(ctx), clientIP(ctx))
 }
+
+func (c *ProductGoodsController) Status(ctx context.Context, req *adminapi.ProductGoodsStatusReq) (res *adminapi.ProductGoodsStatusRes, err error) {
+	return c.svc.Status(ctx, req, authctx.MustUserFromCtx(ctx), clientIP(ctx))
+}
