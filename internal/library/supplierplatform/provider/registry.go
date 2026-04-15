@@ -13,6 +13,7 @@ var defaultRegistry = map[string]BalanceProvider{
 	"xinghai":    xinghaiProvider{},
 }
 
+// Lookup 根据 provider_code 查找余额查询适配器实现。
 func Lookup(code string) (BalanceProvider, bool) {
 	provider, ok := defaultRegistry[strings.TrimSpace(strings.ToLower(code))]
 	return provider, ok

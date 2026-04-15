@@ -15,8 +15,10 @@ import (
 	"github.com/gogf/gf/v2/database/gdb"
 )
 
+// SMSConfigLogic 提供短信配置管理相关业务能力。
 type SMSConfigLogic struct{ core *app.Core }
 
+// Get 读取短信配置（敏感字段只返回脱敏值与是否已配置标记）。
 func (l *SMSConfigLogic) Get(ctx context.Context, _ *adminapi.SettingsSMSGetReq) (*adminapi.SettingsSMSGetRes, error) {
 	state, err := l.core.LoadSMSConfigState(ctx)
 	if err != nil {
@@ -38,6 +40,7 @@ func (l *SMSConfigLogic) Get(ctx context.Context, _ *adminapi.SettingsSMSGetReq)
 	return resp, nil
 }
 
+// Save 保存短信配置，并清理配置缓存后写入操作日志。
 func (l *SMSConfigLogic) Save(ctx context.Context, req *adminapi.SettingsSMSSaveReq, actor app.AdminUser, ip string) (*adminapi.SettingsSMSSaveRes, error) {
 	state, err := l.core.LoadSMSConfigState(ctx)
 	if err != nil {
@@ -50,6 +53,7 @@ func (l *SMSConfigLogic) Save(ctx context.Context, req *adminapi.SettingsSMSSave
 	if err = saveSMSConfig(ctx, l.core, finalCfg); err != nil {
 		return nil, apiErr(consts.CodeInternalError, "短信配置保存失败")
 	}
+	// 保存后删除缓存，确保下次读取走最新配置。
 	_, _ = l.core.Redis().GroupGeneric().Del(ctx, authlib.SMSConfigCacheKey())
 	l.core.WriteOperation(ctx, actor, logDesc, ip)
 	return &adminapi.SettingsSMSSaveRes{}, nil

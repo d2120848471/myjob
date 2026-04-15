@@ -36,8 +36,10 @@ var productTemplateValidateTypeTitles = func() map[int]string {
 	return items
 }()
 
+// ProductTemplateLogic 提供商品模板管理相关业务能力。
 type ProductTemplateLogic struct{ core *app.Core }
 
+// List 分页查询商品模板列表，支持按关键字/类型/共享状态筛选。
 func (l *ProductTemplateLogic) List(ctx context.Context, req *adminapi.ProductTemplateListReq) (*adminapi.ProductTemplateListRes, error) {
 	page, pageSize := app.ParsePagination(req.Page, req.PageSize)
 	keyword := strings.TrimSpace(req.Keyword)
@@ -114,6 +116,7 @@ LIMIT ? OFFSET ?
 	}, nil
 }
 
+// Add 新增商品模板，并写入操作日志。
 func (l *ProductTemplateLogic) Add(ctx context.Context, req *adminapi.ProductTemplateCreateReq, actor entity.AdminUser, ip string) (*adminapi.ProductTemplateCreateRes, error) {
 	normalized, err := normalizeProductTemplateInput(req.Title, req.Type, req.IsShared, req.AccountName, req.ValidateType)
 	if err != nil {
@@ -132,6 +135,7 @@ INSERT INTO product_template (
 	return &adminapi.ProductTemplateCreateRes{ID: id}, nil
 }
 
+// Edit 编辑商品模板，并写入操作日志。
 func (l *ProductTemplateLogic) Edit(ctx context.Context, req *adminapi.ProductTemplateUpdateReq, actor entity.AdminUser, ip string) (*adminapi.ProductTemplateUpdateRes, error) {
 	if _, err := l.getTemplate(ctx, req.ID); err != nil {
 		return nil, apiErr(consts.CodeBadRequest, "商品模板不存在")
@@ -151,6 +155,7 @@ WHERE id = ?
 	return &adminapi.ProductTemplateUpdateRes{}, nil
 }
 
+// Delete 删除商品模板（要求未被商品引用），并写入操作日志。
 func (l *ProductTemplateLogic) Delete(ctx context.Context, req *adminapi.ProductTemplateDeleteReq, actor entity.AdminUser, ip string) (*adminapi.ProductTemplateDeleteRes, error) {
 	template, err := l.getTemplate(ctx, req.ID)
 	if err != nil {
@@ -170,6 +175,7 @@ func (l *ProductTemplateLogic) Delete(ctx context.Context, req *adminapi.Product
 	return &adminapi.ProductTemplateDeleteRes{}, nil
 }
 
+// BatchDelete 批量删除商品模板（要求均未被商品引用），并写入操作日志。
 func (l *ProductTemplateLogic) BatchDelete(ctx context.Context, req *adminapi.ProductTemplateBatchDeleteReq, actor entity.AdminUser, ip string) (*adminapi.ProductTemplateBatchDeleteRes, error) {
 	if len(req.IDs) == 0 {
 		return nil, apiErr(consts.CodeBadRequest, "请至少选择一个商品模板")
@@ -205,6 +211,7 @@ func (l *ProductTemplateLogic) BatchDelete(ctx context.Context, req *adminapi.Pr
 	return &adminapi.ProductTemplateBatchDeleteRes{}, nil
 }
 
+// ValidateTypes 返回商品模板“校验类型”枚举列表。
 func (l *ProductTemplateLogic) ValidateTypes(ctx context.Context, req *adminapi.ProductTemplateValidateTypeListReq) (*adminapi.ProductTemplateValidateTypeListRes, error) {
 	items := make([]entity.ProductTemplateValidateTypeItem, 0, len(productTemplateValidateTypes))
 	items = append(items, productTemplateValidateTypes...)

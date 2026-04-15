@@ -27,15 +27,20 @@ const (
 
 var smsCodeRegexp = regexp.MustCompile(`^\d{6}$`)
 
+// Sender 抽象短信发送能力，业务层只依赖该接口，不感知具体供应商实现。
 type Sender interface {
 	SendLoginCode(ctx context.Context, phone, code string, cfg modelruntime.SMSConfig) error
 }
 
+// MockSender 是用于本地/测试的短信发送器实现：不发送真实短信，仅记录验证码。
 type MockSender struct {
 	mu    sync.RWMutex
 	codes map[string]string
 }
 
+// NewSender 根据 provider 创建短信发送器实现。
+//
+// 不支持的 provider 会回退到 mock，避免运行时直接崩溃。
 func NewSender(provider string) Sender {
 	// Provider 选择统一收口在这里，业务层只依赖 Sender 抽象，不感知具体供应商。
 	switch strings.ToLower(strings.TrimSpace(provider)) {
@@ -48,10 +53,12 @@ func NewSender(provider string) Sender {
 	}
 }
 
+// NewMockSender 创建一个 mock 短信发送器。
 func NewMockSender() *MockSender {
 	return &MockSender{codes: make(map[string]string)}
 }
 
+// SendLoginCode 记录登录验证码（mock 实现，不产生外部请求）。
 func (m *MockSender) SendLoginCode(_ context.Context, phone, code string, _ modelruntime.SMSConfig) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -59,6 +66,7 @@ func (m *MockSender) SendLoginCode(_ context.Context, phone, code string, _ mode
 	return nil
 }
 
+// LastCode 返回 mock 发送器给指定手机号记录的最近一次验证码。
 func (m *MockSender) LastCode(phone string) (string, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -75,6 +83,7 @@ type aliyunSMSAPI interface {
 
 type aliyunSMSClientFactory func(cfg modelruntime.SMSConfig) (aliyunSMSAPI, error)
 
+// AliyunSender 是基于阿里云短信服务的 Sender 实现。
 type AliyunSender struct {
 	newClient aliyunSMSClientFactory
 }

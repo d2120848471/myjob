@@ -27,6 +27,7 @@ var productGoodsTypeLabels = map[string]string{
 	productGoodsTypeDirectRecharge: "直充",
 }
 
+// ProductGoodsLogic 提供商品管理相关业务能力。
 type ProductGoodsLogic struct{ core *app.Core }
 
 type normalizedProductGoodsInput struct {
@@ -57,6 +58,7 @@ type productBrandTreeRow struct {
 	Sort     int    `db:"sort"`
 }
 
+// List 分页查询商品列表，支持品牌/类型/含税/状态/关键字等筛选条件。
 func (l *ProductGoodsLogic) List(ctx context.Context, req *adminapi.ProductGoodsListReq) (*adminapi.ProductGoodsListRes, error) {
 	page, pageSize := app.ParsePagination(req.Page, req.PageSize)
 	keyword := strings.TrimSpace(req.Keyword)
@@ -187,6 +189,7 @@ LIMIT ? OFFSET ?
 	}, nil
 }
 
+// Detail 查询商品详情（用于编辑回显等场景）。
 func (l *ProductGoodsLogic) Detail(ctx context.Context, req *adminapi.ProductGoodsDetailReq) (*adminapi.ProductGoodsDetailRes, error) {
 	row, err := l.core.DB().GetCore().GetOne(ctx, `
 SELECT
@@ -262,6 +265,7 @@ FROM product_goods p
 	}, nil
 }
 
+// FormOptions 返回商品表单所需的选项数据（品牌树、模板、策略、主体等）。
 func (l *ProductGoodsLogic) FormOptions(ctx context.Context, _ *adminapi.ProductGoodsFormOptionsReq) (*adminapi.ProductGoodsFormOptionsRes, error) {
 	brandRows, err := l.loadBrandRows(ctx)
 	if err != nil {
@@ -327,6 +331,7 @@ func (l *ProductGoodsLogic) FormOptions(ctx context.Context, _ *adminapi.Product
 	}, nil
 }
 
+// Add 新增商品，并写入操作日志。
 func (l *ProductGoodsLogic) Add(ctx context.Context, req *adminapi.ProductGoodsCreateReq, actor entity.AdminUser, ip string) (*adminapi.ProductGoodsCreateRes, error) {
 	normalized, err := l.normalizeProductGoodsInput(ctx, req.BrandID, req.Name, req.GoodsType, req.SupplyType, req.IsExport, req.IsDouyin, req.HasTax, req.SubjectID, req.ExceptionNotify, req.ProductTemplateID, req.PurchaseLimitStrategyID, req.PurchaseNotice, req.TerminalPriceLimit, req.BalanceLimit, req.DefaultSellPrice, req.MinPurchaseQty, req.MaxPurchaseQty, req.Status, nil)
 	if err != nil {
@@ -367,6 +372,7 @@ INSERT INTO product_goods (
 	return &adminapi.ProductGoodsCreateRes{ID: createdID, GoodsCode: createdCode}, nil
 }
 
+// Edit 编辑商品信息，并写入操作日志。
 func (l *ProductGoodsLogic) Edit(ctx context.Context, req *adminapi.ProductGoodsUpdateReq, actor entity.AdminUser, ip string) (*adminapi.ProductGoodsUpdateRes, error) {
 	current, err := l.getActiveProduct(ctx, req.ID)
 	if err != nil {
@@ -415,6 +421,7 @@ WHERE id = ? AND is_deleted = 0
 	return &adminapi.ProductGoodsUpdateRes{}, nil
 }
 
+// Delete 软删除商品（is_deleted=1），并在事务内同步品牌商品计数。
 func (l *ProductGoodsLogic) Delete(ctx context.Context, req *adminapi.ProductGoodsDeleteReq, actor entity.AdminUser, ip string) (*adminapi.ProductGoodsDeleteRes, error) {
 	current, err := l.getActiveProduct(ctx, req.ID)
 	if err != nil {
@@ -443,6 +450,7 @@ func (l *ProductGoodsLogic) Delete(ctx context.Context, req *adminapi.ProductGoo
 	return &adminapi.ProductGoodsDeleteRes{}, nil
 }
 
+// Status 批量切换商品启用/禁用状态，并返回失败项原因列表。
 func (l *ProductGoodsLogic) Status(ctx context.Context, req *adminapi.ProductGoodsStatusReq, actor entity.AdminUser, ip string) (*adminapi.ProductGoodsStatusRes, error) {
 	if len(req.IDs) == 0 {
 		return nil, apiErr(consts.CodeBadRequest, "请至少选择一个商品")

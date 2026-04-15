@@ -24,11 +24,15 @@ import (
 	"github.com/gogf/gf/v2/os/gcfg"
 )
 
+// NewCoreFromConfig 使用传入配置创建 Core，并完成 DB/Redis 初始化与启动引导（建表/种子数据）。
 func NewCoreFromConfig(cfg modelconfig.Config) (*Core, error) {
 	modelconfig.Normalize(&cfg)
 	return newCore(cfg, nil, "")
 }
 
+// NewCoreFromConfigFile 从配置文件创建 Core。
+//
+// 配置缺省项（如超级管理员账号）会从环境变量补齐：SUPER_ADMIN_PHONE/SUPER_ADMIN_PASSWORD。
 func NewCoreFromConfigFile(configPath string) (*Core, error) {
 	cfgInstance, cfgName, cfg, err := loadConfig(configPath)
 	if err != nil {
@@ -37,6 +41,9 @@ func NewCoreFromConfigFile(configPath string) (*Core, error) {
 	return newCore(cfg, cfgInstance, cfgName)
 }
 
+// NewCoreFromEnv 从环境变量指定的配置文件创建 Core。
+//
+// - ADMIN_CONFIG 为空时默认使用 manifest/config/config.local.yaml
 func NewCoreFromEnv() (*Core, error) {
 	configPath := strings.TrimSpace(os.Getenv("ADMIN_CONFIG"))
 	if configPath == "" {
@@ -45,6 +52,12 @@ func NewCoreFromEnv() (*Core, error) {
 	return NewCoreFromConfigFile(configPath)
 }
 
+// NewTestCore 构建用于测试的 Core：
+// - 使用临时 sqlite 文件作为数据库
+// - 使用 miniredis 作为 Redis
+// - 使用 mock 短信发送器、同步审计写入、临时上传目录
+//
+// 调用 Close 会自动清理这些临时资源。
 func NewTestCore() (*Core, error) {
 	cfg := modelconfig.Default()
 	cfg.AppEnv = "test"
@@ -86,6 +99,7 @@ func NewTestCore() (*Core, error) {
 	return core, nil
 }
 
+// loadConfig 将指定配置文件加载到独立的 GoFrame 配置实例中，避免污染全局配置。
 func loadConfig(configPath string) (*gcfg.Config, string, modelconfig.Config, error) {
 	absPath, err := filepath.Abs(configPath)
 	if err != nil {
@@ -115,6 +129,11 @@ func loadConfig(configPath string) (*gcfg.Config, string, modelconfig.Config, er
 	return cfgInstance, cfgName, cfg, nil
 }
 
+// newCore 构建 Core 并完成必要初始化：
+// - 校验运行时必需配置（超级管理员账号）
+// - 初始化 DB/Redis 连接与连通性检查
+// - 启动引导（建表/补列/种子数据/默认配置）
+// - 初始化审计写入器
 func newCore(cfg modelconfig.Config, cfgInstance *gcfg.Config, cfgName string) (*Core, error) {
 	if cfg.Bootstrap.SuperAdminPhone == "" {
 		cfg.Bootstrap.SuperAdminPhone = strings.TrimSpace(os.Getenv("SUPER_ADMIN_PHONE"))
@@ -150,6 +169,7 @@ func newCore(cfg modelconfig.Config, cfgInstance *gcfg.Config, cfgName string) (
 	return core, nil
 }
 
+// initStores 初始化数据库与 Redis 连接（使用独立 group），并进行连通性检查。
 func (c *Core) initStores(ctx context.Context) error {
 	dbNode := gdb.ConfigNode{
 		Type:             c.cfg.Database.Driver,
@@ -179,6 +199,7 @@ func (c *Core) initStores(ctx context.Context) error {
 	return nil
 }
 
+// dbLink 根据 driver/dsn 组装 GoFrame 数据库连接字符串。
 func dbLink(driver, dsn string) string {
 	driver = strings.TrimSpace(strings.ToLower(driver))
 	dsn = strings.TrimSpace(dsn)
@@ -198,11 +219,13 @@ func dbLink(driver, dsn string) string {
 	}
 }
 
+// initAuditWriter 初始化操作审计写入器（同步或异步由配置决定）。
 func (c *Core) initAuditWriter() {
 	c.auditWriter = audit.NewWriter(!c.cfg.Audit.Async, c.cfg.Audit.BufferSize, c.insertOperationLog)
 	c.auditWriter.Start()
 }
 
+// Close 释放 Core 持有的资源（审计写入器、Redis/DB 连接、测试临时资源等）。
 func (c *Core) Close() error {
 	if c.auditWriter != nil {
 		c.auditWriter.Close()

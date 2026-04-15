@@ -20,10 +20,13 @@ const (
 )
 
 var (
-	ErrUnknownSystemConfigGroup  = errors.New("system config group not found")
+	// ErrUnknownSystemConfigGroup 表示系统参数分组不存在。
+	ErrUnknownSystemConfigGroup = errors.New("system config group not found")
+	// ErrSystemConfigNotConfigured 表示必填系统参数未配置。
 	ErrSystemConfigNotConfigured = errors.New("system config not configured")
 )
 
+// SystemConfigSpec 描述一个系统参数项的元信息与校验规则。
 type SystemConfigSpec struct {
 	Group        string
 	Key          string
@@ -84,6 +87,7 @@ var systemConfigRegistry = map[string]systemConfigGroupDefinition{
 
 var systemConfigGroupOrder = []string{"finance", "integration"}
 
+// SystemConfigSpecs 返回指定分组的系统参数项定义（用于前端渲染/表单约束）。
 func SystemConfigSpecs(group string) ([]SystemConfigSpec, bool) {
 	definition, ok := systemConfigRegistry[strings.TrimSpace(group)]
 	if !ok {
@@ -94,6 +98,7 @@ func SystemConfigSpecs(group string) ([]SystemConfigSpec, bool) {
 	return items, true
 }
 
+// SystemConfigGroupLabel 返回系统参数分组的展示名称。
 func SystemConfigGroupLabel(group string) string {
 	if definition, ok := systemConfigRegistry[strings.TrimSpace(group)]; ok {
 		return definition.Label
@@ -101,6 +106,7 @@ func SystemConfigGroupLabel(group string) string {
 	return group
 }
 
+// LookupSystemConfigSpec 根据 group/key 查找系统参数项定义。
 func LookupSystemConfigSpec(group, key string) (SystemConfigSpec, bool) {
 	definition, ok := systemConfigRegistry[strings.TrimSpace(group)]
 	if !ok {
@@ -115,12 +121,16 @@ func LookupSystemConfigSpec(group, key string) (SystemConfigSpec, bool) {
 	return SystemConfigSpec{}, false
 }
 
+// SystemConfigGroups 返回系统参数分组的稳定排序列表。
 func SystemConfigGroups() []string {
 	groups := make([]string, len(systemConfigGroupOrder))
 	copy(groups, systemConfigGroupOrder)
 	return groups
 }
 
+// LoadSystemConfigGroup 加载某个分组的系统参数配置状态（带缓存）。
+//
+// 缓存 key 使用 authlib.SystemConfigCacheKey(group)，并通过 version 控制缓存兼容性。
 func (c *Core) LoadSystemConfigGroup(ctx context.Context, group string) (modelruntime.SystemConfigGroupState, error) {
 	group = strings.TrimSpace(group)
 	definition, ok := systemConfigRegistry[group]
@@ -178,6 +188,7 @@ func (c *Core) LoadSystemConfigGroup(ctx context.Context, group string) (modelru
 	return state, nil
 }
 
+// LoadAllSystemConfigGroups 按分组顺序一次性加载全部系统参数分组状态。
 func (c *Core) LoadAllSystemConfigGroups(ctx context.Context) ([]modelruntime.SystemConfigGroupState, error) {
 	groups := SystemConfigGroups()
 	result := make([]modelruntime.SystemConfigGroupState, 0, len(groups))
@@ -191,6 +202,7 @@ func (c *Core) LoadAllSystemConfigGroups(ctx context.Context) ([]modelruntime.Sy
 	return result, nil
 }
 
+// LoadFinanceTaxConfig 加载财务税率配置，并返回原始值与按固定小数位缩放后的整数值。
 func (c *Core) LoadFinanceTaxConfig(ctx context.Context) (modelruntime.FinanceTaxConfig, error) {
 	state, err := c.LoadSystemConfigGroup(ctx, "finance")
 	if err != nil {

@@ -10,8 +10,10 @@ import (
 	"myjob/internal/consts"
 )
 
+// SubjectLogic 提供主体配置管理相关业务能力。
 type SubjectLogic struct{ core *app.Core }
 
+// List 查询主体列表。
 func (l *SubjectLogic) List(ctx context.Context, _ *adminapi.SubjectListReq) (*adminapi.SubjectListRes, error) {
 	items := make([]app.AdminSubject, 0)
 	if err := l.core.DB().GetCore().GetScan(ctx, &items, `SELECT id, name, has_tax, created_at, updated_at FROM admin_subject ORDER BY id DESC`); err != nil {
@@ -20,6 +22,7 @@ func (l *SubjectLogic) List(ctx context.Context, _ *adminapi.SubjectListReq) (*a
 	return &adminapi.SubjectListRes{List: items}, nil
 }
 
+// Add 新增主体，并写入操作日志。
 func (l *SubjectLogic) Add(ctx context.Context, req *adminapi.SubjectCreateReq, actor app.AdminUser, ip string) (*adminapi.SubjectCreateRes, error) {
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" || (req.HasTax != 0 && req.HasTax != 1) {
@@ -41,6 +44,7 @@ func (l *SubjectLogic) Add(ctx context.Context, req *adminapi.SubjectCreateReq, 
 	return &adminapi.SubjectCreateRes{ID: id}, nil
 }
 
+// Edit 编辑主体信息，并写入操作日志。
 func (l *SubjectLogic) Edit(ctx context.Context, req *adminapi.SubjectUpdateReq, actor app.AdminUser, ip string) (*adminapi.SubjectUpdateRes, error) {
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" || (req.HasTax != 0 && req.HasTax != 1) {

@@ -21,8 +21,10 @@ import (
 	"github.com/gogf/gf/v2/net/ghttp"
 )
 
+// BrandLogic 提供品牌管理相关业务能力（增删改查、排序、显隐、图片上传等）。
 type BrandLogic struct{ core *app.Core }
 
+// List 分页查询一级品牌列表（parent_id=0），支持按名称模糊搜索。
 func (l *BrandLogic) List(ctx context.Context, req *adminapi.BrandListReq) (*adminapi.BrandListRes, error) {
 	page, pageSize := app.ParsePagination(req.Page, req.PageSize)
 	name := strings.TrimSpace(req.Name)
@@ -97,6 +99,7 @@ LIMIT ? OFFSET ?
 	return &adminapi.BrandListRes{List: items, Pagination: adminapi.PaginationRes{Page: page, PageSize: pageSize, Total: total.Int()}}, nil
 }
 
+// Children 查询指定品牌下的子品牌列表。
 func (l *BrandLogic) Children(ctx context.Context, req *adminapi.BrandChildrenReq) (*adminapi.BrandChildrenRes, error) {
 	if _, err := l.getBrand(ctx, req.ID); err != nil {
 		return nil, apiErr(consts.CodeBadRequest, "品牌不存在")
@@ -157,6 +160,7 @@ ORDER BY sort ASC, id ASC
 	return &adminapi.BrandChildrenRes{List: items}, nil
 }
 
+// Add 新增品牌，并写入操作日志。
 func (l *BrandLogic) Add(ctx context.Context, req *adminapi.BrandCreateReq, actor app.AdminUser, ip string) (*adminapi.BrandCreateRes, error) {
 	req.Name = strings.TrimSpace(req.Name)
 	req.Icon = strings.TrimSpace(req.Icon)
@@ -193,6 +197,7 @@ INSERT INTO product_brand (
 	return &adminapi.BrandCreateRes{ID: id}, nil
 }
 
+// Edit 编辑品牌信息，并写入操作日志。
 func (l *BrandLogic) Edit(ctx context.Context, req *adminapi.BrandUpdateReq, actor app.AdminUser, ip string) (*adminapi.BrandUpdateRes, error) {
 	brand, err := l.getBrand(ctx, req.ID)
 	if err != nil {
@@ -223,6 +228,7 @@ WHERE id = ?
 	return &adminapi.BrandUpdateRes{}, nil
 }
 
+// Delete 删除品牌（要求无子品牌且未被行业/商品引用），并写入操作日志。
 func (l *BrandLogic) Delete(ctx context.Context, req *adminapi.BrandDeleteReq, actor app.AdminUser, ip string) (*adminapi.BrandDeleteRes, error) {
 	brand, err := l.getBrand(ctx, req.ID)
 	if err != nil {
@@ -266,6 +272,7 @@ func (l *BrandLogic) Delete(ctx context.Context, req *adminapi.BrandDeleteReq, a
 	return &adminapi.BrandDeleteRes{}, nil
 }
 
+// Sort 调整同级品牌排序（top/up/down/bottom）。
 func (l *BrandLogic) Sort(ctx context.Context, req *adminapi.BrandSortReq, actor app.AdminUser, ip string) (*adminapi.BrandSortRes, error) {
 	brand, err := l.getBrand(ctx, req.ID)
 	if err != nil {
@@ -290,6 +297,7 @@ func (l *BrandLogic) Sort(ctx context.Context, req *adminapi.BrandSortReq, actor
 	return &adminapi.BrandSortRes{}, nil
 }
 
+// Visibility 切换品牌显示状态，并写入操作日志。
 func (l *BrandLogic) Visibility(ctx context.Context, req *adminapi.BrandVisibilityReq, actor app.AdminUser, ip string) (*adminapi.BrandVisibilityRes, error) {
 	if req.IsVisible != 0 && req.IsVisible != 1 {
 		return nil, apiErr(consts.CodeBadRequest, "显示状态错误")
@@ -304,6 +312,7 @@ func (l *BrandLogic) Visibility(ctx context.Context, req *adminapi.BrandVisibili
 	return &adminapi.BrandVisibilityRes{}, nil
 }
 
+// Upload 上传品牌图片到本地存储，并返回对外可访问 URL。
 func (l *BrandLogic) Upload(ctx context.Context, req *adminapi.BrandUploadReq, actor app.AdminUser, ip string) (*adminapi.BrandUploadRes, error) {
 	if err := l.validateUploadType(req.Type); err != nil {
 		return nil, err

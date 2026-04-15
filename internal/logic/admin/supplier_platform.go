@@ -20,6 +20,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+// PlatformDeleteHook 允许在删除第三方平台账号前执行自定义清理逻辑。
 type PlatformDeleteHook interface {
 	BeforeDelete(ctx context.Context, platformID int64) error
 }
@@ -28,12 +29,14 @@ type noopPlatformDeleteHook struct{}
 
 func (noopPlatformDeleteHook) BeforeDelete(context.Context, int64) error { return nil }
 
+// SupplierPlatformLogic 提供第三方平台账号管理与余额查询相关业务能力。
 type SupplierPlatformLogic struct {
 	core       *app.Core
 	httpClient *http.Client
 	deleteHook PlatformDeleteHook
 }
 
+// NewSupplierPlatformLogic 创建 SupplierPlatformLogic，并初始化默认 HTTP client 与删除钩子。
 func NewSupplierPlatformLogic(core *app.Core) *SupplierPlatformLogic {
 	return &SupplierPlatformLogic{
 		core:       core,
@@ -42,6 +45,7 @@ func NewSupplierPlatformLogic(core *app.Core) *SupplierPlatformLogic {
 	}
 }
 
+// TypeList 查询可用的平台类型字典列表。
 func (l *SupplierPlatformLogic) TypeList(ctx context.Context, _ *adminapi.SupplierPlatformTypeListReq) (*adminapi.SupplierPlatformTypeListRes, error) {
 	items := make([]entity.SupplierPlatformTypeItem, 0)
 	if err := l.core.DB().GetCore().GetScan(ctx, &items, `SELECT id, type_name, default_provider_code AS provider_code, status, sort, created_at, updated_at FROM supplier_platform_type WHERE status = 1 ORDER BY sort ASC, id ASC`); err != nil {
@@ -50,6 +54,7 @@ func (l *SupplierPlatformLogic) TypeList(ctx context.Context, _ *adminapi.Suppli
 	return &adminapi.SupplierPlatformTypeListRes{List: items}, nil
 }
 
+// List 分页查询平台账号列表，支持关键词/类型/主体/含税/连接状态筛选。
 func (l *SupplierPlatformLogic) List(ctx context.Context, req *adminapi.SupplierPlatformListReq) (*adminapi.SupplierPlatformListRes, error) {
 	page, pageSize := app.ParsePagination(req.Page, req.PageSize)
 	hasTax, hasTaxFilter, err := normalizeSupplierTaxFilter(req.HasTax)
@@ -139,6 +144,7 @@ LIMIT ? OFFSET ?
 	}, nil
 }
 
+// Detail 查询平台账号详情（敏感字段会脱敏返回）。
 func (l *SupplierPlatformLogic) Detail(ctx context.Context, req *adminapi.SupplierPlatformDetailReq) (*adminapi.SupplierPlatformDetailRes, error) {
 	account, err := l.getSupplierPlatform(ctx, req.ID)
 	if err != nil {
@@ -170,6 +176,7 @@ func (l *SupplierPlatformLogic) Detail(ctx context.Context, req *adminapi.Suppli
 	}, nil
 }
 
+// Add 新增平台账号，并写入操作日志。
 func (l *SupplierPlatformLogic) Add(ctx context.Context, req *adminapi.SupplierPlatformCreateReq, actor entity.AdminUser, ip string) (*adminapi.SupplierPlatformCreateRes, error) {
 	normalized, err := l.normalizeSupplierPlatformInput(ctx, req.Name, req.Domain, req.BackupDomain, req.TypeID, req.SubjectID, req.HasTax, req.TokenID, req.SecretKey, req.ThresholdAmount, req.Sort, req.CrowdName)
 	if err != nil {
@@ -194,6 +201,7 @@ INSERT INTO supplier_platform_account (
 	return &adminapi.SupplierPlatformCreateRes{ID: id}, nil
 }
 
+// Edit 编辑平台账号，并写入操作日志。
 func (l *SupplierPlatformLogic) Edit(ctx context.Context, req *adminapi.SupplierPlatformUpdateReq, actor entity.AdminUser, ip string) (*adminapi.SupplierPlatformUpdateRes, error) {
 	account, err := l.getSupplierPlatform(ctx, req.ID)
 	if err != nil {
@@ -235,6 +243,7 @@ SET name = ?, provider_code = ?, provider_name = ?, type_id = ?, subject_id = ?,
 	return &adminapi.SupplierPlatformUpdateRes{}, nil
 }
 
+// Delete 软删除平台账号（is_deleted=1），并写入操作日志。
 func (l *SupplierPlatformLogic) Delete(ctx context.Context, req *adminapi.SupplierPlatformDeleteReq, actor entity.AdminUser, ip string) (*adminapi.SupplierPlatformDeleteRes, error) {
 	account, err := l.getSupplierPlatform(ctx, req.ID)
 	if err != nil {
