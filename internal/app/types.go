@@ -103,14 +103,6 @@ type menuSeed struct {
 	Sort      int
 }
 
-type sqlExecutor interface {
-	Exec(sql string, args ...any) (sql.Result, error)
-	GetValue(sql string, args ...any) (gdb.Value, error)
-	GetArray(sql string, args ...any) (gdb.Array, error)
-	GetScan(pointer any, sql string, args ...any) error
-	GetAll(sql string, args ...any) (gdb.Result, error)
-}
-
 // Config 返回当前 Core 的配置快照（只读值）。
 func (c *Core) Config() modelconfig.Config {
 	return c.cfg

@@ -94,6 +94,24 @@ go test ./test/integration -run TestSupplierPlatformRefresh_LiveProviderBalance 
 go build ./...
 ```
 
+### Lint（与 CI 对齐）
+
+仓库 CI 会执行 `golangci-lint`（见 `.golangci.yml`），当前启用的核心检查包括：
+
+- `govet`
+- `staticcheck`
+- `ineffassign`
+- `unused`
+- `typecheck`
+
+本地建议执行：
+
+```bash
+golangci-lint run --timeout=5m
+```
+
+CI 里会使用增量参数（`--new-from-rev=origin/main`）减少无关历史问题的干扰。
+
 ## 配置说明
 
 当前本地配置文件位于 `manifest/config/config.local.yaml`，主要包含：

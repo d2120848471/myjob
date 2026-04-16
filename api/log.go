@@ -1,7 +1,18 @@
 package api
 
-import "github.com/gogf/gf/v2/frame/g"
+import (
+	"myjob/internal/model/entity"
 
+	"github.com/gogf/gf/v2/frame/g"
+)
+
+// OperationLogItem 是操作日志列表展示项。
+type OperationLogItem = entity.OperationLog
+
+// LoginLogItem 是登录日志列表展示项。
+type LoginLogItem = entity.LoginLog
+
+// OperationLogListReq 用于分页查询操作日志。
 type OperationLogListReq struct {
 	g.Meta    `path:"/logs/operations" method:"get" tags:"日志" summary:"操作日志列表" security:"BearerAuth" dc:"分页查询操作日志"`
 	Page      int    `json:"page" dc:"页码"`
@@ -12,11 +23,13 @@ type OperationLogListReq struct {
 	EndTime   string `json:"end_time" dc:"结束时间"`
 }
 
+// OperationLogListRes 返回操作日志列表与分页信息。
 type OperationLogListRes struct {
 	List       []OperationLogItem `json:"list" dc:"操作日志列表"`
 	Pagination PaginationRes      `json:"pagination" dc:"分页信息"`
 }
 
+// LoginLogListReq 用于分页查询登录日志。
 type LoginLogListReq struct {
 	g.Meta    `path:"/logs/logins" method:"get" tags:"日志" summary:"登录日志列表" security:"BearerAuth" dc:"分页查询登录日志"`
 	Page      int    `json:"page" dc:"页码"`
@@ -26,6 +39,7 @@ type LoginLogListReq struct {
 	EndTime   string `json:"end_time" dc:"结束时间"`
 }
 
+// LoginLogListRes 返回登录日志列表与分页信息。
 type LoginLogListRes struct {
 	List       []LoginLogItem `json:"list" dc:"登录日志列表"`
 	Pagination PaginationRes  `json:"pagination" dc:"分页信息"`

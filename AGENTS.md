@@ -68,7 +68,7 @@
    - 你在最终说明中明确写出复用对象与理由。
 
 ### 与契约测试绑定的文件名（特别注意）
-`test/contract/api_layout_test.go` 当前会显式检查 `api/` 目录中的若干文件名（例如 `settings.go`、`common.go`）。
+`test/contract/api_layout_test.go` 当前会显式检查 `api/` 目录中的若干文件名（例如 `settings.go`、`settings_sms.go`、`settings_system.go`、`common.go`）。
 
 因此：
 - 若只是把 `settings.go`、`common.go` 内部职责拆开，**优先保留原文件作为薄入口/说明文件**；

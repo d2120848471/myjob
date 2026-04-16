@@ -103,7 +103,10 @@ go run .
 ```bash
 go test ./... -count=1 -timeout 60s
 go build ./...
+golangci-lint run --timeout=5m
 ```
+
+> CI 会执行 `go test/go build/golangci-lint`（见 `.github/workflows/ci.yml`）。当前 `.golangci.yml` 启用 `govet/staticcheck/ineffassign/unused/typecheck`。
 
 ## 目录说明
 
@@ -121,6 +124,8 @@ go build ./...
 │   ├── product_template.go
 │   ├── purchase_limit.go
 │   ├── settings.go
+│   ├── settings_sms.go
+│   ├── settings_system.go
 │   ├── subject.go
 │   ├── supplier_platform.go
 │   └── user.go
@@ -153,6 +158,11 @@ go build ./...
 `api/` 只放对外请求/响应协议定义，不放业务逻辑。
 当前协议目录已经拍平成仓库根下的 `api/*.go`，不再使用历史的 历史嵌套协议包路径。
 
+说明：
+
+- `api/settings.go` 为薄入口/说明文件；短信配置与系统参数配置协议拆分到 `api/settings_sms.go` 与 `api/settings_system.go`
+- `api/common.go` 只保留跨业务域复用的通用别名（例如分页），单域 `Item/Enum` 放回对应领域协议文件
+
 ### `internal/bootstrap`
 
 负责把配置、运行时 `Core`、控制器、服务、路由和中间件组装成可运行应用。
@@ -169,6 +179,14 @@ go build ./...
 
 负责业务编排和规则控制，调用 `app`、`library` 与数据库访问能力。
 
+该层普遍采用“同 package 多文件按职责拆分”，例如：
+
+- `brand*.go`
+- `industry*.go`
+- `product_template*.go`
+- `purchase_limit*.go`
+- `user*.go`
+
 ### `internal/app`
 
 负责运行时核心能力，包括：
@@ -181,6 +199,8 @@ go build ./...
 - IP 归属地解析
 - 审计写入辅助
 
+当前公共能力已按职责拆分为多个同 package 文件（例如 `pagination.go`、`mask.go`、`menu_tree.go`、`auth_session.go` 等），避免继续堆回历史 `helpers.go`。
+
 ### `internal/library`
 
 跨模块基础能力库：
@@ -189,6 +209,7 @@ go build ./...
 - `sms`：短信 sender 抽象、mock sender、阿里云 sender
 - `audit`：审计日志写入器
 - `region`：IP 归属地解析与脱敏工具
+- `supplierplatform/provider`：第三方供货平台适配器（余额刷新等对接能力）
 
 ### `manifest/config`
 
@@ -229,3 +250,5 @@ go build ./...
 - `docs/development.md`：开发依赖、配置、脚本和日常命令
 - `docs/testing.md`：测试分层、当前覆盖范围与执行命令
 - `docs/migration.md`：从历史后台迁到当前根应用结构的迁移背景
+- `docs/superpowers/specs/`：规格与设计说明（当前已有商品管理相关 specs）
+- `docs/superpowers/plans/`：阶段计划与拆解（当前已有商品管理相关 plans）

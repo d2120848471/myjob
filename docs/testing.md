@@ -95,6 +95,14 @@ go test ./test/integration -run TestSupplierPlatformRefresh_LiveProviderBalance 
 go test ./... -count=1 -timeout 60s
 ```
 
+并建议在提交前执行一次 lint（与 CI 对齐）：
+
+```bash
+golangci-lint run --timeout=5m
+```
+
+CI 里会使用增量参数（`--new-from-rev=origin/main`）减少无关历史问题的干扰。
+
 ### 影响接口兼容时
 
 ```bash
