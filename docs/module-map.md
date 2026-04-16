@@ -21,7 +21,7 @@
 - 协议：`api/user.go`
 - controller：`internal/controller/admin/user.go`
 - service：`UserService`
-- logic：`internal/logic/admin/user.go`
+- logic：`internal/logic/admin/user*.go`
 - 路由前缀：`/api/admin/users*`
 - 主要能力：
   - 员工列表
@@ -82,7 +82,7 @@
 - 协议：`api/brand.go`
 - controller：`internal/controller/admin/brand.go`
 - service：`BrandService`
-- logic：`internal/logic/admin/brand.go`
+- logic：`internal/logic/admin/brand*.go`
 - 路由前缀：`/api/admin/brands*`
 - 主要能力：
   - 一级品牌分页与搜索
@@ -98,7 +98,7 @@
 - 协议：`api/industry.go`
 - controller：`internal/controller/admin/industry.go`
 - service：`IndustryService`
-- logic：`internal/logic/admin/industry.go`
+- logic：`internal/logic/admin/industry*.go`
 - 路由前缀：`/api/admin/industries*`
 - 主要能力：
   - 行业列表、增删改、排序
@@ -114,7 +114,7 @@
 - 协议：`api/product_template.go`
 - controller：`internal/controller/admin/product_template.go`
 - service：`ProductTemplateService`
-- logic：`internal/logic/admin/product_template.go`
+- logic：`internal/logic/admin/product_template*.go`
 - 路由前缀：`/api/admin/product-templates*`
 - 主要能力：
   - 本地模板分页查询、关键词搜索
@@ -151,7 +151,7 @@
 - 协议：`api/purchase_limit.go`
 - controller：`internal/controller/admin/purchase_limit.go`
 - service：`PurchaseLimitService`
-- logic：`internal/logic/admin/purchase_limit.go`
+- logic：`internal/logic/admin/purchase_limit*.go`
 - 路由前缀：`/api/admin/purchase-limit-strategies*`
 - 主要能力：
   - 分页列表、关键词搜索
