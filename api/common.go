@@ -2,42 +2,10 @@ package api
 
 import (
 	"myjob/internal/model/dto/admin"
-	"myjob/internal/model/entity"
-	modelruntime "myjob/internal/model/runtime"
 )
 
+// PaginationRes 是通用分页返回结构的别名，用于列表类接口保持统一的响应形状。
 type PaginationRes = admin.Pagination
 
-type LoginUser = modelruntime.LoginUser
-
-type GroupListItem = entity.GroupListItem
-
-type UserListItem = entity.UserListItem
-
-type SubjectItem = entity.AdminSubject
-
-type BrandListItem = entity.BrandListItem
-
-type IndustryListItem = entity.IndustryListItem
-
-type IndustryBrandRelationItem = entity.IndustryBrandRelationItem
-
-type BrandSelectorItem = entity.BrandSelectorItem
-
-type ProductTemplateListItem = entity.ProductTemplateListItem
-
-type ProductTemplateValidateTypeItem = entity.ProductTemplateValidateTypeItem
-
-type PurchaseLimitStrategyListItem = entity.PurchaseLimitStrategyListItem
-
-type PurchaseLimitEnumItem = entity.PurchaseLimitEnumItem
-
-type SupplierPlatformTypeItem = entity.SupplierPlatformTypeItem
-
-type SupplierPlatformListItem = entity.SupplierPlatformListItem
-
-type MenuItem = entity.AdminMenu
-
-type OperationLogItem = entity.OperationLog
-
-type LoginLogItem = entity.LoginLog
+// 注意：api/common.go 只保留真正跨业务域复用的通用协议别名（例如分页）。
+// 明显只服务单个业务域的 Req/Res/Item/Enum 必须放回对应领域协议文件，避免该文件继续吸附无关职责。

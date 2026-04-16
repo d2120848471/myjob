@@ -27,9 +27,12 @@
 - `api/group.go`
 - `api/industry.go`
 - `api/log.go`
+- `api/product_goods.go`
 - `api/product_template.go`
 - `api/purchase_limit.go`
 - `api/settings.go`
+- `api/settings_sms.go`
+- `api/settings_system.go`
 - `api/subject.go`
 - `api/supplier_platform.go`
 - `api/user.go`

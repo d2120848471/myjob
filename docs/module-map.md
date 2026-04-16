@@ -184,8 +184,8 @@
 
 ### 短信配置
 
-- 协议：`api/settings.go`
-- controller：`internal/controller/admin/settings.go`
+- 协议：`api/settings_sms.go`（薄入口：`api/settings.go`）
+- controller：`internal/controller/admin/settings_sms.go`（声明：`internal/controller/admin/settings.go`）
 - service：`SMSConfigService`
 - logic：`internal/logic/admin/config.go`
 - 路由前缀：`/api/admin/settings/sms`
@@ -198,8 +198,8 @@
 
 ### 系统参数配置
 
-- 协议：`api/settings.go`
-- controller：`internal/controller/admin/settings.go`
+- 协议：`api/settings_system.go`（薄入口：`api/settings.go`）
+- controller：`internal/controller/admin/settings_system.go`（声明：`internal/controller/admin/settings.go`）
 - service：`SystemConfigService`
 - logic：`internal/logic/admin/system_config.go`
 - 路由前缀：`/api/admin/settings/system`
@@ -224,6 +224,20 @@
   - 支持管理员 ID、时间范围过滤
   - 操作日志额外支持关键字过滤
 
+### 公共能力（internal/app）
+
+`internal/app` 是运行期核心能力层，当前已按职责拆分为多个同 package 文件（避免继续堆回 `helpers.go`）：
+
+- `helpers.go`：历史入口说明（薄入口）
+- `pagination.go`：分页工具与统一分页结构
+- `mask.go`：敏感信息脱敏（AccessKey/Secret 等）
+- `menu_tree.go`：菜单树与授权回显组装
+- `auth_session.go`：登录态签发、校验与会话存储
+- `sms_config.go`：短信配置读取与缓存
+- `audit.go`：审计写入辅助
+- `user_lookup.go`：登录用户/员工查询辅助
+- `redis_helpers.go`：Redis key/TTL 等基础辅助
+
 ## 目录地图
 
 ### `api`
@@ -240,6 +254,8 @@
 - `product_template.go`
 - `purchase_limit.go`
 - `settings.go`
+- `settings_sms.go`
+- `settings_system.go`
 - `supplier_platform.go`
 - `subject.go`
 - `user.go`
