@@ -130,6 +130,9 @@ golangci-lint run --timeout=5m
 │   ├── supplier_platform.go
 │   └── user.go
 ├── docs/
+├── platform_docs/
+│   ├── README.md
+│   └── *.md
 ├── hack/
 ├── internal/
 │   ├── app
@@ -162,6 +165,20 @@ golangci-lint run --timeout=5m
 
 - `api/settings.go` 为薄入口/说明文件；短信配置与系统参数配置协议拆分到 `api/settings_sms.go` 与 `api/settings_system.go`
 - `api/common.go` 只保留跨业务域复用的通用别名（例如分页），单域 `Item/Enum` 放回对应领域协议文件
+
+### `docs`
+
+项目内部手写文档目录，主要记录当前仓库自己的架构、模块边界、开发方式、测试方式和迁移背景。
+
+### `platform_docs`
+
+第三方渠道原始对接文档归档目录。
+`platform_docs/README.md` 维护平台总览，其他 `platform_docs/*.md` 按渠道拆分，保留外部接口的签名规则、字段约束、状态码、模块说明和示例，供第三方供货平台接入、余额刷新排障和 provider 实现对照使用。
+
+该目录和 `docs/` 的边界如下：
+
+- `platform_docs/` 记录渠道侧原始协议与接口资料
+- `docs/` 记录本仓库自己的实现、结构、测试与运行说明
 
 ### `internal/bootstrap`
 
@@ -250,5 +267,6 @@ golangci-lint run --timeout=5m
 - `docs/development.md`：开发依赖、配置、脚本和日常命令
 - `docs/testing.md`：测试分层、当前覆盖范围与执行命令
 - `docs/migration.md`：从历史后台迁到当前根应用结构的迁移背景
+- `platform_docs/README.md`：第三方渠道原始接口文档总览；具体平台文档按 `platform_docs/*.md` 拆分
 - `docs/superpowers/specs/`：规格与设计说明（当前已有商品管理相关 specs）
 - `docs/superpowers/plans/`：阶段计划与拆解（当前已有商品管理相关 plans）

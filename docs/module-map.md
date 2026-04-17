@@ -73,9 +73,15 @@
   - 主体关联与平台侧 `has_tax`
   - 手动余额刷新
   - 余额刷新日志落库
+- 外部协议参考：
+  - `platform_docs/README.md`
+  - `platform_docs/*.md`
 - 权限边界：
   - 第三方对接接口统一要求 `supplier.index`
   - 一期只写余额日志，不开放日志查询 HTTP 接口
+- 文档边界：
+  - `platform_docs/` 记录渠道原始接口与签名规则
+  - `docs/*.md` 记录本仓库怎样落地这些渠道能力
 
 ### 品牌管理
 
@@ -259,6 +265,15 @@
 - `supplier_platform.go`
 - `subject.go`
 - `user.go`
+
+### `docs`
+
+项目内部手写文档目录，负责记录当前仓库自己的架构、模块边界、开发流程、测试方式和迁移说明。
+
+### `platform_docs`
+
+第三方渠道接口文档归档目录。
+`platform_docs/README.md` 负责平台总览，其他 `platform_docs/*.md` 一平台一文件，保留外部渠道的签名规则、字段约束、状态码、接口模块和示例，供 `internal/library/supplierplatform/provider/*` 的实现和排障时对照。
 
 ### `internal/bootstrap`
 
