@@ -90,6 +90,7 @@ func assemble(core *app.Core) (*Application, error) {
 	productTemplateCtrl := admincontroller.NewProductTemplate(services.ProductTemplate)
 	purchaseLimitCtrl := admincontroller.NewPurchaseLimit(services.PurchaseLimit)
 	productGoodsCtrl := admincontroller.NewProductGoods(services.ProductGoods)
+	productGoodsChannelConfigCtrl := admincontroller.NewProductGoodsChannelConfig(services.ProductGoodsChannelConfig)
 	supplierPlatformCtrl := admincontroller.NewSupplierPlatform(services.SupplierPlatform)
 	settingsCtrl := admincontroller.NewSettings(services.SMSConfig, services.System)
 	operationLogCtrl := admincontroller.NewOperationLog(services.AuditLog)
@@ -144,6 +145,7 @@ func assemble(core *app.Core) (*Application, error) {
 		group.Group("", func(group *ghttp.RouterGroup) {
 			group.Middleware(guard.Require("product.goods", false))
 			group.Bind(productGoodsCtrl)
+			group.Bind(productGoodsChannelConfigCtrl)
 		})
 		group.Group("", func(group *ghttp.RouterGroup) {
 			group.Middleware(guard.Require("supplier.index", false))

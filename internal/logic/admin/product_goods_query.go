@@ -109,9 +109,12 @@ WHERE `+whereClause+`
 	}
 
 	items := make([]adminapi.ProductGoodsListItem, 0, len(rows))
+	goodsIDs := make([]int64, 0, len(rows))
 	for _, row := range rows {
+		goodsID := row["id"].Int64()
+		goodsIDs = append(goodsIDs, goodsID)
 		items = append(items, adminapi.ProductGoodsListItem{
-			ID:                        row["id"].Int64(),
+			ID:                        goodsID,
 			GoodsCode:                 row["goods_code"].String(),
 			BrandID:                   row["brand_id"].Int64(),
 			BrandName:                 row["brand_name"].String(),
@@ -129,11 +132,32 @@ WHERE `+whereClause+`
 			ProductTemplateTitle:      productGoodsRecordString(row, "product_template_title"),
 			PurchaseLimitStrategyID:   productGoodsRecordInt64(row, "purchase_limit_strategy_id"),
 			PurchaseLimitStrategyName: productGoodsRecordString(row, "purchase_limit_strategy_name"),
+			BoundChannels:             []string{},
+			BoundChannelCount:         0,
+			PrimaryChannelName:        "",
+			MinChannelCost:            "",
+			ChannelAutoPriceStatus:    false,
 			DefaultSellPrice:          productGoodsRecordMoney(row, "default_sell_price"),
 			TerminalPriceLimit:        productGoodsRecordMoney(row, "terminal_price_limit"),
 			Status:                    row["status"].Int(),
 			CreatedAt:                 formatAppTime(parseRecordTime(row, "created_at")),
 		})
+	}
+
+	summaries, err := l.loadGoodsChannelSummaries(ctx, goodsIDs)
+	if err != nil {
+		return nil, apiErr(consts.CodeInternalError, "商品列表查询失败")
+	}
+	for i := range items {
+		summary, ok := summaries[items[i].ID]
+		if !ok {
+			continue
+		}
+		items[i].BoundChannels = summary.BoundChannels
+		items[i].BoundChannelCount = summary.BoundChannelCount
+		items[i].PrimaryChannelName = summary.PrimaryChannelName
+		items[i].MinChannelCost = summary.MinChannelCost
+		items[i].ChannelAutoPriceStatus = summary.ChannelAutoPriceStatus
 	}
 
 	return &adminapi.ProductGoodsListRes{

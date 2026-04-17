@@ -459,19 +459,24 @@ func TestProductGoodsCRUDAndFilters(t *testing.T) {
 
 	var listAllData struct {
 		List []struct {
-			ID                        int64  `json:"id"`
-			GoodsCode                 string `json:"goods_code"`
-			BrandID                   int64  `json:"brand_id"`
-			BrandName                 string `json:"brand_name"`
-			BrandIcon                 string `json:"brand_icon"`
-			SubjectID                 *int64 `json:"subject_id"`
-			SubjectName               string `json:"subject_name"`
-			Name                      string `json:"name"`
-			GoodsType                 string `json:"goods_type"`
-			ProductTemplateTitle      string `json:"product_template_title"`
-			PurchaseLimitStrategyName string `json:"purchase_limit_strategy_name"`
-			HasTax                    int    `json:"has_tax"`
-			Status                    int    `json:"status"`
+			ID                        int64    `json:"id"`
+			GoodsCode                 string   `json:"goods_code"`
+			BrandID                   int64    `json:"brand_id"`
+			BrandName                 string   `json:"brand_name"`
+			BrandIcon                 string   `json:"brand_icon"`
+			SubjectID                 *int64   `json:"subject_id"`
+			SubjectName               string   `json:"subject_name"`
+			Name                      string   `json:"name"`
+			GoodsType                 string   `json:"goods_type"`
+			ProductTemplateTitle      string   `json:"product_template_title"`
+			PurchaseLimitStrategyName string   `json:"purchase_limit_strategy_name"`
+			BoundChannels             []string `json:"bound_channels"`
+			BoundChannelCount         int      `json:"bound_channel_count"`
+			PrimaryChannelName        string   `json:"primary_channel_name"`
+			MinChannelCost            string   `json:"min_channel_cost"`
+			ChannelAutoPriceStatus    bool     `json:"channel_auto_price_status"`
+			HasTax                    int      `json:"has_tax"`
+			Status                    int      `json:"status"`
 		} `json:"list"`
 		Pagination struct {
 			Page     int `json:"page"`
@@ -492,6 +497,18 @@ func TestProductGoodsCRUDAndFilters(t *testing.T) {
 	require.NotNil(t, listAllData.List[1].SubjectID)
 	require.Equal(t, taxSubjectID, *listAllData.List[1].SubjectID)
 	require.Equal(t, "开票主体A", listAllData.List[1].SubjectName)
+	require.NotNil(t, listAllData.List[0].BoundChannels)
+	require.Len(t, listAllData.List[0].BoundChannels, 0)
+	require.Equal(t, 0, listAllData.List[0].BoundChannelCount)
+	require.Equal(t, "", listAllData.List[0].PrimaryChannelName)
+	require.Equal(t, "", listAllData.List[0].MinChannelCost)
+	require.False(t, listAllData.List[0].ChannelAutoPriceStatus)
+	require.NotNil(t, listAllData.List[1].BoundChannels)
+	require.Len(t, listAllData.List[1].BoundChannels, 0)
+	require.Equal(t, 0, listAllData.List[1].BoundChannelCount)
+	require.Equal(t, "", listAllData.List[1].PrimaryChannelName)
+	require.Equal(t, "", listAllData.List[1].MinChannelCost)
+	require.False(t, listAllData.List[1].ChannelAutoPriceStatus)
 
 	listByGoodsCode := h.getJSON("/api/admin/products?page=1&page_size=20&keyword="+createData.GoodsCode, token)
 	require.Equal(t, 0, listByGoodsCode.Code)
