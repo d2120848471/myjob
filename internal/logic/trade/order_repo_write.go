@@ -11,13 +11,6 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-func boolToInt(value bool) int {
-	if value {
-		return 1
-	}
-	return 0
-}
-
 func (l *TradeOrderLogic) insertTradeOrder(ctx context.Context, tx gdb.TX, orderNo string, input CreateTradeOrderInput, prepared CandidateBuildOutput, firstBinding CandidateBinding, lockedSalePrice decimal.Decimal, totalAmount decimal.Decimal, lossAmount decimal.Decimal) (int64, error) {
 	now := l.core.Now()
 	lossOrder := 0
@@ -66,9 +59,12 @@ INSERT INTO trade_order (
 	return id, nil
 }
 
-func (l *TradeOrderLogic) insertTradeOrderAttempt(ctx context.Context, tx gdb.TX, orderID int64, providerRequestOrderNo string, plan FulfillmentPlanItem, binding CandidateBinding, subjectName string, lockedSalePrice decimal.Decimal, lossAmount decimal.Decimal) (int64, error) {
+func (l *TradeOrderLogic) insertTradeOrderAttempt(ctx context.Context, tx gdb.TX, orderID int64, providerRequestOrderNo string, plan FulfillmentPlanItem, binding CandidateBinding, subjectName string, lockedSalePrice decimal.Decimal, lossAmount decimal.Decimal, attemptNo int) (int64, error) {
 	now := l.core.Now()
 	channelName := buildBindingChannelNameSnapshot(binding, subjectName)
+	if attemptNo <= 0 {
+		attemptNo = 1
+	}
 	result, err := tx.Exec(`
 INSERT INTO trade_order_attempt (
     order_id, binding_id, platform_account_id, provider_code,
@@ -84,7 +80,7 @@ INSERT INTO trade_order_attempt (
 		strings.TrimSpace(binding.ProviderCode),
 		plan.FulfillmentNo,
 		plan.AttemptQuantity,
-		1,
+		attemptNo,
 		providerRequestOrderNo,
 		channelName,
 		strings.TrimSpace(binding.SupplierGoodsNo),

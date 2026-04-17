@@ -2,8 +2,6 @@ package tradelogic
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"math/rand"
 	"strings"
 
@@ -96,7 +94,7 @@ func (l *TradeOrderLogic) CreateOrder(ctx context.Context, input CreateTradeOrde
 		// 先插入全部 fulfillment 的首个 attempt（A01），但一期仅立即执行第一个 fulfillment。
 		for _, item := range plan {
 			providerRequestOrderNo := NewProviderRequestOrderNo(orderNo, item.FulfillmentNo, 1)
-			attemptRowID, err := l.insertTradeOrderAttempt(ctx, tx, orderID, providerRequestOrderNo, item, firstBinding, prepared.Goods.SubjectName, lockedSalePrice, lossAmount)
+			attemptRowID, err := l.insertTradeOrderAttempt(ctx, tx, orderID, providerRequestOrderNo, item, firstBinding, prepared.Goods.SubjectName, lockedSalePrice, lossAmount, 1)
 			if err != nil {
 				return err
 			}
@@ -142,18 +140,6 @@ func (l *TradeOrderLogic) CreateOrder(ctx context.Context, input CreateTradeOrde
 		}
 	}
 	return order, nil
-}
-
-func (l *TradeOrderLogic) decodePayloadMap(raw string) (map[string]any, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return nil, fmt.Errorf("payload empty")
-	}
-	result := make(map[string]any)
-	if err := json.Unmarshal([]byte(raw), &result); err != nil {
-		return nil, err
-	}
-	return result, nil
 }
 
 var _ = supplierprovider.CreateOrderInput{}

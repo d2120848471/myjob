@@ -18,13 +18,19 @@ import (
 type createAttemptRow struct {
 	AttemptID              int64  `db:"attempt_id"`
 	OrderID                int64  `db:"order_id"`
+	OrderNo                string `db:"order_no"`
 	GoodsID                int64  `db:"goods_id"`
+	GoodsCode              string `db:"goods_code"`
+	OrderQuantity          int    `db:"order_quantity"`
 	PlatformAccountID      int64  `db:"platform_account_id"`
 	ProviderCode           string `db:"provider_code"`
 	ProviderRequestOrderNo string `db:"provider_request_order_no"`
+	FulfillmentNo          string `db:"fulfillment_no"`
 	AttemptQuantity        int    `db:"attempt_quantity"`
+	AttemptNo              int    `db:"attempt_no"`
 	SupplierGoodsNo        string `db:"supplier_goods_no"`
 	PayloadJSON            string `db:"payload_json"`
+	SalePrice              string `db:"sale_price"`
 }
 
 func (l *TradeOrderLogic) loadCreateAttemptRow(ctx context.Context, db gdb.DB, attemptID int64) (createAttemptRow, error) {
@@ -33,13 +39,19 @@ func (l *TradeOrderLogic) loadCreateAttemptRow(ctx context.Context, db gdb.DB, a
 SELECT
     a.id AS attempt_id,
     a.order_id,
+    o.order_no,
     o.goods_id,
+    o.goods_code_snapshot AS goods_code,
+    o.quantity AS order_quantity,
     a.platform_account_id,
     a.provider_code,
     a.provider_request_order_no,
+    a.fulfillment_no,
     a.attempt_quantity,
+    a.attempt_no,
     a.binding_supplier_goods_no_snapshot AS supplier_goods_no,
-    o.payload_json
+    o.payload_json,
+    o.sale_price
 FROM trade_order_attempt a
 JOIN trade_order o ON o.id = a.order_id
 WHERE a.id = ?
@@ -67,30 +79,6 @@ func decodeJSONMap(value string) map[string]any {
 	result := make(map[string]any)
 	_ = json.Unmarshal([]byte(value), &result)
 	return result
-}
-
-func classifyHTTPError(err error) string {
-	if err == nil {
-		return ""
-	}
-	var netErr net.Error
-	if ok := errorsAs(err, &netErr); ok && netErr.Timeout() {
-		return "timeout"
-	}
-	return "server_error"
-}
-
-func errorsAs(err error, target any) bool {
-	type aser interface {
-		As(target any) bool
-	}
-	if err == nil {
-		return false
-	}
-	if e, ok := any(err).(aser); ok {
-		return e.As(target)
-	}
-	return false
 }
 
 func (l *TradeOrderLogic) executeCreateAttempt(ctx context.Context, attemptID int64, traceID string) error {
@@ -258,7 +246,24 @@ WHERE id = ?
 			attemptID,
 		)
 
-		// TODO：周期三后续补齐：成功数量推进、订单状态收敛、补单。
+		// 同步明确成功：直接推进主订单数量与状态。
+		if attemptStatus == "success" {
+			_ = l.markOrderSuccess(ctx, row.OrderID, row.AttemptQuantity, result.ChannelOrderNo, now)
+			_ = l.tryKickoffNextCreatedAttempt(ctx, row.OrderID, traceID)
+		}
+		// 同步明确失败：若开启智能补单，则切换下一条绑定继续建单。
+		if attemptStatus == "failed" {
+			if nextID, ok, _ := l.tryReplenishAfterFailedAttempt(ctx, row, traceID); ok && nextID > 0 {
+				_ = l.executeCreateAttempt(ctx, nextID, traceID)
+			} else {
+				reason := strings.TrimSpace(result.ErrorCategory)
+				if reason == "" {
+					reason = "all_bindings_failed"
+				}
+				_ = l.markOrderFailed(ctx, row.OrderID, row.AttemptQuantity, reason, now)
+				_ = l.tryKickoffNextCreatedAttempt(ctx, row.OrderID, traceID)
+			}
+		}
 		return nil
 	}
 
@@ -266,6 +271,58 @@ WHERE id = ?
 		_ = lastErr
 	}
 	return nil
+}
+
+func (l *TradeOrderLogic) markOrderSuccess(ctx context.Context, orderID int64, attemptQuantity int, channelOrderNo string, now time.Time) error {
+	if orderID <= 0 || attemptQuantity <= 0 {
+		return nil
+	}
+	return l.core.DB().Transaction(ctx, func(ctx context.Context, tx gdb.TX) error {
+		record, err := tx.GetOne(`SELECT quantity, success_quantity, failed_quantity, status, failure_reason FROM trade_order WHERE id = ?`, orderID)
+		if err != nil {
+			return err
+		}
+		if record == nil || len(record) == 0 {
+			return nil
+		}
+		status := strings.TrimSpace(record["status"].String())
+		if status == "success" || status == "failed" || status == "manual_review" {
+			return nil
+		}
+
+		total := record["quantity"].Int()
+		currentSuccess := record["success_quantity"].Int()
+		currentFailed := record["failed_quantity"].Int()
+		newSuccess := currentSuccess + attemptQuantity
+		failureReason := strings.TrimSpace(record["failure_reason"].String())
+
+		finishedAt := time.Time{}
+		nextStatus := "processing"
+		if total > 0 {
+			if newSuccess >= total {
+				nextStatus = "success"
+				finishedAt = now
+			} else if newSuccess+currentFailed >= total {
+				nextStatus = "manual_review"
+				finishedAt = now
+				if failureReason == "" {
+					failureReason = "partial_success_need_review"
+				}
+			}
+		}
+
+		_, err = tx.Exec(`
+UPDATE trade_order
+SET success_quantity = ?,
+    status = ?,
+    channel_order_no = CASE WHEN ? != '' THEN ? ELSE channel_order_no END,
+    failure_reason = CASE WHEN ? != '' THEN ? ELSE failure_reason END,
+    finished_at = ?,
+    updated_at = ?
+WHERE id = ?
+`, newSuccess, nextStatus, strings.TrimSpace(channelOrderNo), strings.TrimSpace(channelOrderNo), failureReason, failureReason, nullableTimeArg(finishedAt), now, orderID)
+		return err
+	})
 }
 
 func (l *TradeOrderLogic) computeQuerySchedule(ctx context.Context, goodsID int64, now time.Time) (time.Time, time.Time) {

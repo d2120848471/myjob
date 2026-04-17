@@ -140,21 +140,6 @@ func buildCandidateBindings(ctx context.Context, runner sqlRunner, now time.Time
 	return CandidateBuildOutput{Goods: goods, Config: cfg, Candidates: candidates}, nil
 }
 
-type goodsRow struct {
-	ID                int64          `db:"id"`
-	GoodsCode         string         `db:"goods_code"`
-	GoodsName         string         `db:"goods_name"`
-	SupplyType        string         `db:"supply_type"`
-	HasTax            int            `db:"has_tax"`
-	SubjectID         sql.NullInt64  `db:"subject_id"`
-	DefaultSellPrice  sql.NullString `db:"default_sell_price"`
-	MinPurchaseQty    int            `db:"min_purchase_qty"`
-	MaxPurchaseQty    int            `db:"max_purchase_qty"`
-	Status            int            `db:"status"`
-	IsDeleted         int            `db:"is_deleted"`
-	ProductTemplateID sql.NullInt64  `db:"product_template_id"`
-}
-
 func loadActiveChannelGoods(ctx context.Context, runner sqlRunner, goodsCode string) (GoodsSnapshot, error) {
 	goodsCode = strings.TrimSpace(goodsCode)
 	if goodsCode == "" {

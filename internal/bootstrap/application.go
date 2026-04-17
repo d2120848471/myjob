@@ -10,9 +10,12 @@ import (
 
 	"myjob/internal/app"
 	admincontroller "myjob/internal/controller/admin"
+	opencontroller "myjob/internal/controller/open"
+	providercontroller "myjob/internal/controller/provider"
 	authlib "myjob/internal/library/auth"
 	smslib "myjob/internal/library/sms"
 	adminlogic "myjob/internal/logic/admin"
+	tradelogic "myjob/internal/logic/trade"
 	"myjob/internal/middleware"
 	modelconfig "myjob/internal/model/config"
 	modelruntime "myjob/internal/model/runtime"
@@ -20,6 +23,7 @@ import (
 	"github.com/gogf/gf/v2/database/gredis"
 	"github.com/gogf/gf/v2/net/ghttp"
 	"github.com/gogf/gf/v2/net/goai"
+	"github.com/gogf/gf/v2/os/gcron"
 )
 
 // SMSConfig 是运行态短信配置快照的别名，便于测试与对外透出。
@@ -27,8 +31,9 @@ type SMSConfig = modelruntime.SMSConfig
 
 // Application 表示 MyJob 后台应用实例，持有运行时 Core 与 HTTP Server，并提供测试辅助能力。
 type Application struct {
-	core   *app.Core
-	server *ghttp.Server
+	core      *app.Core
+	server    *ghttp.Server
+	cronNames []string
 }
 
 // NewApplicationFromConfig 基于显式配置创建应用实例（不会自动启动 HTTP Server）。
@@ -97,11 +102,19 @@ func assemble(core *app.Core) (*Application, error) {
 	operationLogCtrl := admincontroller.NewOperationLog(services.AuditLog)
 	loginLogCtrl := admincontroller.NewLoginLog(services.AuditLog)
 	guard := middleware.NewAuthGuard(core)
+	openSignatureGuard := middleware.NewOpenSignatureGuard(core)
+	openOrderCtrl := opencontroller.NewOpenOrder(tradelogic.NewOpenOrderLogic(core))
+	tradeOrderLogic := tradelogic.NewTradeOrderLogic(core, nil, nil)
+	providerCallbackCtrl := providercontroller.NewProviderCallback(tradeOrderLogic)
+	providerPriceNotifyCtrl := providercontroller.NewProviderPriceNotify(tradeOrderLogic)
 
 	s := ghttp.GetServer(fmt.Sprintf("myjob-admin-%d", time.Now().UnixNano()))
 	s.SetAddr(core.Config().Server.Address)
 	s.SetOpenApiPath("/api.json")
 	s.SetSwaggerPath("/swagger")
+	if core.Config().AppEnv == "test" {
+		s.SetDumpRouterMap(false)
+	}
 	configureOpenAPI(s)
 	if err := mountUploadStaticPath(s, core.Config().Upload); err != nil {
 		return nil, err
@@ -167,7 +180,22 @@ func assemble(core *app.Core) (*Application, error) {
 		})
 	})
 
-	return &Application{core: core, server: s}, nil
+	s.Group("/api/open", func(group *ghttp.RouterGroup) {
+		group.Middleware(middleware.Response)
+		group.Middleware(openSignatureGuard.Require())
+		group.Bind(openOrderCtrl)
+	})
+
+	s.Group("/api/provider", func(group *ghttp.RouterGroup) {
+		group.Bind(providerCallbackCtrl)
+		group.Bind(providerPriceNotifyCtrl)
+	})
+
+	cronNames, err := registerTradeJobs(core, tradeOrderLogic)
+	if err != nil {
+		return nil, err
+	}
+	return &Application{core: core, server: s, cronNames: cronNames}, nil
 }
 
 func mountUploadStaticPath(s *ghttp.Server, cfg modelconfig.UploadConfig) error {
@@ -201,7 +229,13 @@ func configureOpenAPI(s *ghttp.Server) {
 }
 
 func (a *Application) Handler() http.Handler { return a.server }
-func (a *Application) Close() error          { _ = a.server.Shutdown(); return a.core.Close() }
+func (a *Application) Close() error {
+	_ = a.server.Shutdown()
+	for _, name := range a.cronNames {
+		gcron.Remove(name)
+	}
+	return a.core.Close()
+}
 func (a *Application) Redis() *gredis.Redis  { return a.core.Redis() }
 func (a *Application) LastMockSMSCode(phone string) (string, error) {
 	return a.core.LastMockSMSCode(phone)
