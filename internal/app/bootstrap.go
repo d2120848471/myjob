@@ -62,6 +62,9 @@ func (c *Core) bootstrap(ctx context.Context) error {
 	if err := c.ensureSMSConfig(ctx); err != nil {
 		return err
 	}
+	if err := c.ensureTradeSystemConfig(ctx); err != nil {
+		return err
+	}
 	if err := c.ensureSuperAdmin(ctx); err != nil {
 		return err
 	}
@@ -239,6 +242,27 @@ func (c *Core) ensureSupplierPlatformTypes(ctx context.Context) error {
 // ensureSMSConfig 初始化短信配置默认项（写入 system_config 表）。
 func (c *Core) ensureSMSConfig(ctx context.Context) error {
 	defaults := map[string]string{"sms_access_key": "", "sms_access_key_secret": "", "sms_sign_name": "玖权益", "sms_template_code": "SMS_000001", "sms_expire_minutes": "30", "sms_interval_minutes": "1"}
+	for key, value := range defaults {
+		exists, err := c.DB().GetCore().GetValue(ctx, `SELECT COUNT(*) FROM system_config WHERE config_key = ?`, key)
+		if err != nil {
+			return err
+		}
+		if exists.Int() > 0 {
+			continue
+		}
+		if _, err = c.DB().Exec(ctx, `INSERT INTO system_config (config_key, config_value, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`, key, value, key, c.now(), c.now()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ensureTradeSystemConfig 初始化交易域依赖的 system_config 默认项（用于税态换算等规则）。
+func (c *Core) ensureTradeSystemConfig(ctx context.Context) error {
+	defaults := map[string]string{
+		"trade.tax.untaxed_to_taxed_rate": "",
+		"trade.tax.taxed_to_untaxed_rate": "",
+	}
 	for key, value := range defaults {
 		exists, err := c.DB().GetCore().GetValue(ctx, `SELECT COUNT(*) FROM system_config WHERE config_key = ?`, key)
 		if err != nil {

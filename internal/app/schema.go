@@ -238,7 +238,216 @@ CREATE TABLE IF NOT EXISTS system_config (
     description TEXT NOT NULL DEFAULT '',
     created_at DATETIME NOT NULL,
     updated_at DATETIME NOT NULL
-)
+);
+
+CREATE TABLE IF NOT EXISTS product_goods_channel_config (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    goods_id INTEGER NOT NULL UNIQUE,
+    smart_replenish_enabled INTEGER NOT NULL DEFAULT 0,
+    attempt_timeout_enabled INTEGER NOT NULL DEFAULT 0,
+    attempt_timeout_minutes INTEGER NOT NULL DEFAULT 0,
+    route_mode TEXT NOT NULL DEFAULT 'fixed_order',
+    sync_cost_enabled INTEGER NOT NULL DEFAULT 0,
+    sync_goods_name_enabled INTEGER NOT NULL DEFAULT 0,
+    allow_loss INTEGER NOT NULL DEFAULT 0,
+    max_loss_amount TEXT NULL,
+    is_bundle INTEGER NOT NULL DEFAULT 0,
+    min_channel_cost_snapshot TEXT NULL,
+    bound_channel_count_snapshot INTEGER NOT NULL DEFAULT 0,
+    primary_binding_id INTEGER NULL,
+    primary_channel_name_snapshot TEXT NOT NULL DEFAULT '',
+    channel_auto_price_status_snapshot INTEGER NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS product_goods_channel_binding (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    goods_id INTEGER NOT NULL,
+    platform_account_id INTEGER NOT NULL,
+    supplier_goods_no TEXT NOT NULL,
+    supplier_goods_name TEXT NOT NULL DEFAULT '',
+    source_cost_price TEXT NOT NULL DEFAULT '0.0000',
+    cost_price TEXT NOT NULL DEFAULT '0.0000',
+    tax_adjust_direction TEXT NOT NULL DEFAULT 'none',
+    tax_adjust_rate TEXT NOT NULL DEFAULT '0.0000',
+    tax_adjust_amount TEXT NOT NULL DEFAULT '0.0000',
+    dock_status TEXT NOT NULL DEFAULT 'enabled',
+    sort INTEGER NOT NULL DEFAULT 0,
+    weight INTEGER NOT NULL DEFAULT 0,
+    start_time TEXT NOT NULL DEFAULT '',
+    end_time TEXT NOT NULL DEFAULT '',
+    validate_template_id INTEGER NULL,
+    is_auto_change INTEGER NOT NULL DEFAULT 0,
+    add_type TEXT NOT NULL DEFAULT 'fixed',
+    default_price TEXT NOT NULL DEFAULT '0.0000',
+    lock_price TEXT NOT NULL DEFAULT '0.0000',
+    symbol_price TEXT NOT NULL DEFAULT '0.0000',
+    max_price TEXT NOT NULL DEFAULT '0.0000',
+    min_price TEXT NOT NULL DEFAULT '0.0000',
+    is_deleted INTEGER NOT NULL DEFAULT 0,
+    deleted_at DATETIME NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    UNIQUE(goods_id, platform_account_id, supplier_goods_no, is_deleted)
+);
+CREATE INDEX IF NOT EXISTS idx_product_goods_channel_binding_goods_id
+    ON product_goods_channel_binding(goods_id);
+CREATE INDEX IF NOT EXISTS idx_product_goods_channel_binding_platform_account_id
+    ON product_goods_channel_binding(platform_account_id);
+CREATE INDEX IF NOT EXISTS idx_product_goods_channel_binding_goods_status
+    ON product_goods_channel_binding(goods_id, dock_status, is_deleted);
+CREATE INDEX IF NOT EXISTS idx_product_goods_channel_binding_goods_sort
+    ON product_goods_channel_binding(goods_id, sort, is_deleted);
+
+CREATE TABLE IF NOT EXISTS trade_order (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_no TEXT NOT NULL UNIQUE,
+    caller_id INTEGER NOT NULL,
+    client_order_no TEXT NOT NULL,
+    goods_id INTEGER NOT NULL,
+    goods_code_snapshot TEXT NOT NULL DEFAULT '',
+    goods_name_snapshot TEXT NOT NULL DEFAULT '',
+    binding_id INTEGER NOT NULL DEFAULT 0,
+    platform_account_id INTEGER NOT NULL DEFAULT 0,
+    route_mode_snapshot TEXT NOT NULL DEFAULT '',
+    quantity INTEGER NOT NULL,
+    success_quantity INTEGER NOT NULL DEFAULT 0,
+    failed_quantity INTEGER NOT NULL DEFAULT 0,
+    payload_json TEXT NOT NULL DEFAULT '',
+    sale_price TEXT NOT NULL DEFAULT '0.0000',
+    total_amount TEXT NOT NULL DEFAULT '0.0000',
+    source_cost_price_snapshot TEXT NOT NULL DEFAULT '0.0000',
+    cost_price_snapshot TEXT NOT NULL DEFAULT '0.0000',
+    tax_adjust_direction TEXT NOT NULL DEFAULT 'none',
+    tax_adjust_rate TEXT NOT NULL DEFAULT '0.0000',
+    tax_adjust_amount TEXT NOT NULL DEFAULT '0.0000',
+    loss_order INTEGER NOT NULL DEFAULT 0,
+    loss_amount TEXT NOT NULL DEFAULT '0.0000',
+    channel_order_no TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'created',
+    failure_reason TEXT NOT NULL DEFAULT '',
+    finished_at DATETIME NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    UNIQUE(caller_id, client_order_no)
+);
+CREATE INDEX IF NOT EXISTS idx_trade_order_goods_id
+    ON trade_order(goods_id);
+CREATE INDEX IF NOT EXISTS idx_trade_order_status
+    ON trade_order(status);
+CREATE INDEX IF NOT EXISTS idx_trade_order_created_at
+    ON trade_order(created_at);
+
+CREATE TABLE IF NOT EXISTS trade_order_attempt (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id INTEGER NOT NULL,
+    binding_id INTEGER NOT NULL,
+    platform_account_id INTEGER NOT NULL,
+    provider_code TEXT NOT NULL,
+    fulfillment_no TEXT NOT NULL,
+    attempt_quantity INTEGER NOT NULL,
+    attempt_no INTEGER NOT NULL,
+    provider_request_order_no TEXT NOT NULL UNIQUE,
+    channel_order_no TEXT NOT NULL DEFAULT '',
+    attempt_status TEXT NOT NULL DEFAULT 'created',
+    upstream_status TEXT NOT NULL DEFAULT '',
+    binding_channel_name_snapshot TEXT NOT NULL DEFAULT '',
+    binding_supplier_goods_no_snapshot TEXT NOT NULL DEFAULT '',
+    source_cost_price_snapshot TEXT NOT NULL DEFAULT '0.0000',
+    cost_price_snapshot TEXT NOT NULL DEFAULT '0.0000',
+    sale_price_snapshot TEXT NOT NULL DEFAULT '0.0000',
+    loss_amount_snapshot TEXT NOT NULL DEFAULT '0.0000',
+    request_url TEXT NOT NULL DEFAULT '',
+    request_method TEXT NOT NULL DEFAULT '',
+    request_headers TEXT NOT NULL DEFAULT '',
+    request_payload TEXT NOT NULL DEFAULT '',
+    response_payload TEXT NOT NULL DEFAULT '',
+    http_status INTEGER NOT NULL DEFAULT 0,
+    duration_ms INTEGER NOT NULL DEFAULT 0,
+    error_category TEXT NOT NULL DEFAULT '',
+    error_code TEXT NOT NULL DEFAULT '',
+    error_message TEXT NOT NULL DEFAULT '',
+    query_count INTEGER NOT NULL DEFAULT 0,
+    last_query_at DATETIME NULL,
+    next_query_at DATETIME NULL,
+    query_deadline_at DATETIME NULL,
+    callback_payload TEXT NOT NULL DEFAULT '',
+    callback_received_at DATETIME NULL,
+    callback_processed_at DATETIME NULL,
+    trace_id TEXT NOT NULL DEFAULT '',
+    finished_at DATETIME NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    UNIQUE(order_id, fulfillment_no, attempt_no)
+);
+CREATE INDEX IF NOT EXISTS idx_trade_order_attempt_order_id
+    ON trade_order_attempt(order_id);
+CREATE INDEX IF NOT EXISTS idx_trade_order_attempt_order_fulfillment
+    ON trade_order_attempt(order_id, fulfillment_no);
+CREATE INDEX IF NOT EXISTS idx_trade_order_attempt_binding_id
+    ON trade_order_attempt(binding_id);
+CREATE INDEX IF NOT EXISTS idx_trade_order_attempt_channel_order_no
+    ON trade_order_attempt(channel_order_no);
+CREATE INDEX IF NOT EXISTS idx_trade_order_attempt_attempt_status
+    ON trade_order_attempt(attempt_status);
+CREATE INDEX IF NOT EXISTS idx_trade_order_attempt_next_query_at
+    ON trade_order_attempt(next_query_at);
+
+CREATE TABLE IF NOT EXISTS provider_callback_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    provider_code TEXT NOT NULL,
+    platform_account_id INTEGER NOT NULL DEFAULT 0,
+    idempotency_key TEXT NOT NULL,
+    provider_request_order_no TEXT NOT NULL DEFAULT '',
+    channel_order_no TEXT NOT NULL DEFAULT '',
+    request_headers TEXT NOT NULL,
+    request_body TEXT NOT NULL,
+    verify_result TEXT NOT NULL DEFAULT '',
+    process_result TEXT NOT NULL DEFAULT '',
+    ack_body TEXT NOT NULL DEFAULT '',
+    created_at DATETIME NOT NULL,
+    UNIQUE(provider_code, idempotency_key)
+);
+CREATE INDEX IF NOT EXISTS idx_provider_callback_log_provider_request_order_no
+    ON provider_callback_log(provider_request_order_no);
+CREATE INDEX IF NOT EXISTS idx_provider_callback_log_channel_order_no
+    ON provider_callback_log(channel_order_no);
+
+CREATE TABLE IF NOT EXISTS provider_price_notify_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    provider_code TEXT NOT NULL,
+    platform_account_id INTEGER NOT NULL DEFAULT 0,
+    idempotency_key TEXT NOT NULL,
+    supplier_goods_no TEXT NOT NULL DEFAULT '',
+    request_headers TEXT NOT NULL,
+    request_body TEXT NOT NULL,
+    source_cost_price_new TEXT NOT NULL DEFAULT '0.0000',
+    verify_result TEXT NOT NULL DEFAULT '',
+    process_result TEXT NOT NULL DEFAULT '',
+    created_at DATETIME NOT NULL,
+    UNIQUE(provider_code, idempotency_key)
+);
+CREATE INDEX IF NOT EXISTS idx_provider_price_notify_log_platform_goods
+    ON provider_price_notify_log(platform_account_id, supplier_goods_no);
+
+CREATE TABLE IF NOT EXISTS open_caller (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    app_key TEXT NOT NULL,
+    app_secret TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'enabled',
+    allowed_ip_list TEXT NOT NULL DEFAULT '[]',
+    sign_version TEXT NOT NULL DEFAULT 'v1',
+    remark TEXT NOT NULL DEFAULT '',
+    is_deleted INTEGER NOT NULL DEFAULT 0,
+    deleted_at DATETIME NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    UNIQUE(app_key, is_deleted)
+);
+CREATE INDEX IF NOT EXISTS idx_open_caller_status
+    ON open_caller(status);
 `
 
 const mysqlSchema = `
@@ -471,5 +680,200 @@ CREATE TABLE IF NOT EXISTS system_config (
     description VARCHAR(255) NOT NULL DEFAULT '',
     created_at DATETIME NOT NULL,
     updated_at DATETIME NOT NULL
-)
+);
+
+CREATE TABLE IF NOT EXISTS product_goods_channel_config (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    goods_id BIGINT UNSIGNED NOT NULL,
+    smart_replenish_enabled TINYINT NOT NULL DEFAULT 0,
+    attempt_timeout_enabled TINYINT NOT NULL DEFAULT 0,
+    attempt_timeout_minutes INT NOT NULL DEFAULT 0,
+    route_mode VARCHAR(32) NOT NULL DEFAULT 'fixed_order',
+    sync_cost_enabled TINYINT NOT NULL DEFAULT 0,
+    sync_goods_name_enabled TINYINT NOT NULL DEFAULT 0,
+    allow_loss TINYINT NOT NULL DEFAULT 0,
+    max_loss_amount DECIMAL(18,4) NULL,
+    is_bundle TINYINT NOT NULL DEFAULT 0,
+    min_channel_cost_snapshot DECIMAL(18,4) NULL,
+    bound_channel_count_snapshot INT NOT NULL DEFAULT 0,
+    primary_binding_id BIGINT UNSIGNED NULL,
+    primary_channel_name_snapshot VARCHAR(128) NOT NULL DEFAULT '',
+    channel_auto_price_status_snapshot TINYINT NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    UNIQUE KEY uk_goods_id (goods_id)
+);
+
+CREATE TABLE IF NOT EXISTS product_goods_channel_binding (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    goods_id BIGINT UNSIGNED NOT NULL,
+    platform_account_id BIGINT UNSIGNED NOT NULL,
+    supplier_goods_no VARCHAR(128) NOT NULL,
+    supplier_goods_name VARCHAR(255) NOT NULL DEFAULT '',
+    source_cost_price DECIMAL(18,4) NOT NULL DEFAULT 0.0000,
+    cost_price DECIMAL(18,4) NOT NULL DEFAULT 0.0000,
+    tax_adjust_direction VARCHAR(32) NOT NULL DEFAULT 'none',
+    tax_adjust_rate DECIMAL(9,4) NOT NULL DEFAULT 0.0000,
+    tax_adjust_amount DECIMAL(18,4) NOT NULL DEFAULT 0.0000,
+    dock_status VARCHAR(16) NOT NULL DEFAULT 'enabled',
+    sort INT NOT NULL DEFAULT 0,
+    weight INT NOT NULL DEFAULT 0,
+    start_time CHAR(5) NOT NULL DEFAULT '',
+    end_time CHAR(5) NOT NULL DEFAULT '',
+    validate_template_id BIGINT UNSIGNED NULL,
+    is_auto_change TINYINT NOT NULL DEFAULT 0,
+    add_type VARCHAR(16) NOT NULL DEFAULT 'fixed',
+    default_price DECIMAL(18,4) NOT NULL DEFAULT 0.0000,
+    lock_price DECIMAL(18,4) NOT NULL DEFAULT 0.0000,
+    symbol_price DECIMAL(18,4) NOT NULL DEFAULT 0.0000,
+    max_price DECIMAL(18,4) NOT NULL DEFAULT 0.0000,
+    min_price DECIMAL(18,4) NOT NULL DEFAULT 0.0000,
+    is_deleted TINYINT NOT NULL DEFAULT 0,
+    deleted_at DATETIME NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    UNIQUE KEY uk_goods_account_supplier_no (goods_id, platform_account_id, supplier_goods_no, is_deleted),
+    KEY idx_goods_id (goods_id),
+    KEY idx_platform_account_id (platform_account_id),
+    KEY idx_goods_status (goods_id, dock_status, is_deleted),
+    KEY idx_goods_sort (goods_id, sort, is_deleted)
+);
+
+CREATE TABLE IF NOT EXISTS trade_order (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    order_no VARCHAR(64) NOT NULL,
+    caller_id BIGINT UNSIGNED NOT NULL,
+    client_order_no VARCHAR(128) NOT NULL,
+    goods_id BIGINT UNSIGNED NOT NULL,
+    goods_code_snapshot VARCHAR(64) NOT NULL DEFAULT '',
+    goods_name_snapshot VARCHAR(255) NOT NULL DEFAULT '',
+    binding_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    platform_account_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    route_mode_snapshot VARCHAR(32) NOT NULL DEFAULT '',
+    quantity INT NOT NULL,
+    success_quantity INT NOT NULL DEFAULT 0,
+    failed_quantity INT NOT NULL DEFAULT 0,
+    payload_json TEXT NOT NULL,
+    sale_price DECIMAL(18,4) NOT NULL DEFAULT 0.0000,
+    total_amount DECIMAL(18,4) NOT NULL DEFAULT 0.0000,
+    source_cost_price_snapshot DECIMAL(18,4) NOT NULL DEFAULT 0.0000,
+    cost_price_snapshot DECIMAL(18,4) NOT NULL DEFAULT 0.0000,
+    tax_adjust_direction VARCHAR(32) NOT NULL DEFAULT 'none',
+    tax_adjust_rate DECIMAL(9,4) NOT NULL DEFAULT 0.0000,
+    tax_adjust_amount DECIMAL(18,4) NOT NULL DEFAULT 0.0000,
+    loss_order TINYINT NOT NULL DEFAULT 0,
+    loss_amount DECIMAL(18,4) NOT NULL DEFAULT 0.0000,
+    channel_order_no VARCHAR(128) NOT NULL DEFAULT '',
+    status VARCHAR(32) NOT NULL DEFAULT 'created',
+    failure_reason VARCHAR(255) NOT NULL DEFAULT '',
+    finished_at DATETIME NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    UNIQUE KEY uk_order_no (order_no),
+    UNIQUE KEY uk_caller_client_order_no (caller_id, client_order_no),
+    KEY idx_goods_id (goods_id),
+    KEY idx_status (status),
+    KEY idx_created_at (created_at)
+);
+
+CREATE TABLE IF NOT EXISTS trade_order_attempt (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    order_id BIGINT UNSIGNED NOT NULL,
+    binding_id BIGINT UNSIGNED NOT NULL,
+    platform_account_id BIGINT UNSIGNED NOT NULL,
+    provider_code VARCHAR(64) NOT NULL,
+    fulfillment_no VARCHAR(64) NOT NULL,
+    attempt_quantity INT NOT NULL,
+    attempt_no INT NOT NULL,
+    provider_request_order_no VARCHAR(128) NOT NULL,
+    channel_order_no VARCHAR(128) NOT NULL DEFAULT '',
+    attempt_status VARCHAR(32) NOT NULL DEFAULT 'created',
+    upstream_status VARCHAR(64) NOT NULL DEFAULT '',
+    binding_channel_name_snapshot VARCHAR(255) NOT NULL DEFAULT '',
+    binding_supplier_goods_no_snapshot VARCHAR(128) NOT NULL DEFAULT '',
+    source_cost_price_snapshot DECIMAL(18,4) NOT NULL DEFAULT 0.0000,
+    cost_price_snapshot DECIMAL(18,4) NOT NULL DEFAULT 0.0000,
+    sale_price_snapshot DECIMAL(18,4) NOT NULL DEFAULT 0.0000,
+    loss_amount_snapshot DECIMAL(18,4) NOT NULL DEFAULT 0.0000,
+    request_url VARCHAR(512) NOT NULL DEFAULT '',
+    request_method VARCHAR(16) NOT NULL DEFAULT '',
+    request_headers TEXT NOT NULL,
+    request_payload TEXT NOT NULL,
+    response_payload TEXT NOT NULL,
+    http_status INT NOT NULL DEFAULT 0,
+    duration_ms INT NOT NULL DEFAULT 0,
+    error_category VARCHAR(32) NOT NULL DEFAULT '',
+    error_code VARCHAR(64) NOT NULL DEFAULT '',
+    error_message VARCHAR(255) NOT NULL DEFAULT '',
+    query_count INT NOT NULL DEFAULT 0,
+    last_query_at DATETIME NULL,
+    next_query_at DATETIME NULL,
+    query_deadline_at DATETIME NULL,
+    callback_payload TEXT NOT NULL,
+    callback_received_at DATETIME NULL,
+    callback_processed_at DATETIME NULL,
+    trace_id VARCHAR(128) NOT NULL DEFAULT '',
+    finished_at DATETIME NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    UNIQUE KEY uk_provider_request_order_no (provider_request_order_no),
+    UNIQUE KEY uk_order_fulfillment_attempt (order_id, fulfillment_no, attempt_no),
+    KEY idx_order_id (order_id),
+    KEY idx_order_fulfillment (order_id, fulfillment_no),
+    KEY idx_binding_id (binding_id),
+    KEY idx_channel_order_no (channel_order_no),
+    KEY idx_attempt_status (attempt_status),
+    KEY idx_next_query_at (next_query_at)
+);
+
+CREATE TABLE IF NOT EXISTS provider_callback_log (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    provider_code VARCHAR(64) NOT NULL,
+    platform_account_id BIGINT UNSIGNED NOT NULL,
+    idempotency_key VARCHAR(128) NOT NULL,
+    provider_request_order_no VARCHAR(128) NOT NULL DEFAULT '',
+    channel_order_no VARCHAR(128) NOT NULL DEFAULT '',
+    request_headers TEXT NOT NULL,
+    request_body TEXT NOT NULL,
+    verify_result VARCHAR(64) NOT NULL DEFAULT '',
+    process_result VARCHAR(128) NOT NULL DEFAULT '',
+    ack_body TEXT NOT NULL,
+    created_at DATETIME NOT NULL,
+    UNIQUE KEY uk_callback_idempotency (provider_code, idempotency_key),
+    KEY idx_provider_request_order_no (provider_request_order_no),
+    KEY idx_channel_order_no (channel_order_no)
+);
+
+CREATE TABLE IF NOT EXISTS provider_price_notify_log (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    provider_code VARCHAR(64) NOT NULL,
+    platform_account_id BIGINT UNSIGNED NOT NULL,
+    idempotency_key VARCHAR(128) NOT NULL,
+    supplier_goods_no VARCHAR(128) NOT NULL,
+    request_headers TEXT NOT NULL,
+    request_body TEXT NOT NULL,
+    source_cost_price_new DECIMAL(18,4) NOT NULL DEFAULT 0.0000,
+    verify_result VARCHAR(64) NOT NULL DEFAULT '',
+    process_result VARCHAR(128) NOT NULL DEFAULT '',
+    created_at DATETIME NOT NULL,
+    UNIQUE KEY uk_price_notify_idempotency (provider_code, idempotency_key),
+    KEY idx_platform_goods (platform_account_id, supplier_goods_no)
+);
+
+CREATE TABLE IF NOT EXISTS open_caller (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(128) NOT NULL,
+    app_key VARCHAR(64) NOT NULL,
+    app_secret VARCHAR(128) NOT NULL,
+    status VARCHAR(16) NOT NULL DEFAULT 'enabled',
+    allowed_ip_list TEXT NOT NULL,
+    sign_version VARCHAR(16) NOT NULL DEFAULT 'v1',
+    remark VARCHAR(255) NOT NULL DEFAULT '',
+    is_deleted TINYINT NOT NULL DEFAULT 0,
+    deleted_at DATETIME NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    UNIQUE KEY uk_app_key (app_key, is_deleted),
+    KEY idx_status (status)
+);
 `

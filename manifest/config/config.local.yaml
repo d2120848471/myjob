@@ -12,6 +12,12 @@ auth:
   jwt_secret: "please-change-this-secret"
   access_token_ttl_minutes: 10080
   temp_login_ttl_minutes: 5
+trade:
+  attempt_query_scan_interval_seconds: 30
+  attempt_query_batch_size: 100
+  attempt_query_max_backoff_seconds: 300
+  open_nonce_ttl_seconds: 600
+  open_timestamp_skew_seconds: 300
 bootstrap:
   super_admin_username: "admin"
   super_admin_phone: "${SUPER_ADMIN_PHONE}"

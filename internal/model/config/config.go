@@ -15,6 +15,7 @@ type Config struct {
 	Database  DatabaseConfig   `json:"database" yaml:"database"`
 	Redis     RedisConfig      `json:"redis" yaml:"redis"`
 	Auth      AuthConfig       `json:"auth" yaml:"auth"`
+	Trade     TradeConfig      `json:"trade" yaml:"trade"`
 	Bootstrap BootstrapConfig  `json:"bootstrap" yaml:"bootstrap"`
 	SMS       RuntimeSMSConfig `json:"sms" yaml:"sms"`
 	Audit     AuditConfig      `json:"audit" yaml:"audit"`
@@ -40,6 +41,14 @@ type AuthConfig struct {
 	JWTSecret         string `json:"jwt_secret" yaml:"jwt_secret"`
 	AccessTokenTTLMin int    `json:"access_token_ttl_minutes" yaml:"access_token_ttl_minutes"`
 	TempLoginTTLMin   int    `json:"temp_login_ttl_minutes" yaml:"temp_login_ttl_minutes"`
+}
+
+type TradeConfig struct {
+	AttemptQueryScanIntervalSeconds int `json:"attempt_query_scan_interval_seconds" yaml:"attempt_query_scan_interval_seconds"`
+	AttemptQueryBatchSize           int `json:"attempt_query_batch_size" yaml:"attempt_query_batch_size"`
+	AttemptQueryMaxBackoffSeconds   int `json:"attempt_query_max_backoff_seconds" yaml:"attempt_query_max_backoff_seconds"`
+	OpenNonceTTLSeconds             int `json:"open_nonce_ttl_seconds" yaml:"open_nonce_ttl_seconds"`
+	OpenTimestampSkewSeconds        int `json:"open_timestamp_skew_seconds" yaml:"open_timestamp_skew_seconds"`
 }
 
 type BootstrapConfig struct {
@@ -73,6 +82,7 @@ func Default() Config {
 		},
 		Redis:     RedisConfig{Addr: "127.0.0.1:6380", DB: 0},
 		Auth:      AuthConfig{JWTSecret: "please-change-this-secret", AccessTokenTTLMin: 10080, TempLoginTTLMin: 5},
+		Trade:     TradeConfig{AttemptQueryScanIntervalSeconds: 30, AttemptQueryBatchSize: 100, AttemptQueryMaxBackoffSeconds: 300, OpenNonceTTLSeconds: 600, OpenTimestampSkewSeconds: 300},
 		Bootstrap: BootstrapConfig{SuperAdminUsername: "admin"},
 		SMS:       RuntimeSMSConfig{Provider: "aliyun"},
 		Audit:     AuditConfig{Async: true, BufferSize: 128},
@@ -124,6 +134,21 @@ func normalize(cfg *Config) {
 	}
 	if cfg.Auth.TempLoginTTLMin <= 0 {
 		cfg.Auth.TempLoginTTLMin = 5
+	}
+	if cfg.Trade.AttemptQueryScanIntervalSeconds <= 0 {
+		cfg.Trade.AttemptQueryScanIntervalSeconds = 30
+	}
+	if cfg.Trade.AttemptQueryBatchSize <= 0 {
+		cfg.Trade.AttemptQueryBatchSize = 100
+	}
+	if cfg.Trade.AttemptQueryMaxBackoffSeconds <= 0 {
+		cfg.Trade.AttemptQueryMaxBackoffSeconds = 300
+	}
+	if cfg.Trade.OpenNonceTTLSeconds <= 0 {
+		cfg.Trade.OpenNonceTTLSeconds = 600
+	}
+	if cfg.Trade.OpenTimestampSkewSeconds <= 0 {
+		cfg.Trade.OpenTimestampSkewSeconds = 300
 	}
 	if cfg.Audit.BufferSize <= 0 {
 		cfg.Audit.BufferSize = 128
