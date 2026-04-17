@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"myjob/internal/app"
 	"myjob/internal/consts"
@@ -17,6 +18,34 @@ import (
 	"github.com/gogf/gf/v2/database/gdb"
 	"github.com/shopspring/decimal"
 )
+
+type sqlRunner interface {
+	Exec(sql string, args ...any) (sql.Result, error)
+	GetOne(sql string, args ...any) (gdb.Record, error)
+	GetScan(pointer any, sql string, args ...any) error
+	GetValue(sql string, args ...any) (gdb.Value, error)
+}
+
+type ctxDBRunner struct {
+	ctx context.Context
+	db  gdb.DB
+}
+
+func (r ctxDBRunner) Exec(sql string, args ...any) (sql.Result, error) {
+	return r.db.Exec(r.ctx, sql, args...)
+}
+
+func (r ctxDBRunner) GetOne(sql string, args ...any) (gdb.Record, error) {
+	return r.db.GetOne(r.ctx, sql, args...)
+}
+
+func (r ctxDBRunner) GetScan(pointer any, sql string, args ...any) error {
+	return r.db.GetScan(r.ctx, pointer, sql, args...)
+}
+
+func (r ctxDBRunner) GetValue(sql string, args ...any) (gdb.Value, error) {
+	return r.db.GetValue(r.ctx, sql, args...)
+}
 
 // GoodsSnapshot 表示交易域内部使用的商品快照。
 type GoodsSnapshot struct {
@@ -26,6 +55,7 @@ type GoodsSnapshot struct {
 	SupplyType        string
 	HasTax            int
 	SubjectID         int64
+	SubjectName       string
 	DefaultSellPrice  decimal.Decimal
 	MinPurchaseQty    int
 	MaxPurchaseQty    int
@@ -59,7 +89,17 @@ type CandidateBuildOutput struct {
 // - 本函数不接真实上游，不做建单。
 // - 失败时返回业务错误（带 gcode），由上层统一包装成 {code,message,data}。
 func BuildCandidateBindings(ctx context.Context, core *app.Core, goodsCode string, quantity int, payloadJSON string) (CandidateBuildOutput, error) {
-	goods, err := loadActiveChannelGoods(ctx, core.DB(), goodsCode)
+	return BuildCandidateBindingsWithDB(ctx, core.DB(), core.Now(), goodsCode, quantity, payloadJSON)
+}
+
+// BuildCandidateBindingsWithDB 与 BuildCandidateBindings 等价，但允许上层显式传入事务 tx，
+// 确保“幂等判断 + 选路前读”在同一事务内完成。
+func BuildCandidateBindingsWithDB(ctx context.Context, db gdb.DB, now time.Time, goodsCode string, quantity int, payloadJSON string) (CandidateBuildOutput, error) {
+	return buildCandidateBindings(ctx, ctxDBRunner{ctx: ctx, db: db}, now, goodsCode, quantity, payloadJSON)
+}
+
+func buildCandidateBindings(ctx context.Context, runner sqlRunner, now time.Time, goodsCode string, quantity int, payloadJSON string) (CandidateBuildOutput, error) {
+	goods, err := loadActiveChannelGoods(ctx, runner, goodsCode)
 	if err != nil {
 		return CandidateBuildOutput{}, err
 	}
@@ -75,7 +115,7 @@ func BuildCandidateBindings(ctx context.Context, core *app.Core, goodsCode strin
 		return CandidateBuildOutput{}, apiErr(consts.CodeBadRequest, err.Error())
 	}
 	if goods.ProductTemplateID != nil {
-		validateType, err := loadTemplateValidateType(ctx, core.DB(), *goods.ProductTemplateID)
+		validateType, err := loadTemplateValidateType(ctx, runner, *goods.ProductTemplateID)
 		if err != nil {
 			return CandidateBuildOutput{}, err
 		}
@@ -84,12 +124,12 @@ func BuildCandidateBindings(ctx context.Context, core *app.Core, goodsCode strin
 		}
 	}
 
-	cfg, err := loadGoodsChannelConfigSnapshot(ctx, core, goods.ID)
+	cfg, err := loadGoodsChannelConfigSnapshot(ctx, runner, now, goods.ID)
 	if err != nil {
 		return CandidateBuildOutput{}, err
 	}
 
-	candidates, err := loadCandidateBindings(ctx, core.DB(), goods.SubjectID, goods.ID, payloadValue)
+	candidates, err := loadCandidateBindings(ctx, runner, goods.SubjectID, goods.ID, payloadValue)
 	if err != nil {
 		return CandidateBuildOutput{}, err
 	}
@@ -115,28 +155,30 @@ type goodsRow struct {
 	ProductTemplateID sql.NullInt64  `db:"product_template_id"`
 }
 
-func loadActiveChannelGoods(ctx context.Context, db gdb.DB, goodsCode string) (GoodsSnapshot, error) {
+func loadActiveChannelGoods(ctx context.Context, runner sqlRunner, goodsCode string) (GoodsSnapshot, error) {
 	goodsCode = strings.TrimSpace(goodsCode)
 	if goodsCode == "" {
 		return GoodsSnapshot{}, apiErr(consts.CodeBadRequest, "goods_code不能为空")
 	}
 
-	record, err := db.GetCore().GetOne(ctx, `
+	record, err := runner.GetOne(`
 SELECT
-    id,
-    goods_code,
-    name AS goods_name,
-    supply_type,
-    has_tax,
-    subject_id,
-    default_sell_price,
-    min_purchase_qty,
-    max_purchase_qty,
-    status,
-    is_deleted,
-    product_template_id
-FROM product_goods
-WHERE goods_code = ? AND is_deleted = 0
+    p.id,
+    p.goods_code,
+    p.name AS goods_name,
+    p.supply_type,
+    p.has_tax,
+    p.subject_id,
+    COALESCE(sub.name, '') AS subject_name,
+    p.default_sell_price,
+    p.min_purchase_qty,
+    p.max_purchase_qty,
+    p.status,
+    p.is_deleted,
+    p.product_template_id
+FROM product_goods p
+LEFT JOIN admin_subject sub ON sub.id = p.subject_id
+WHERE p.goods_code = ? AND p.is_deleted = 0
 `, goodsCode)
 	if err != nil {
 		return GoodsSnapshot{}, apiErr(consts.CodeInternalError, "读取商品失败")
@@ -175,6 +217,7 @@ WHERE goods_code = ? AND is_deleted = 0
 		SupplyType:        record["supply_type"].String(),
 		HasTax:            record["has_tax"].Int(),
 		SubjectID:         subjectValue.Int64(),
+		SubjectName:       strings.TrimSpace(record["subject_name"].String()),
 		DefaultSellPrice:  Round4(defaultSell),
 		MinPurchaseQty:    record["min_purchase_qty"].Int(),
 		MaxPurchaseQty:    record["max_purchase_qty"].Int(),
@@ -182,14 +225,14 @@ WHERE goods_code = ? AND is_deleted = 0
 	}, nil
 }
 
-func loadGoodsChannelConfigSnapshot(ctx context.Context, core *app.Core, goodsID int64) (GoodsChannelConfigSnapshot, error) {
+func loadGoodsChannelConfigSnapshot(ctx context.Context, runner sqlRunner, now time.Time, goodsID int64) (GoodsChannelConfigSnapshot, error) {
 	if goodsID <= 0 {
 		return GoodsChannelConfigSnapshot{}, apiErr(consts.CodeBadRequest, "goods_id错误")
 	}
-	if err := ensureGoodsChannelConfigRow(ctx, core, goodsID); err != nil {
+	if err := ensureGoodsChannelConfigRow(ctx, runner, now, goodsID); err != nil {
 		return GoodsChannelConfigSnapshot{}, apiErr(consts.CodeInternalError, "读取渠道配置失败")
 	}
-	record, err := core.DB().GetCore().GetOne(ctx, `
+	record, err := runner.GetOne(`
 SELECT
     goods_id,
     smart_replenish_enabled,
@@ -236,15 +279,15 @@ WHERE goods_id = ?
 	}, nil
 }
 
-func ensureGoodsChannelConfigRow(ctx context.Context, core *app.Core, goodsID int64) error {
-	exists, err := core.DB().GetCore().GetValue(ctx, `SELECT COUNT(*) FROM product_goods_channel_config WHERE goods_id = ?`, goodsID)
+func ensureGoodsChannelConfigRow(ctx context.Context, runner sqlRunner, now time.Time, goodsID int64) error {
+	exists, err := runner.GetValue(`SELECT COUNT(*) FROM product_goods_channel_config WHERE goods_id = ?`, goodsID)
 	if err != nil {
 		return err
 	}
 	if exists.Int() > 0 {
 		return nil
 	}
-	_, err = core.DB().Exec(ctx, `INSERT INTO product_goods_channel_config (goods_id, created_at, updated_at) VALUES (?, ?, ?)`, goodsID, core.Now(), core.Now())
+	_, err = runner.Exec(`INSERT INTO product_goods_channel_config (goods_id, created_at, updated_at) VALUES (?, ?, ?)`, goodsID, now, now)
 	return err
 }
 
@@ -272,12 +315,12 @@ type bindingRow struct {
 	ProviderName       string        `db:"provider_name"`
 }
 
-func loadCandidateBindings(ctx context.Context, db gdb.DB, goodsSubjectID int64, goodsID int64, payloadValue string) ([]CandidateBinding, error) {
+func loadCandidateBindings(ctx context.Context, runner sqlRunner, goodsSubjectID int64, goodsID int64, payloadValue string) ([]CandidateBinding, error) {
 	if goodsID <= 0 {
 		return nil, apiErr(consts.CodeBadRequest, "goods_id错误")
 	}
 	rows := make([]bindingRow, 0)
-	if err := db.GetCore().GetScan(ctx, &rows, `
+	if err := runner.GetScan(&rows, `
 SELECT
     b.id,
     b.goods_id,
@@ -326,7 +369,7 @@ WHERE b.goods_id = ? AND b.is_deleted = 0 AND b.dock_status = 'enabled' AND a.su
 		if row.ValidateTemplateID.Valid && row.ValidateTemplateID.Int64 > 0 {
 			id := row.ValidateTemplateID.Int64
 			validateTemplateID = &id
-			validateType, err := loadTemplateValidateType(ctx, db, id)
+			validateType, err := loadTemplateValidateType(ctx, runner, id)
 			if err != nil {
 				return nil, err
 			}
@@ -429,8 +472,8 @@ func extractPayloadPrimaryValue(raw string) (string, error) {
 	return candidates[0].Value, nil
 }
 
-func loadTemplateValidateType(ctx context.Context, db gdb.DB, templateID int64) (int, error) {
-	value, err := db.GetCore().GetValue(ctx, `SELECT validate_type FROM product_template WHERE id = ?`, templateID)
+func loadTemplateValidateType(ctx context.Context, runner sqlRunner, templateID int64) (int, error) {
+	value, err := runner.GetValue(`SELECT validate_type FROM product_template WHERE id = ?`, templateID)
 	if err != nil {
 		return 0, apiErr(consts.CodeInternalError, "读取模板失败")
 	}

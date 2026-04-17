@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -109,6 +110,7 @@ func newJSONRequest(ctx context.Context, url string, payload any, headers map[st
 	if err != nil {
 		return nil, err
 	}
+	req.GetBody = func() (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(body)), nil }
 	if payload != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -119,10 +121,12 @@ func newJSONRequest(ctx context.Context, url string, payload any, headers map[st
 }
 
 func newEmptyJSONRequest(ctx context.Context, url string, body string, headers map[string]string) (*http.Request, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(body))
+	bodyBytes := []byte(body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return nil, err
 	}
+	req.GetBody = func() (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(bodyBytes)), nil }
 	req.Header.Set("Content-Type", "application/json")
 	for key, value := range headers {
 		req.Header.Set(key, value)
@@ -131,10 +135,12 @@ func newEmptyJSONRequest(ctx context.Context, url string, body string, headers m
 }
 
 func newFormRequest(ctx context.Context, url string, values url.Values, headers map[string]string) (*http.Request, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(values.Encode()))
+	bodyBytes := []byte(values.Encode())
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return nil, err
 	}
+	req.GetBody = func() (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(bodyBytes)), nil }
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	for key, value := range headers {
 		req.Header.Set(key, value)
@@ -153,10 +159,12 @@ func newMultipartRequest(ctx context.Context, requestURL string, fields map[stri
 	if err := writer.Close(); err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, requestURL, bytes.NewReader(buffer.Bytes()))
+	bodyBytes := buffer.Bytes()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, requestURL, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return nil, err
 	}
+	req.GetBody = func() (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(bodyBytes)), nil }
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	for key, value := range headers {
 		req.Header.Set(key, value)
