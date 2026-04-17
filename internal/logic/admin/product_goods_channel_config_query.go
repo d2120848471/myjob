@@ -208,6 +208,9 @@ WHERE goods_id = ?
 func boolFlag(value int) bool { return value != 0 }
 
 func (l *ProductGoodsChannelConfigLogic) refreshGoodsChannelSummary(ctx context.Context, goodsID int64) error {
+	if err := l.ensureGoodsChannelConfigRow(ctx, goodsID); err != nil {
+		return err
+	}
 	cfg, err := l.getGoodsChannelConfigRow(ctx, goodsID)
 	if err != nil {
 		return err
