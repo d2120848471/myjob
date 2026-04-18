@@ -35,11 +35,20 @@ func newTestMySQLConfig() (modelconfig.Config, error) {
 //
 // 这里显式清库，而不是依赖事务回滚，是因为契约测试和应用级测试会跨多次请求写入数据。
 func prepareTestMySQLDatabase(dsn string) (*sql.DB, *sql.Conn, error) {
-	lockDB, lockConn, err := acquireTestMySQLLock(dsn)
+	return prepareScopedTestMySQLDatabase(dsn, testMySQLDatabase, testMySQLLockName)
+}
+
+// prepareScopedTestMySQLDatabase 为指定测试库完成“拿锁 -> 建库/清库”流程。
+//
+// 默认测试入口固定使用 `admin_test`，但个别回归测试需要独立库名来验证冷启动建库，
+// 这里把库名和锁名参数化，避免这些测试去碰共享的 `admin_test`。
+func prepareScopedTestMySQLDatabase(dsn, databaseName, lockName string) (*sql.DB, *sql.Conn, error) {
+	lockDB, lockConn, err := acquireScopedTestMySQLLock(dsn, lockName)
 	if err != nil {
 		return nil, nil, err
 	}
-	if err = ensureAndResetTestMySQLDatabase(dsn); err != nil {
+	if err = ensureAndResetScopedTestMySQLDatabase(dsn, databaseName); err != nil {
+		_ = releaseScopedTestMySQLLock(lockConn, lockName)
 		_ = lockConn.Close()
 		_ = lockDB.Close()
 		return nil, nil, err
@@ -47,7 +56,7 @@ func prepareTestMySQLDatabase(dsn string) (*sql.DB, *sql.Conn, error) {
 	return lockDB, lockConn, nil
 }
 
-func ensureAndResetTestMySQLDatabase(dsn string) error {
+func ensureAndResetScopedTestMySQLDatabase(dsn, databaseName string) error {
 	serverDB, err := openMySQLServer(dsn)
 	if err != nil {
 		return err
@@ -57,7 +66,7 @@ func ensureAndResetTestMySQLDatabase(dsn string) error {
 	if _, err = serverDB.Exec(
 		fmt.Sprintf(
 			"CREATE DATABASE IF NOT EXISTS %s CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci",
-			quoteMySQLIdentifier(testMySQLDatabase),
+			quoteMySQLIdentifier(databaseName),
 		),
 	); err != nil {
 		return err
@@ -76,7 +85,7 @@ func ensureAndResetTestMySQLDatabase(dsn string) error {
 //
 // `go test ./...` 会并发跑多个 package；如果多个测试进程同时重置同一测试库，
 // 就会在 bootstrap 种子写入阶段互相踩数据，所以这里必须在测试 Core 整个生命周期内持锁。
-func acquireTestMySQLLock(dsn string) (*sql.DB, *sql.Conn, error) {
+func acquireScopedTestMySQLLock(dsn, lockName string) (*sql.DB, *sql.Conn, error) {
 	db, err := openMySQLServer(dsn)
 	if err != nil {
 		return nil, nil, err
@@ -88,7 +97,7 @@ func acquireTestMySQLLock(dsn string) (*sql.DB, *sql.Conn, error) {
 	}
 
 	var locked sql.NullInt64
-	if err = conn.QueryRowContext(context.Background(), `SELECT GET_LOCK(?, 60)`, testMySQLLockName).Scan(&locked); err != nil {
+	if err = conn.QueryRowContext(context.Background(), `SELECT GET_LOCK(?, 60)`, lockName).Scan(&locked); err != nil {
 		conn.Close()
 		db.Close()
 		return nil, nil, err
@@ -96,9 +105,17 @@ func acquireTestMySQLLock(dsn string) (*sql.DB, *sql.Conn, error) {
 	if !locked.Valid || locked.Int64 != 1 {
 		conn.Close()
 		db.Close()
-		return nil, nil, fmt.Errorf("获取 MySQL 测试库锁失败: %s", testMySQLLockName)
+		return nil, nil, fmt.Errorf("获取 MySQL 测试库锁失败: %s", lockName)
 	}
 	return db, conn, nil
+}
+
+func releaseScopedTestMySQLLock(conn *sql.Conn, lockName string) error {
+	if conn == nil {
+		return nil
+	}
+	_, err := conn.ExecContext(context.Background(), `SELECT RELEASE_LOCK(?)`, lockName)
+	return err
 }
 
 func withMySQLDatabase(dsn, database string) (string, error) {

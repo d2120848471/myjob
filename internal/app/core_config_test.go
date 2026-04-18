@@ -3,10 +3,12 @@ package app
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	modelconfig "myjob/internal/model/config"
 
@@ -88,18 +90,43 @@ func TestNewTestCore_HoldsAdminTestMySQLLock(t *testing.T) {
 	require.EqualValues(t, 0, locked.Int64)
 }
 
-func TestNewTestCore_CreatesAdminTestDatabaseWhenMissing(t *testing.T) {
+func TestPrepareScopedTestMySQLDatabase_CreatesMissingDatabase(t *testing.T) {
 	serverDB := openMySQLServerConn(t)
-	_, err := serverDB.Exec(`DROP DATABASE IF EXISTS ` + "`" + testMySQLDatabase + "`")
+	databaseName := fmt.Sprintf("admin_test_create_%d", time.Now().UnixNano())
+	lockName := fmt.Sprintf("myjob_%s_lock", databaseName)
+	dsn, err := withMySQLDatabase(modelconfig.Default().Database.DSN, databaseName)
 	require.NoError(t, err)
 
-	core, err := NewTestCore()
+	_, err = serverDB.Exec(`DROP DATABASE IF EXISTS ` + quoteMySQLIdentifier(databaseName))
 	require.NoError(t, err)
-	t.Cleanup(func() { _ = core.Close() })
 
-	schema, err := core.DB().GetCore().GetValue(context.Background(), `SELECT DATABASE()`)
+	lockDB, lockConn, err := prepareScopedTestMySQLDatabase(dsn, databaseName, lockName)
 	require.NoError(t, err)
-	require.Equal(t, testMySQLDatabase, schema.String())
+	t.Cleanup(func() {
+		_ = releaseScopedTestMySQLLock(lockConn, lockName)
+		_ = lockConn.Close()
+		_ = lockDB.Close()
+		_, _ = serverDB.Exec(`DROP DATABASE IF EXISTS ` + quoteMySQLIdentifier(databaseName))
+	})
+
+	db, schemaName, err := openMySQLDatabase(dsn)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	require.Equal(t, databaseName, schemaName)
+
+	schemaCount, err := openMySQLValue(db, `
+SELECT COUNT(*)
+FROM information_schema.schemata
+WHERE schema_name = ?
+`, databaseName)
+	require.NoError(t, err)
+	require.EqualValues(t, 1, schemaCount)
+}
+
+func openMySQLValue(db *sql.DB, query string, args ...any) (int64, error) {
+	var value int64
+	err := db.QueryRowContext(context.Background(), query, args...).Scan(&value)
+	return value, err
 }
 
 func openAdminTestMySQL(t *testing.T) *sql.DB {
