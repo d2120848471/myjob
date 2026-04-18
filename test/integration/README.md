@@ -24,12 +24,10 @@ go test ./test/integration -count=1 -timeout 60s
 
 ```bash
 export MYJOB_RUN_INTEGRATION=1
-export SUPER_ADMIN_PHONE=13800000000
-export SUPER_ADMIN_PASSWORD=Admin_123
 go test ./test/integration -count=1 -timeout 60s
 ```
 
-如果没有设置这些环境变量，runtime smoke test 会跳过。
+runtime smoke test 会使用本地默认超管 `admin / abc123` 登录。
 
 运行 supplier live provider 余额验证（可选）：
 

@@ -69,11 +69,11 @@ func Default() Config {
 		Server: ServerConfig{Address: ":8080"},
 		Database: DatabaseConfig{
 			Driver: "mysql",
-			DSN:    "root:root123456@tcp(127.0.0.1:3307)/admin?charset=utf8mb4&parseTime=true&loc=Local",
+			DSN:    "root:root123456@tcp(127.0.0.1:3306)/admin?charset=utf8mb4&parseTime=true&loc=Local",
 		},
 		Redis:     RedisConfig{Addr: "127.0.0.1:6380", DB: 0},
 		Auth:      AuthConfig{JWTSecret: "please-change-this-secret", AccessTokenTTLMin: 10080, TempLoginTTLMin: 5},
-		Bootstrap: BootstrapConfig{SuperAdminUsername: "admin"},
+		Bootstrap: BootstrapConfig{SuperAdminUsername: "admin", SuperAdminPhone: "15881767197", SuperAdminPassword: "abc123"},
 		SMS:       RuntimeSMSConfig{Provider: "aliyun"},
 		Audit:     AuditConfig{Async: true, BufferSize: 128},
 		Upload:    UploadConfig{LocalDir: "storage/uploads", PublicPrefix: "/uploads", MaxImageSizeMB: 2},

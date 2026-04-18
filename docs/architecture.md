@@ -154,7 +154,7 @@ POST /api/admin/auth/sms/verify
 ### MySQL
 
 - 默认真实运行数据库是 MySQL
-- 本地开发默认连接 `127.0.0.1:3307/admin`
+- 本地开发默认连接 `127.0.0.1:3306/admin`
 - 初始化 SQL 位于 `manifest/sql/`
 
 ### Redis

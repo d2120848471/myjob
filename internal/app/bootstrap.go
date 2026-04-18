@@ -254,21 +254,27 @@ func (c *Core) ensureSMSConfig(ctx context.Context) error {
 	return nil
 }
 
-// ensureSuperAdmin 确保超级管理员账号存在（group_id=0）。
+// ensureSuperAdmin 确保超级管理员账号存在且始终同步本地固定引导凭证。
+// 这样即使旧库里已有 admin，也会在启动期回写手机号和密码，避免本地调试凭证漂移。
 func (c *Core) ensureSuperAdmin(ctx context.Context) error {
 	username := c.cfg.Bootstrap.SuperAdminUsername
 	if username == "" {
 		username = "admin"
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(c.cfg.Bootstrap.SuperAdminPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
 	}
 	count, err := c.DB().GetCore().GetValue(ctx, `SELECT COUNT(*) FROM admin_user WHERE username = ?`, username)
 	if err != nil {
 		return err
 	}
 	if count.Int() > 0 {
-		return nil
-	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(c.cfg.Bootstrap.SuperAdminPassword), bcrypt.DefaultCost)
-	if err != nil {
+		_, err = c.DB().Exec(ctx, `
+UPDATE admin_user
+SET password_hash = ?, real_name = ?, phone = ?, group_id = 0, status = 1, is_deleted = 0, is_business = 1, deleted_at = NULL, token_version = token_version + 1, updated_at = ?
+WHERE username = ?
+`, string(hash), "系统管理员", c.cfg.Bootstrap.SuperAdminPhone, c.now(), username)
 		return err
 	}
 	_, err = c.DB().Exec(ctx, `

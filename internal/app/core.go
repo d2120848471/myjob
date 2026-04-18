@@ -32,7 +32,8 @@ func NewCoreFromConfig(cfg modelconfig.Config) (*Core, error) {
 
 // NewCoreFromConfigFile 从配置文件创建 Core。
 //
-// 配置缺省项（如超级管理员账号）会从环境变量补齐：SUPER_ADMIN_PHONE/SUPER_ADMIN_PASSWORD。
+// 本地默认配置已经内置超级管理员账号；如果某份自定义配置显式留空，
+// 仍允许通过 SUPER_ADMIN_PHONE/SUPER_ADMIN_PASSWORD 做一次性覆盖。
 func NewCoreFromConfigFile(configPath string) (*Core, error) {
 	cfgInstance, cfgName, cfg, err := loadConfig(configPath)
 	if err != nil {
@@ -47,7 +48,11 @@ func NewCoreFromConfigFile(configPath string) (*Core, error) {
 func NewCoreFromEnv() (*Core, error) {
 	configPath := strings.TrimSpace(os.Getenv("ADMIN_CONFIG"))
 	if configPath == "" {
-		configPath = "manifest/config/config.local.yaml"
+		var err error
+		configPath, err = defaultConfigPath()
+		if err != nil {
+			return nil, err
+		}
 	}
 	return NewCoreFromConfigFile(configPath)
 }
@@ -62,8 +67,8 @@ func NewTestCore() (*Core, error) {
 	cfg := modelconfig.Default()
 	cfg.AppEnv = "test"
 	cfg.Database.Driver = "sqlite"
-	cfg.Bootstrap.SuperAdminPhone = "13800000000"
-	cfg.Bootstrap.SuperAdminPassword = "Admin_123"
+	cfg.Bootstrap.SuperAdminPhone = "15881767197"
+	cfg.Bootstrap.SuperAdminPassword = "abc123"
 	cfg.SMS.Provider = "mock"
 	cfg.Audit.Async = false
 	cfg.Upload.LocalDir = filepath.Join(os.TempDir(), fmt.Sprintf("myjob-upload-%d", time.Now().UnixNano()))
@@ -99,6 +104,30 @@ func NewTestCore() (*Core, error) {
 	return core, nil
 }
 
+// defaultConfigPath 解析本地默认配置文件路径。
+// 它会从当前工作目录向上查找仓库内的 manifest/config/config.local.yaml，
+// 兼容从 test 子目录直接运行 go test 的场景。
+func defaultConfigPath() (string, error) {
+	const relativePath = "manifest/config/config.local.yaml"
+
+	wd, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	for {
+		candidate := filepath.Join(wd, relativePath)
+		if _, statErr := os.Stat(candidate); statErr == nil {
+			return filepath.Abs(candidate)
+		}
+		parent := filepath.Dir(wd)
+		if parent == wd {
+			break
+		}
+		wd = parent
+	}
+	return "", os.ErrNotExist
+}
+
 // loadConfig 将指定配置文件加载到独立的 GoFrame 配置实例中，避免污染全局配置。
 func loadConfig(configPath string) (*gcfg.Config, string, modelconfig.Config, error) {
 	absPath, err := filepath.Abs(configPath)
@@ -119,30 +148,44 @@ func loadConfig(configPath string) (*gcfg.Config, string, modelconfig.Config, er
 	if err != nil {
 		return nil, "", modelconfig.Config{}, err
 	}
+	defaults := modelconfig.Default()
 	if cfg.Bootstrap.SuperAdminPhone == "" {
 		cfg.Bootstrap.SuperAdminPhone = strings.TrimSpace(os.Getenv("SUPER_ADMIN_PHONE"))
+		if cfg.Bootstrap.SuperAdminPhone == "" {
+			cfg.Bootstrap.SuperAdminPhone = defaults.Bootstrap.SuperAdminPhone
+		}
 	}
 	if cfg.Bootstrap.SuperAdminPassword == "" {
 		cfg.Bootstrap.SuperAdminPassword = strings.TrimSpace(os.Getenv("SUPER_ADMIN_PASSWORD"))
+		if cfg.Bootstrap.SuperAdminPassword == "" {
+			cfg.Bootstrap.SuperAdminPassword = defaults.Bootstrap.SuperAdminPassword
+		}
 	}
 	modelconfig.Normalize(&cfg)
 	return cfgInstance, cfgName, cfg, nil
 }
 
 // newCore 构建 Core 并完成必要初始化：
-// - 校验运行时必需配置（超级管理员账号）
+// - 兜底运行时基础配置（包括默认超级管理员账号）
 // - 初始化 DB/Redis 连接与连通性检查
 // - 启动引导（建表/补列/种子数据/默认配置）
 // - 初始化审计写入器
 func newCore(cfg modelconfig.Config, cfgInstance *gcfg.Config, cfgName string) (*Core, error) {
+	defaults := modelconfig.Default()
 	if cfg.Bootstrap.SuperAdminPhone == "" {
 		cfg.Bootstrap.SuperAdminPhone = strings.TrimSpace(os.Getenv("SUPER_ADMIN_PHONE"))
+		if cfg.Bootstrap.SuperAdminPhone == "" {
+			cfg.Bootstrap.SuperAdminPhone = defaults.Bootstrap.SuperAdminPhone
+		}
 	}
 	if cfg.Bootstrap.SuperAdminPassword == "" {
 		cfg.Bootstrap.SuperAdminPassword = strings.TrimSpace(os.Getenv("SUPER_ADMIN_PASSWORD"))
+		if cfg.Bootstrap.SuperAdminPassword == "" {
+			cfg.Bootstrap.SuperAdminPassword = defaults.Bootstrap.SuperAdminPassword
+		}
 	}
-	if cfg.Bootstrap.SuperAdminPhone == "" || cfg.Bootstrap.SuperAdminPassword == "" {
-		return nil, errors.New("SUPER_ADMIN_PHONE and SUPER_ADMIN_PASSWORD are required for runtime bootstrap")
+	if cfg.Bootstrap.SuperAdminUsername == "" {
+		cfg.Bootstrap.SuperAdminUsername = defaults.Bootstrap.SuperAdminUsername
 	}
 	core := &Core{
 		cfg:            cfg,

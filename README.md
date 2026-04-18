@@ -62,14 +62,13 @@ MyJob Admin Backend 是当前仓库根目录下运行的 GoFrame 单体后台项
 docker compose up -d mysql redis
 ```
 
-### 2. 准备运行时环境变量
+### 2. 检查本地默认超管
 
-```bash
-export SUPER_ADMIN_PHONE=13800000000
-export SUPER_ADMIN_PASSWORD=Admin_123
-```
+- 用户名：`admin`
+- 手机号：`15881767197`
+- 密码：`abc123`
 
-> 如果配置文件里没有写死超级管理员手机号和密码，运行时必须提供这两个环境变量；否则启动期引导会失败。
+> 当前仓库默认使用 `manifest/config/config.local.yaml` 中写死的本地超管凭证启动，不再要求每次手工 `export SUPER_ADMIN_*`。
 
 ### 3. 检查配置来源
 
