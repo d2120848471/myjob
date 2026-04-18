@@ -51,6 +51,24 @@ export ADMIN_CONFIG=manifest/config/config.local.yaml
 go run .
 ```
 
+### 5. 重建本地 MySQL 并校验注释
+
+当你修改了 MySQL 表结构、表注释或字段注释时，推荐直接删卷重建本地库，再启动应用回灌默认种子：
+
+```bash
+docker compose down -v
+docker compose up -d mysql redis
+go run .
+```
+
+然后查询 `information_schema`，确认表注释和字段注释都已落库：
+
+```bash
+docker exec $(docker compose ps -q mysql) mysql -uroot -proot123456 -D admin -e "SELECT TABLE_NAME, TABLE_COMMENT FROM information_schema.TABLES WHERE TABLE_SCHEMA='admin' AND TABLE_COMMENT = '';"
+
+docker exec $(docker compose ps -q mysql) mysql -uroot -proot123456 -D admin -e "SELECT TABLE_NAME, COLUMN_NAME, COLUMN_COMMENT FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='admin' AND COLUMN_COMMENT = '';"
+```
+
 ## 常用命令
 
 ### 全量测试
@@ -138,6 +156,12 @@ bootstrap:
 - `manifest/sql/003_seed_admin.sql.tmpl`：超级管理员 SQL 模板
 - `manifest/sql/004_seed_config.sql`：系统配置初始值
 - `manifest/sql/005_supplier_platform.sql`：第三方平台类型、账号和余额日志结构
+
+补充说明：
+
+- Docker 首次建库时，MySQL 会执行 `manifest/sql/*.sql`
+- 应用启动时，`internal/app/schema.go` 会执行内置建表语句并补齐缺失表
+- 因此修改 MySQL schema、表注释或字段注释时，必须同步 `manifest/sql/*.sql` 和 `internal/app/schema.go`
 
 如需生成超级管理员初始化 SQL：
 

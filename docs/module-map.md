@@ -244,6 +244,8 @@
 - `user_lookup.go`：登录用户/员工查询辅助
 - `redis_helpers.go`：Redis key/TTL 等基础辅助
 
+其中 `schema.go` 负责应用启动期的内置建表语句；MySQL 表结构和表/字段注释调整时，需要和 `manifest/sql/*.sql` 同步维护。
+
 ## 目录地图
 
 ### `api`
@@ -317,6 +319,7 @@ HTTP 协议适配层，不直接写业务规则。
 ### `internal/app`
 
 运行时核心层，负责配置、依赖初始化、种子引导、公共查询和通用辅助能力。
+其中 `schema.go` 维护应用启动自建表所需的 MySQL / SQLite schema；MySQL 注释属于这里的职责边界。
 
 ### `internal/library`
 
@@ -350,6 +353,8 @@ HTTP 协议适配层，不直接写业务规则。
 - `003_seed_admin.sql.tmpl`：超级管理员初始化模板
 - `004_seed_config.sql`：系统参数初始值
 - `005_supplier_platform.sql`：第三方平台类型、账号和余额日志结构
+
+这里的 schema 文件用于 Docker 首次初始化 MySQL；如果修改 MySQL 表结构、表注释或字段注释，必须和 `internal/app/schema.go` 一起修改，避免首次建库和应用自建表出现漂移。
 
 ### `test/contract`
 
