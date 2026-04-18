@@ -19,7 +19,7 @@
 
 契约测试会启动测试态应用，底层默认使用：
 
-- SQLite 临时文件
+- MySQL 测试库 `admin_test`（启动时自动创建，并在每次启动前清空旧表）
 - `miniredis`
 - mock 短信 sender
 

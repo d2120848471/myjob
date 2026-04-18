@@ -183,6 +183,6 @@ POST /api/admin/auth/sms/verify
 ## 测试时的运行形态
 
 - 契约测试通过 `NewTestApplication()` 启动应用
-- `NewTestCore()` 会使用临时 SQLite 文件 + `miniredis`
+- `NewTestCore()` 会自动创建并重置 MySQL `admin_test`，Redis 仍使用 `miniredis`
 - 契约测试默认不会调用真实阿里云短信发送
 - 集成测试才会按真实配置尝试启动应用
