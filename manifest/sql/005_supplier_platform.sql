@@ -1,3 +1,5 @@
+SET NAMES utf8mb4;
+
 CREATE TABLE IF NOT EXISTS supplier_platform_type (
   id INT NOT NULL PRIMARY KEY,
   type_name VARCHAR(64) NOT NULL,
