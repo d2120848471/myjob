@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -222,7 +223,7 @@ func productGoodsStatusSelectSQL(driver string, idCount int) string {
 }
 
 func buildGoodsCode(id int64) string {
-	return fmt.Sprintf("GD%010d", id)
+	return strconv.FormatInt(id, 10)
 }
 
 func temporaryProductGoodsCode(now time.Time) string {
