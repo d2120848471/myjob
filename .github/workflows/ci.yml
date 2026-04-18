@@ -8,12 +8,36 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root123456
+          MYSQL_ROOT_HOST: "%"
+          MYSQL_DATABASE: admin
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot123456"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
           cache: true
+      - name: Wait for MySQL
+        run: |
+          for i in {1..30}; do
+            if (echo > /dev/tcp/127.0.0.1/3306) >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "MySQL service did not become ready in time" >&2
+          exit 1
       - name: Go Test
         run: go test ./... -count=1 -timeout 60s
       - name: Go Build

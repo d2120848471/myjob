@@ -94,6 +94,10 @@ go test ./test/integration -run TestSupplierPlatformRefresh_LiveProviderBalance 
 go test ./... -count=1 -timeout 60s
 ```
 
+仓库 CI 的 `test` job 会额外启动一个本地 MySQL service，监听 `127.0.0.1:3306`，
+并预建 `admin` 库，口径与默认 DSN `root:root123456@tcp(127.0.0.1:3306)/admin` 保持一致。
+这样 `NewTestCore()` 在远端也能自动创建并重置 `admin_test`，不会因为缺少数据库服务把整套测试直接跑红。
+
 并建议在提交前执行一次 lint（与 CI 对齐）：
 
 ```bash
