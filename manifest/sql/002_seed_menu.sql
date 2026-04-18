@@ -1,3 +1,5 @@
+SET NAMES utf8mb4;
+
 INSERT INTO admin_menu (id, parent_id, name, code, menu_type, menu_level, status, super_only, sort, created_at, updated_at) VALUES
 (1, 0, '员工管理', 'admin.list', 'permission', 1, 1, 0, 1, NOW(), NOW()),
 (2, 0, '用户组与授权', 'admin.department', 'permission', 1, 1, 0, 2, NOW(), NOW()),

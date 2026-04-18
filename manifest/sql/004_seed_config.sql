@@ -1,3 +1,5 @@
+SET NAMES utf8mb4;
+
 INSERT INTO system_config (config_key, config_value, description, created_at, updated_at) VALUES
 ('sms_access_key', '', '阿里云 AccessKey', NOW(), NOW()),
 ('sms_access_key_secret', '', '阿里云 AccessKey Secret', NOW(), NOW()),
