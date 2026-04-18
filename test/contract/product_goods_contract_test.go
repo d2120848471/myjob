@@ -3,10 +3,10 @@ package contract_test
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -295,7 +295,7 @@ func TestProductGoodsCRUDAndFilters(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(createRes.Data, &createData))
 	require.NotZero(t, createData.ID)
-	require.Equal(t, fmt.Sprintf("GD%010d", createData.ID), createData.GoodsCode)
+	require.Equal(t, strconv.FormatInt(createData.ID, 10), createData.GoodsCode)
 
 	disableBoundStrategy := h.patchJSON("/api/admin/purchase-limit-strategies/"+int64ToString(strategyEnabled)+"/status", map[string]any{
 		"status": 0,
