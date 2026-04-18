@@ -7,7 +7,7 @@
 契约测试位于 `test/contract/`，当前是最主要的接口回归入口。
 它通过 `NewTestApplication()` 启动应用，底层使用：
 
-- 临时 SQLite 文件
+- MySQL 测试库 `admin_test`（启动时自动创建，并在每次启动前清空旧表）
 - `miniredis`
 - `mock` 短信 sender
 

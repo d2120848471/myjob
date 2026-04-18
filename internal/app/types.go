@@ -43,6 +43,8 @@ type Core struct {
 	mock           *sms.MockSender
 	regionResolver region.RegionResolver
 	auditWriter    *audit.Writer
+	testLockDB     *sql.DB
+	testLockConn   *sql.Conn
 	tempDBFile     string
 	tempUploadDir  string
 	miniRedis      *miniredis.Miniredis

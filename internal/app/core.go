@@ -58,34 +58,30 @@ func NewCoreFromEnv() (*Core, error) {
 }
 
 // NewTestCore 构建用于测试的 Core：
-// - 使用临时 sqlite 文件作为数据库
+// - 使用自动创建并清理的 MySQL `admin_test` 作为数据库
 // - 使用 miniredis 作为 Redis
 // - 使用 mock 短信发送器、同步审计写入、临时上传目录
 //
-// 调用 Close 会自动清理这些临时资源。
+// 调用 Close 会自动清理这些临时资源；MySQL 测试库会在下次 NewTestCore 启动前重置。
 func NewTestCore() (*Core, error) {
-	cfg := modelconfig.Default()
-	cfg.AppEnv = "test"
-	cfg.Database.Driver = "sqlite"
+	cfg, err := newTestMySQLConfig()
+	if err != nil {
+		return nil, err
+	}
 	cfg.Bootstrap.SuperAdminPhone = "15881767197"
 	cfg.Bootstrap.SuperAdminPassword = "abc123"
-	cfg.SMS.Provider = "mock"
-	cfg.Audit.Async = false
 	cfg.Upload.LocalDir = filepath.Join(os.TempDir(), fmt.Sprintf("myjob-upload-%d", time.Now().UnixNano()))
 	cfg.Upload.PublicPrefix = "/uploads"
 	cfg.Upload.MaxImageSizeMB = 2
-
-	tmpFile, err := os.CreateTemp("", "myjob-admin-*.db")
+	lockDB, lockConn, err := prepareTestMySQLDatabase(cfg.Database.DSN)
 	if err != nil {
 		return nil, err
 	}
-	if err = tmpFile.Close(); err != nil {
-		return nil, err
-	}
-	cfg.Database.DSN = tmpFile.Name()
 
 	mr, err := miniredis.Run()
 	if err != nil {
+		_ = lockConn.Close()
+		_ = lockDB.Close()
 		return nil, err
 	}
 	cfg.Redis.Addr = mr.Addr()
@@ -95,10 +91,13 @@ func NewTestCore() (*Core, error) {
 	core, err := newCore(cfg, g.Cfg(fmt.Sprintf("myjob-test-%d", time.Now().UnixNano())), "")
 	if err != nil {
 		mr.Close()
-		_ = os.Remove(tmpFile.Name())
+		_, _ = lockConn.ExecContext(context.Background(), `SELECT RELEASE_LOCK(?)`, testMySQLLockName)
+		_ = lockConn.Close()
+		_ = lockDB.Close()
 		return nil, err
 	}
-	core.tempDBFile = tmpFile.Name()
+	core.testLockDB = lockDB
+	core.testLockConn = lockConn
 	core.tempUploadDir = cfg.Upload.LocalDir
 	core.miniRedis = mr
 	return core, nil
@@ -282,6 +281,19 @@ func (c *Core) Close() error {
 	}
 	if c.miniRedis != nil {
 		c.miniRedis.Close()
+	}
+	if c.testLockConn != nil {
+		if _, releaseErr := c.testLockConn.ExecContext(context.Background(), `SELECT RELEASE_LOCK(?)`, testMySQLLockName); err == nil {
+			err = releaseErr
+		}
+		if closeErr := c.testLockConn.Close(); err == nil {
+			err = closeErr
+		}
+	}
+	if c.testLockDB != nil {
+		if closeErr := c.testLockDB.Close(); err == nil {
+			err = closeErr
+		}
 	}
 	if c.tempDBFile != "" {
 		_ = os.Remove(c.tempDBFile)
