@@ -11,6 +11,7 @@ import (
 
 func TestUTF8SeedSQLFilesDeclareUTF8Connection(t *testing.T) {
 	files := []string{
+		"001_schema.sql",
 		"002_seed_menu.sql",
 		"004_seed_config.sql",
 		"005_supplier_platform.sql",

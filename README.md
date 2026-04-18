@@ -106,6 +106,8 @@ golangci-lint run --timeout=5m
 ```
 
 > CI 会执行 `go test/go build/golangci-lint`（见 `.github/workflows/ci.yml`）。当前 `.golangci.yml` 启用 `govet/staticcheck/ineffassign/unused/typecheck`。
+>
+> MySQL 表结构和字段注释存在两条维护链路：Docker 首次建库使用 `manifest/sql/*.sql`，应用启动自建表使用 `internal/app/schema.go`。凡是修改 MySQL schema 或 `COMMENT`，必须同步这两处。
 
 ## 目录说明
 
@@ -216,6 +218,7 @@ golangci-lint run --timeout=5m
 - 审计写入辅助
 
 当前公共能力已按职责拆分为多个同 package 文件（例如 `pagination.go`、`mask.go`、`menu_tree.go`、`auth_session.go` 等），避免继续堆回历史 `helpers.go`。
+其中 `schema.go` 负责应用启动期的内置建表语句；如果改 MySQL 表结构或表/字段注释，需要和 `manifest/sql/*.sql` 保持同步。
 
 ### `internal/library`
 
@@ -234,6 +237,7 @@ golangci-lint run --timeout=5m
 ### `manifest/sql`
 
 初始化 SQL 资源目录，包含 schema、菜单、超级管理员模板和系统配置种子。
+这里的 MySQL 建表语句用于 Docker 首次初始化数据库；如果调整 MySQL 表结构或表/字段注释，需要和 `internal/app/schema.go` 一起修改。
 
 ### `hack`
 

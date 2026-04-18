@@ -82,6 +82,7 @@ go test ./test/integration -run TestSupplierPlatformRefresh_LiveProviderBalance 
 
 - `internal/library/region`
 - `internal/library/sms`
+- `internal/app/mysql_schema_comment_test.go`：静态校验 MySQL `CREATE TABLE` 是否同时声明表注释和字段注释，并检查 `manifest/sql/*.sql` 与 `internal/app/schema.go` 不要在注释约束上漂移
 
 适用于纯逻辑或基础库的回归验证。
 
@@ -100,6 +101,26 @@ golangci-lint run --timeout=5m
 ```
 
 CI 里会使用增量参数（`--new-from-rev=origin/main`）减少无关历史问题的干扰。
+
+### 影响 MySQL schema 或注释时
+
+先做静态校验：
+
+```bash
+go test ./internal/app -run 'Test(MySQLSchemaIncludesTableAndColumnComments|ManifestMySQLSchemaFilesIncludeTableAndColumnComments)' -count=1 -timeout 60s
+```
+
+再做本地重建验收：
+
+```bash
+docker compose down -v
+docker compose up -d mysql redis
+go run .
+docker exec $(docker compose ps -q mysql) mysql -uroot -proot123456 -D admin -e "SELECT TABLE_NAME, TABLE_COMMENT FROM information_schema.TABLES WHERE TABLE_SCHEMA='admin' AND TABLE_COMMENT = '';"
+docker exec $(docker compose ps -q mysql) mysql -uroot -proot123456 -D admin -e "SELECT TABLE_NAME, COLUMN_NAME, COLUMN_COMMENT FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='admin' AND COLUMN_COMMENT = '';"
+```
+
+如果两个查询都没有返回记录，说明当前库的表注释和字段注释已经完整落库。
 
 ### 影响接口兼容时
 

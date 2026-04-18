@@ -1,143 +1,145 @@
+SET NAMES utf8mb4;
+
 CREATE TABLE IF NOT EXISTS admin_user (
-  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  username VARCHAR(64) NOT NULL UNIQUE,
-  password_hash VARCHAR(255) NOT NULL,
-  real_name VARCHAR(64) NOT NULL DEFAULT '',
-  phone VARCHAR(20) NOT NULL DEFAULT '',
-  group_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
-  status TINYINT NOT NULL DEFAULT 1,
-  balance_notify TINYINT NOT NULL DEFAULT 0,
-  is_business TINYINT NOT NULL DEFAULT 0,
-  is_deleted TINYINT NOT NULL DEFAULT 0,
-  last_login_ip VARCHAR(45) NULL,
-  last_login_at DATETIME NULL,
-  token_version INT NOT NULL DEFAULT 0,
-  deleted_at DATETIME NULL,
-  created_at DATETIME NOT NULL,
-  updated_at DATETIME NOT NULL
-);
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '员工ID',
+  username VARCHAR(64) NOT NULL UNIQUE COMMENT '用户名',
+  password_hash VARCHAR(255) NOT NULL COMMENT '密码哈希',
+  real_name VARCHAR(64) NOT NULL DEFAULT '' COMMENT '姓名',
+  phone VARCHAR(20) NOT NULL DEFAULT '' COMMENT '手机号',
+  group_id BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '用户组ID',
+  status TINYINT NOT NULL DEFAULT 1 COMMENT '状态',
+  balance_notify TINYINT NOT NULL DEFAULT 0 COMMENT '余额通知开关',
+  is_business TINYINT NOT NULL DEFAULT 0 COMMENT '是否商务',
+  is_deleted TINYINT NOT NULL DEFAULT 0 COMMENT '软删除标记',
+  last_login_ip VARCHAR(45) NULL COMMENT '最后登录IP',
+  last_login_at DATETIME NULL COMMENT '最后登录时间',
+  token_version INT NOT NULL DEFAULT 0 COMMENT '令牌版本',
+  deleted_at DATETIME NULL COMMENT '删除时间',
+  created_at DATETIME NOT NULL COMMENT '创建时间',
+  updated_at DATETIME NOT NULL COMMENT '更新时间'
+) COMMENT='后台员工表';
 
 CREATE TABLE IF NOT EXISTS admin_group (
-  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(64) NOT NULL UNIQUE,
-  description VARCHAR(255) NOT NULL DEFAULT '',
-  status TINYINT NOT NULL DEFAULT 1,
-  created_at DATETIME NOT NULL,
-  updated_at DATETIME NOT NULL
-);
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '用户组ID',
+  name VARCHAR(64) NOT NULL UNIQUE COMMENT '用户组名称',
+  description VARCHAR(255) NOT NULL DEFAULT '' COMMENT '用户组描述',
+  status TINYINT NOT NULL DEFAULT 1 COMMENT '状态',
+  created_at DATETIME NOT NULL COMMENT '创建时间',
+  updated_at DATETIME NOT NULL COMMENT '更新时间'
+) COMMENT='后台用户组表';
 
 CREATE TABLE IF NOT EXISTS admin_menu (
-  id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
-  parent_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
-  name VARCHAR(64) NOT NULL,
-  code VARCHAR(64) NOT NULL UNIQUE,
-  menu_type VARCHAR(16) NOT NULL DEFAULT 'permission',
-  menu_level TINYINT NOT NULL DEFAULT 1,
-  status TINYINT NOT NULL DEFAULT 1,
-  super_only TINYINT NOT NULL DEFAULT 0,
-  sort INT NOT NULL DEFAULT 0,
-  created_at DATETIME NOT NULL,
-  updated_at DATETIME NOT NULL
-);
+  id BIGINT UNSIGNED NOT NULL PRIMARY KEY COMMENT '菜单ID',
+  parent_id BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '父菜单ID',
+  name VARCHAR(64) NOT NULL COMMENT '菜单名称',
+  code VARCHAR(64) NOT NULL UNIQUE COMMENT '权限编码',
+  menu_type VARCHAR(16) NOT NULL DEFAULT 'permission' COMMENT '菜单类型',
+  menu_level TINYINT NOT NULL DEFAULT 1 COMMENT '菜单层级',
+  status TINYINT NOT NULL DEFAULT 1 COMMENT '状态',
+  super_only TINYINT NOT NULL DEFAULT 0 COMMENT '是否仅超级管理员可见',
+  sort INT NOT NULL DEFAULT 0 COMMENT '排序值',
+  created_at DATETIME NOT NULL COMMENT '创建时间',
+  updated_at DATETIME NOT NULL COMMENT '更新时间'
+) COMMENT='后台权限菜单表';
 
 CREATE TABLE IF NOT EXISTS admin_group_menu (
-  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  group_id BIGINT UNSIGNED NOT NULL,
-  menu_id BIGINT UNSIGNED NOT NULL,
-  created_at DATETIME NOT NULL,
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '关联ID',
+  group_id BIGINT UNSIGNED NOT NULL COMMENT '用户组ID',
+  menu_id BIGINT UNSIGNED NOT NULL COMMENT '菜单ID',
+  created_at DATETIME NOT NULL COMMENT '创建时间',
   UNIQUE KEY uk_group_menu (group_id, menu_id)
-);
+) COMMENT='用户组菜单关联表';
 
 CREATE TABLE IF NOT EXISTS admin_operation_log (
-  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  admin_id BIGINT UNSIGNED NOT NULL,
-  admin_name VARCHAR(64) NOT NULL,
-  description TEXT NOT NULL,
-  ip VARCHAR(45) NOT NULL,
-  ip_region VARCHAR(128) NOT NULL,
-  created_at DATETIME NOT NULL
-);
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '日志ID',
+  admin_id BIGINT UNSIGNED NOT NULL COMMENT '管理员ID',
+  admin_name VARCHAR(64) NOT NULL COMMENT '管理员名称',
+  description TEXT NOT NULL COMMENT '操作描述',
+  ip VARCHAR(45) NOT NULL COMMENT '操作IP',
+  ip_region VARCHAR(128) NOT NULL COMMENT 'IP归属地',
+  created_at DATETIME NOT NULL COMMENT '创建时间'
+) COMMENT='后台操作日志表';
 
 CREATE TABLE IF NOT EXISTS admin_login_log (
-  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  admin_id BIGINT UNSIGNED NOT NULL,
-  admin_name VARCHAR(64) NOT NULL,
-  ip VARCHAR(45) NOT NULL,
-  ip_region VARCHAR(128) NOT NULL,
-  created_at DATETIME NOT NULL
-);
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '日志ID',
+  admin_id BIGINT UNSIGNED NOT NULL COMMENT '管理员ID',
+  admin_name VARCHAR(64) NOT NULL COMMENT '管理员名称',
+  ip VARCHAR(45) NOT NULL COMMENT '登录IP',
+  ip_region VARCHAR(128) NOT NULL COMMENT 'IP归属地',
+  created_at DATETIME NOT NULL COMMENT '创建时间'
+) COMMENT='后台登录日志表';
 
 CREATE TABLE IF NOT EXISTS admin_subject (
-  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(64) NOT NULL UNIQUE,
-  has_tax TINYINT NOT NULL DEFAULT 0,
-  created_at DATETIME NOT NULL,
-  updated_at DATETIME NOT NULL
-);
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '主体ID',
+  name VARCHAR(64) NOT NULL UNIQUE COMMENT '主体名称',
+  has_tax TINYINT NOT NULL DEFAULT 0 COMMENT '是否含税',
+  created_at DATETIME NOT NULL COMMENT '创建时间',
+  updated_at DATETIME NOT NULL COMMENT '更新时间'
+) COMMENT='主体配置表';
 
 CREATE TABLE IF NOT EXISTS product_template (
-  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  title VARCHAR(100) NOT NULL,
-  template_type VARCHAR(32) NOT NULL DEFAULT 'local',
-  is_shared TINYINT NOT NULL DEFAULT 0,
-  account_name VARCHAR(100) NOT NULL DEFAULT '',
-  validate_type INT NOT NULL DEFAULT 1,
-  created_at DATETIME NOT NULL,
-  updated_at DATETIME NOT NULL,
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '模板ID',
+  title VARCHAR(100) NOT NULL COMMENT '模板标题',
+  template_type VARCHAR(32) NOT NULL DEFAULT 'local' COMMENT '模板类型',
+  is_shared TINYINT NOT NULL DEFAULT 0 COMMENT '是否共享',
+  account_name VARCHAR(100) NOT NULL DEFAULT '' COMMENT '模板账号名称',
+  validate_type INT NOT NULL DEFAULT 1 COMMENT '校验方式',
+  created_at DATETIME NOT NULL COMMENT '创建时间',
+  updated_at DATETIME NOT NULL COMMENT '更新时间',
   KEY idx_product_template_type_share (template_type, is_shared, id)
-);
+) COMMENT='商品模板表';
 
 CREATE TABLE IF NOT EXISTS product_purchase_limit_strategy (
-  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(100) NOT NULL,
-  limit_type TINYINT NOT NULL DEFAULT 1,
-  period_type TINYINT NOT NULL DEFAULT 1,
-  period INT NOT NULL DEFAULT 1,
-  limit_nums INT NOT NULL DEFAULT 0,
-  limit_times INT NOT NULL DEFAULT 0,
-  status TINYINT NOT NULL DEFAULT 1,
-  created_at DATETIME NOT NULL,
-  updated_at DATETIME NOT NULL,
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '策略ID',
+  name VARCHAR(100) NOT NULL COMMENT '策略名称',
+  limit_type TINYINT NOT NULL DEFAULT 1 COMMENT '限制类型',
+  period_type TINYINT NOT NULL DEFAULT 1 COMMENT '周期类型',
+  period INT NOT NULL DEFAULT 1 COMMENT '周期值',
+  limit_nums INT NOT NULL DEFAULT 0 COMMENT '限制数量',
+  limit_times INT NOT NULL DEFAULT 0 COMMENT '限制次数',
+  status TINYINT NOT NULL DEFAULT 1 COMMENT '状态',
+  created_at DATETIME NOT NULL COMMENT '创建时间',
+  updated_at DATETIME NOT NULL COMMENT '更新时间',
   KEY idx_product_purchase_limit_strategy_keyword (name, id)
-);
+) COMMENT='商品限购策略表';
 
 CREATE TABLE IF NOT EXISTS product_goods (
-  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  goods_code VARCHAR(32) NOT NULL,
-  brand_id BIGINT UNSIGNED NOT NULL,
-  name VARCHAR(255) NOT NULL,
-  goods_type VARCHAR(32) NOT NULL,
-  supply_type VARCHAR(32) NOT NULL DEFAULT 'channel',
-  is_export TINYINT NOT NULL DEFAULT 1,
-  is_douyin TINYINT NOT NULL DEFAULT 0,
-  has_tax TINYINT NOT NULL DEFAULT 0,
-  subject_id BIGINT UNSIGNED NULL,
-  exception_notify TINYINT NOT NULL DEFAULT 1,
-  product_template_id BIGINT UNSIGNED NULL,
-  purchase_limit_strategy_id BIGINT UNSIGNED NULL,
-  purchase_notice TEXT NULL,
-  terminal_price_limit DECIMAL(10,4) NULL,
-  balance_limit DECIMAL(10,4) NOT NULL DEFAULT 0.0000,
-  default_sell_price DECIMAL(10,4) NULL,
-  min_purchase_qty INT NOT NULL DEFAULT 1,
-  max_purchase_qty INT NOT NULL DEFAULT 1,
-  status TINYINT NOT NULL DEFAULT 1,
-  is_deleted TINYINT NOT NULL DEFAULT 0,
-  deleted_at DATETIME NULL,
-  created_at DATETIME NOT NULL,
-  updated_at DATETIME NOT NULL,
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '商品ID',
+  goods_code VARCHAR(32) NOT NULL COMMENT '商品编码',
+  brand_id BIGINT UNSIGNED NOT NULL COMMENT '品牌ID',
+  name VARCHAR(255) NOT NULL COMMENT '商品名称',
+  goods_type VARCHAR(32) NOT NULL COMMENT '商品类型',
+  supply_type VARCHAR(32) NOT NULL DEFAULT 'channel' COMMENT '供货方式',
+  is_export TINYINT NOT NULL DEFAULT 1 COMMENT '是否可导出',
+  is_douyin TINYINT NOT NULL DEFAULT 0 COMMENT '是否可抖音',
+  has_tax TINYINT NOT NULL DEFAULT 0 COMMENT '是否含税',
+  subject_id BIGINT UNSIGNED NULL COMMENT '主体ID',
+  exception_notify TINYINT NOT NULL DEFAULT 1 COMMENT '异常提醒开关',
+  product_template_id BIGINT UNSIGNED NULL COMMENT '商品模板ID',
+  purchase_limit_strategy_id BIGINT UNSIGNED NULL COMMENT '限购策略ID',
+  purchase_notice TEXT NULL COMMENT '购买须知',
+  terminal_price_limit DECIMAL(10,4) NULL COMMENT '终端限价',
+  balance_limit DECIMAL(10,4) NOT NULL DEFAULT 0.0000 COMMENT '余额限制',
+  default_sell_price DECIMAL(10,4) NULL COMMENT '默认售价',
+  min_purchase_qty INT NOT NULL DEFAULT 1 COMMENT '最小购买数量',
+  max_purchase_qty INT NOT NULL DEFAULT 1 COMMENT '最大购买数量',
+  status TINYINT NOT NULL DEFAULT 1 COMMENT '状态',
+  is_deleted TINYINT NOT NULL DEFAULT 0 COMMENT '软删除标记',
+  deleted_at DATETIME NULL COMMENT '删除时间',
+  created_at DATETIME NOT NULL COMMENT '创建时间',
+  updated_at DATETIME NOT NULL COMMENT '更新时间',
   UNIQUE KEY uk_product_goods_code (goods_code),
   KEY idx_product_goods_brand (brand_id, is_deleted, id),
   KEY idx_product_goods_status (status, is_deleted, id),
   KEY idx_product_goods_type (goods_type, is_deleted, id),
   KEY idx_product_goods_name (name, is_deleted)
-);
+) COMMENT='商品表';
 
 CREATE TABLE IF NOT EXISTS system_config (
-  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  config_key VARCHAR(64) NOT NULL UNIQUE,
-  config_value TEXT NOT NULL,
-  description VARCHAR(255) NOT NULL DEFAULT '',
-  created_at DATETIME NOT NULL,
-  updated_at DATETIME NOT NULL
-);
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '配置ID',
+  config_key VARCHAR(64) NOT NULL UNIQUE COMMENT '配置键',
+  config_value TEXT NOT NULL COMMENT '配置值',
+  description VARCHAR(255) NOT NULL DEFAULT '' COMMENT '配置描述',
+  created_at DATETIME NOT NULL COMMENT '创建时间',
+  updated_at DATETIME NOT NULL COMMENT '更新时间'
+) COMMENT='系统配置表';
