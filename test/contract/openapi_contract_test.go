@@ -26,7 +26,7 @@ func TestEnvelopeUsesMessageField(t *testing.T) {
 
 	loginRes := h.rawRequest("POST", "/api/admin/auth/login", map[string]any{
 		"username": "admin",
-		"password": "Admin_123",
+		"password": "abc123",
 	}, "")
 	require.Equal(t, 200, loginRes.status)
 	require.Contains(t, loginRes.body, "\"message\"")

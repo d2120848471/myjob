@@ -77,7 +77,7 @@
 - 后台接口统一挂在 `/api/admin/*`
 - 响应体统一为 `code / message / data`
 - 品牌图片本地存储默认走 `storage/uploads` + `/uploads/*`
-- 继续支持 `ADMIN_CONFIG`、`SUPER_ADMIN_PHONE`、`SUPER_ADMIN_PASSWORD`
+- 继续支持 `ADMIN_CONFIG`；本地默认超管凭证直接写在 `manifest/config/config.local.yaml`
 - 保留 MySQL、Redis、短信配置、系统参数配置、菜单权限、日志表这套现有业务语义
 
 ## 非目标

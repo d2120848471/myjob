@@ -31,7 +31,7 @@ func TestAuthFlow_SessionSMSProfileLogout(t *testing.T) {
 
 	loginRes := h.postJSON("/api/admin/auth/login", map[string]any{
 		"username": "admin",
-		"password": "Admin_123",
+		"password": "abc123",
 	}, "")
 	require.Equal(t, 0, loginRes.Code)
 	require.Equal(t, "OK", loginRes.Message)
@@ -269,7 +269,7 @@ func (h *testHarness) loginAdmin(t *testing.T) string {
 	t.Helper()
 	res := h.postJSON("/api/admin/auth/login", map[string]any{
 		"username": "admin",
-		"password": "Admin_123",
+		"password": "abc123",
 	}, "")
 	require.Equal(t, 0, res.Code)
 	var data struct {

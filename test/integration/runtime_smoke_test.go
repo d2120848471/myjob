@@ -23,9 +23,6 @@ func TestRuntime_LoginSmoke(t *testing.T) {
 	if os.Getenv("MYJOB_RUN_INTEGRATION") != "1" {
 		t.Skip("set MYJOB_RUN_INTEGRATION=1 to run integration smoke tests")
 	}
-	if os.Getenv("SUPER_ADMIN_PHONE") == "" || os.Getenv("SUPER_ADMIN_PASSWORD") == "" {
-		t.Skip("SUPER_ADMIN_PHONE and SUPER_ADMIN_PASSWORD are required")
-	}
 
 	app, err := bootstrap.NewApplicationFromEnv()
 	require.NoError(t, err)
@@ -36,7 +33,7 @@ func TestRuntime_LoginSmoke(t *testing.T) {
 
 	body, err := json.Marshal(map[string]any{
 		"username": "admin",
-		"password": os.Getenv("SUPER_ADMIN_PASSWORD"),
+		"password": "abc123",
 	})
 	require.NoError(t, err)
 

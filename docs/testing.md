@@ -54,12 +54,10 @@ go test ./test/integration -run 'TestSupplierPlatformRefresh_' -count=1 -timeout
 
 ```bash
 export MYJOB_RUN_INTEGRATION=1
-export SUPER_ADMIN_PHONE=13800000000
-export SUPER_ADMIN_PASSWORD=Admin_123
 go test ./test/integration -count=1 -timeout 60s
 ```
 
-如果没有设置环境变量，这个测试会跳过，而不是失败。
+它会使用本地默认超管 `admin / abc123` 完成登录烟测。
 
 ### 2.1 第三方平台 live 验证
 
@@ -113,8 +111,6 @@ go test ./test/contract -count=1 -timeout 60s
 
 ```bash
 export MYJOB_RUN_INTEGRATION=1
-export SUPER_ADMIN_PHONE=13800000000
-export SUPER_ADMIN_PASSWORD=Admin_123
 go test ./test/integration -count=1 -timeout 60s
 ```
 

@@ -339,7 +339,7 @@ HTTP 协议适配层，不直接写业务规则。
 
 ### `manifest/config`
 
-运行时配置目录，当前主要是 `config.local.yaml`。
+运行时配置目录，当前主要是 `config.local.yaml`，其中本地默认 MySQL 连接使用 `127.0.0.1:3306/admin`，并固定超级管理员账号 `admin / 15881767197 / abc123`。
 
 ### `manifest/sql`
 
