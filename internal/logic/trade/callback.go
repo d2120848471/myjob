@@ -124,6 +124,19 @@ INSERT INTO provider_callback_log (
 		return ackBody, contentType, nil
 	}
 
+	// 主订单已进入最终态时：视为晚到回调，只做审计，不允许再补单或覆盖主订单状态。
+	if final, _ := l.isOrderFinal(ctx, orderID); final {
+		processResult := "late_callback_ignored"
+		if result.FinalSuccess {
+			processResult = "late_success_ignored"
+		} else if result.FinalFailed {
+			processResult = "late_failed_ignored"
+		}
+		_ = l.updateCallbackLogProcessResult(ctx, logID, processResult)
+		_ = l.updateAttemptCallbackAudit(ctx, attemptID, result, account, now)
+		return ackBody, contentType, nil
+	}
+
 	if ignored, ignoreErr := l.ignoreLateCallbackIfNeeded(ctx, logID, attemptID, orderID, result, account, now); ignoreErr == nil && ignored {
 		return ackBody, contentType, nil
 	}
@@ -135,42 +148,43 @@ INSERT INTO provider_callback_log (
 		attemptStatus = "failed"
 	}
 
-	finishedAt := time.Time{}
-	if attemptStatus == "success" || attemptStatus == "failed" {
-		finishedAt = now
-	}
-
-	_, _ = l.core.DB().Exec(ctx, `
-UPDATE trade_order_attempt
-SET callback_payload = ?,
-    callback_received_at = ?,
-    callback_processed_at = ?,
-    attempt_status = CASE WHEN ? != '' THEN ? ELSE attempt_status END,
-    upstream_status = ?,
-    channel_order_no = CASE WHEN ? != '' THEN ? ELSE channel_order_no END,
-    finished_at = ?,
-    updated_at = ?
-WHERE id = ?
-`,
-		truncateSnapshot(sanitizeSnapshot(result.RawPayload, account.TokenID, account.SecretKey)),
-		now,
-		now,
-		attemptStatus,
-		attemptStatus,
-		truncateSnapshot(strings.TrimSpace(result.UpstreamStatus)),
-		strings.TrimSpace(result.ChannelOrderNo),
-		strings.TrimSpace(result.ChannelOrderNo),
-		nullableTimeArg(finishedAt),
-		now,
-		attemptID,
-	)
+	_ = l.updateAttemptCallbackAudit(ctx, attemptID, result, account, now)
 
 	if attemptStatus == "success" {
+		updated, _ := l.core.DB().Exec(ctx, `
+UPDATE trade_order_attempt
+SET attempt_status = ?,
+    finished_at = ?,
+    updated_at = ?
+WHERE id = ? AND attempt_status IN ('created','submitted','accepted','waiting_callback','querying','unknown')
+`, attemptStatus, now, now, attemptID)
+		affected := int64(0)
+		if updated != nil {
+			affected, _ = updated.RowsAffected()
+		}
+		if affected <= 0 {
+			return ackBody, contentType, nil
+		}
 		_ = l.markOrderSuccess(ctx, orderID, attemptQuantity, result.ChannelOrderNo, now)
 		_ = l.tryKickoffNextCreatedAttempt(ctx, orderID, traceID)
 		return ackBody, contentType, nil
 	}
 	if attemptStatus == "failed" {
+		updated, _ := l.core.DB().Exec(ctx, `
+UPDATE trade_order_attempt
+SET attempt_status = ?,
+    finished_at = ?,
+    updated_at = ?
+WHERE id = ? AND attempt_status IN ('created','submitted','accepted','waiting_callback','querying','unknown')
+`, attemptStatus, now, now, attemptID)
+		affected := int64(0)
+		if updated != nil {
+			affected, _ = updated.RowsAffected()
+		}
+		if affected <= 0 {
+			return ackBody, contentType, nil
+		}
+
 		createRow, loadErr := l.loadCreateAttemptRow(ctx, l.core.DB(), attemptID)
 		if loadErr == nil {
 			if nextID, ok, _ := l.tryReplenishAfterFailedAttempt(ctx, createRow, traceID); ok && nextID > 0 {
@@ -182,6 +196,60 @@ WHERE id = ?
 		}
 	}
 	return ackBody, contentType, nil
+}
+
+func (l *TradeOrderLogic) isOrderFinal(ctx context.Context, orderID int64) (bool, error) {
+	if orderID <= 0 {
+		return false, nil
+	}
+	record, err := l.core.DB().GetCore().GetOne(ctx, `SELECT status FROM trade_order WHERE id = ? LIMIT 1`, orderID)
+	if err != nil || record == nil || len(record) == 0 {
+		return false, err
+	}
+	switch strings.TrimSpace(record["status"].String()) {
+	case "success", "failed", "manual_review":
+		return true, nil
+	default:
+		return false, nil
+	}
+}
+
+func (l *TradeOrderLogic) updateAttemptCallbackAudit(ctx context.Context, attemptID int64, result *supplierprovider.CallbackResult, account entity.SupplierPlatformAccount, now time.Time) error {
+	if attemptID <= 0 || result == nil {
+		return nil
+	}
+	callbackPayload := truncateSnapshot(sanitizeSnapshot(result.RawPayload, account.TokenID, account.SecretKey))
+	channelOrderNo := strings.TrimSpace(result.ChannelOrderNo)
+
+	_, err := l.core.DB().Exec(ctx, `
+UPDATE trade_order_attempt
+SET callback_payload = ?,
+    callback_received_at = ?,
+    callback_processed_at = ?,
+    upstream_status = ?,
+    channel_order_no = CASE WHEN ? != '' THEN ? ELSE channel_order_no END,
+    error_category = CASE WHEN ? != '' THEN ? ELSE error_category END,
+    error_code = CASE WHEN ? != '' THEN ? ELSE error_code END,
+    error_message = CASE WHEN ? != '' THEN ? ELSE error_message END,
+    updated_at = ?
+WHERE id = ?
+`,
+		callbackPayload,
+		now,
+		now,
+		truncateSnapshot(strings.TrimSpace(result.UpstreamStatus)),
+		channelOrderNo,
+		channelOrderNo,
+		truncateSnapshot(strings.TrimSpace(result.ErrorCategory)),
+		truncateSnapshot(strings.TrimSpace(result.ErrorCategory)),
+		truncateSnapshot(strings.TrimSpace(result.ErrorCode)),
+		truncateSnapshot(strings.TrimSpace(result.ErrorCode)),
+		truncateSnapshot(strings.TrimSpace(result.ErrorMessage)),
+		truncateSnapshot(strings.TrimSpace(result.ErrorMessage)),
+		now,
+		attemptID,
+	)
+	return err
 }
 
 func (l *TradeOrderLogic) updateCallbackLogProcessResult(ctx context.Context, logID int64, processResult string) error {

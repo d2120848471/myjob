@@ -3,6 +3,7 @@ package tradelogic
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -36,7 +37,7 @@ func (createAcceptedQuerySuccessProvider) BuildCreateOrderRequest(ctx context.Co
 }
 func (createAcceptedQuerySuccessProvider) ParseCreateOrderResponse(statusCode int, body []byte) (*supplierprovider.CreateOrderResult, error) {
 	return &supplierprovider.CreateOrderResult{
-		Accepted:      true,
+		Accepted:       true,
 		ChannelOrderNo: "CH-Q1",
 		UpstreamStatus: "accepted",
 		RawPayload:     string(body),
@@ -54,7 +55,7 @@ func (createAcceptedQuerySuccessProvider) BuildQueryOrderRequest(ctx context.Con
 }
 func (createAcceptedQuerySuccessProvider) ParseQueryOrderResponse(statusCode int, body []byte) (*supplierprovider.QueryOrderResult, error) {
 	return &supplierprovider.QueryOrderResult{
-		FinalSuccess:  true,
+		FinalSuccess:   true,
 		ChannelOrderNo: "CH-Q1",
 		UpstreamStatus: "success",
 		RawPayload:     string(body),
@@ -170,7 +171,7 @@ func (createAcceptedQueryFailedProvider) BuildCreateOrderRequest(ctx context.Con
 }
 func (createAcceptedQueryFailedProvider) ParseCreateOrderResponse(statusCode int, body []byte) (*supplierprovider.CreateOrderResult, error) {
 	return &supplierprovider.CreateOrderResult{
-		Accepted:      true,
+		Accepted:       true,
 		ChannelOrderNo: "CH-QF-1",
 		UpstreamStatus: "accepted",
 		RawPayload:     string(body),
@@ -217,7 +218,7 @@ func (createFinalSuccessProvider) BuildCreateOrderRequest(ctx context.Context, a
 }
 func (createFinalSuccessProvider) ParseCreateOrderResponse(statusCode int, body []byte) (*supplierprovider.CreateOrderResult, error) {
 	return &supplierprovider.CreateOrderResult{
-		FinalSuccess:  true,
+		FinalSuccess:   true,
 		ChannelOrderNo: "CH-QF-2",
 		UpstreamStatus: "success",
 		RawPayload:     string(body),
@@ -445,4 +446,209 @@ WHERE order_id = ?
 	attemptCount, err := core.DB().GetCore().GetValue(ctx, `SELECT COUNT(*) FROM trade_order_attempt WHERE order_id = ?`, order.ID)
 	require.NoError(t, err)
 	require.Equal(t, 2, attemptCount.Int())
+}
+
+type alwaysErrTransport struct{}
+
+func (alwaysErrTransport) RoundTrip(*http.Request) (*http.Response, error) {
+	return nil, errors.New("boom")
+}
+
+type queryParseErrProvider struct{}
+
+func (queryParseErrProvider) Code() string { return "ptest" }
+func (queryParseErrProvider) Name() string { return "查单解析失败Provider" }
+func (queryParseErrProvider) CandidateBaseURLs(account supplierprovider.AccountConfig) []string {
+	return []string{strings.TrimRight(account.Domain, "/")}
+}
+func (queryParseErrProvider) SupportsNativeQuantity() bool { return true }
+func (queryParseErrProvider) BuildCreateOrderRequest(context.Context, supplierprovider.AccountConfig, supplierprovider.CreateOrderInput, string) (*http.Request, error) {
+	return nil, errors.New("not used")
+}
+func (queryParseErrProvider) ParseCreateOrderResponse(int, []byte) (*supplierprovider.CreateOrderResult, error) {
+	return nil, errors.New("not used")
+}
+func (queryParseErrProvider) BuildQueryOrderRequest(ctx context.Context, account supplierprovider.AccountConfig, input supplierprovider.QueryOrderInput, baseURL string) (*http.Request, error) {
+	raw := []byte(`{}`)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(baseURL, "/")+"/query", bytes.NewReader(raw))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.GetBody = func() (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(raw)), nil }
+	return req, nil
+}
+func (queryParseErrProvider) ParseQueryOrderResponse(int, []byte) (*supplierprovider.QueryOrderResult, error) {
+	return nil, errors.New("parse fail")
+}
+
+func TestTradeOrderLogic_RunQueryJob_RequestErrorAdvancesBackoff(t *testing.T) {
+	core, err := app.NewTestCore()
+	require.NoError(t, err)
+	defer core.Close()
+
+	ctx := context.Background()
+	now := core.Now()
+
+	subjectResult, err := core.DB().Exec(ctx, `
+INSERT INTO admin_subject (name, has_tax, created_at, updated_at)
+VALUES ('交易主体A', 1, ?, ?)
+`, now, now)
+	require.NoError(t, err)
+	subjectID, _ := subjectResult.LastInsertId()
+
+	goodsCode := "P-QUERY-REQERR-001"
+	goodsResult, err := core.DB().Exec(ctx, `
+INSERT INTO product_goods (goods_code, brand_id, name, goods_type, supply_type, has_tax, subject_id, default_sell_price, min_purchase_qty, max_purchase_qty, status, created_at, updated_at)
+VALUES (?, 1, '查单请求失败商品', 'card_secret', 'channel', 1, ?, '29.9000', 1, 5, 1, ?, ?)
+`, goodsCode, subjectID, now, now)
+	require.NoError(t, err)
+	goodsID, _ := goodsResult.LastInsertId()
+
+	accountResult, err := core.DB().Exec(ctx, `
+INSERT INTO supplier_platform_account (name, provider_code, provider_name, type_id, subject_id, has_tax, domain, token_id, secret_key, created_at, updated_at)
+VALUES ('渠道账号A', 'ptest', '测试平台', 6, ?, 0, 'http://example.invalid', 'token-a', 'secret', ?, ?)
+`, subjectID, now, now)
+	require.NoError(t, err)
+	accountID, _ := accountResult.LastInsertId()
+
+	orderResult, err := core.DB().Exec(ctx, `
+INSERT INTO trade_order (order_no, caller_id, client_order_no, goods_id, quantity, status, created_at, updated_at)
+VALUES ('TO-REQERR-001', 100, 'C-REQERR-001', ?, 1, 'processing', ?, ?)
+`, goodsID, now, now)
+	require.NoError(t, err)
+	orderID, _ := orderResult.LastInsertId()
+
+	attemptResult, err := core.DB().Exec(ctx, `
+INSERT INTO trade_order_attempt (
+    order_id, binding_id, platform_account_id, provider_code,
+    fulfillment_no, attempt_quantity, attempt_no,
+    provider_request_order_no, attempt_status,
+    query_count, next_query_at, query_deadline_at,
+    created_at, updated_at
+) VALUES (
+    ?, 0, ?, 'ptest',
+    'F001', 1, 1,
+    'PR-REQERR-001', 'accepted',
+    0, ?, ?,
+    ?, ?
+)
+`, orderID, accountID, now.Add(-time.Second), now.Add(10*time.Minute), now, now)
+	require.NoError(t, err)
+	attemptID, _ := attemptResult.LastInsertId()
+
+	lookup := func(code string) (supplierprovider.OrderProvider, bool) {
+		if strings.TrimSpace(code) == "ptest" {
+			return queryParseErrProvider{}, true
+		}
+		return nil, false
+	}
+	logic := NewTradeOrderLogic(core, lookup, &http.Client{Transport: alwaysErrTransport{}})
+
+	processed, err := logic.RunQueryJob(ctx, "trace-reqerr")
+	require.NoError(t, err)
+	require.Equal(t, 1, processed)
+
+	record, err := core.DB().GetCore().GetOne(ctx, `SELECT attempt_status, error_category, query_count FROM trade_order_attempt WHERE id = ?`, attemptID)
+	require.NoError(t, err)
+	require.Equal(t, "querying", strings.TrimSpace(record["attempt_status"].String()))
+	require.Equal(t, "server_error", strings.TrimSpace(record["error_category"].String()))
+	require.Equal(t, 1, record["query_count"].Int())
+
+	advanced, err := core.DB().GetCore().GetValue(ctx, `
+SELECT CASE WHEN next_query_at > ? THEN 1 ELSE 0 END
+FROM trade_order_attempt
+WHERE id = ?
+`, now, attemptID)
+	require.NoError(t, err)
+	require.Equal(t, 1, advanced.Int())
+}
+
+func TestTradeOrderLogic_RunQueryJob_ParseErrorAdvancesBackoff(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer upstream.Close()
+
+	core, err := app.NewTestCore()
+	require.NoError(t, err)
+	defer core.Close()
+
+	ctx := context.Background()
+	now := core.Now()
+
+	subjectResult, err := core.DB().Exec(ctx, `
+INSERT INTO admin_subject (name, has_tax, created_at, updated_at)
+VALUES ('交易主体A', 1, ?, ?)
+`, now, now)
+	require.NoError(t, err)
+	subjectID, _ := subjectResult.LastInsertId()
+
+	goodsCode := "P-QUERY-PARSEERR-001"
+	goodsResult, err := core.DB().Exec(ctx, `
+INSERT INTO product_goods (goods_code, brand_id, name, goods_type, supply_type, has_tax, subject_id, default_sell_price, min_purchase_qty, max_purchase_qty, status, created_at, updated_at)
+VALUES (?, 1, '查单解析失败商品', 'card_secret', 'channel', 1, ?, '29.9000', 1, 5, 1, ?, ?)
+`, goodsCode, subjectID, now, now)
+	require.NoError(t, err)
+	goodsID, _ := goodsResult.LastInsertId()
+
+	accountResult, err := core.DB().Exec(ctx, `
+INSERT INTO supplier_platform_account (name, provider_code, provider_name, type_id, subject_id, has_tax, domain, token_id, secret_key, created_at, updated_at)
+VALUES ('渠道账号A', 'ptest', '测试平台', 6, ?, 0, ?, 'token-a', 'secret', ?, ?)
+`, subjectID, upstream.URL, now, now)
+	require.NoError(t, err)
+	accountID, _ := accountResult.LastInsertId()
+
+	orderResult, err := core.DB().Exec(ctx, `
+INSERT INTO trade_order (order_no, caller_id, client_order_no, goods_id, quantity, status, created_at, updated_at)
+VALUES ('TO-PARSEERR-001', 100, 'C-PARSEERR-001', ?, 1, 'processing', ?, ?)
+`, goodsID, now, now)
+	require.NoError(t, err)
+	orderID, _ := orderResult.LastInsertId()
+
+	attemptResult, err := core.DB().Exec(ctx, `
+INSERT INTO trade_order_attempt (
+    order_id, binding_id, platform_account_id, provider_code,
+    fulfillment_no, attempt_quantity, attempt_no,
+    provider_request_order_no, attempt_status,
+    query_count, next_query_at, query_deadline_at,
+    created_at, updated_at
+) VALUES (
+    ?, 0, ?, 'ptest',
+    'F001', 1, 1,
+    'PR-PARSEERR-001', 'accepted',
+    0, ?, ?,
+    ?, ?
+)
+`, orderID, accountID, now.Add(-time.Second), now.Add(10*time.Minute), now, now)
+	require.NoError(t, err)
+	attemptID, _ := attemptResult.LastInsertId()
+
+	lookup := func(code string) (supplierprovider.OrderProvider, bool) {
+		if strings.TrimSpace(code) == "ptest" {
+			return queryParseErrProvider{}, true
+		}
+		return nil, false
+	}
+	logic := NewTradeOrderLogic(core, lookup, upstream.Client())
+
+	processed, err := logic.RunQueryJob(ctx, "trace-parseerr")
+	require.NoError(t, err)
+	require.Equal(t, 1, processed)
+
+	record, err := core.DB().GetCore().GetOne(ctx, `SELECT attempt_status, error_category, error_message, query_count FROM trade_order_attempt WHERE id = ?`, attemptID)
+	require.NoError(t, err)
+	require.Equal(t, "querying", strings.TrimSpace(record["attempt_status"].String()))
+	require.Equal(t, "unknown", strings.TrimSpace(record["error_category"].String()))
+	require.Contains(t, strings.TrimSpace(record["error_message"].String()), "parse fail")
+	require.Equal(t, 1, record["query_count"].Int())
+
+	advanced, err := core.DB().GetCore().GetValue(ctx, `
+SELECT CASE WHEN next_query_at > ? THEN 1 ELSE 0 END
+FROM trade_order_attempt
+WHERE id = ?
+`, now, attemptID)
+	require.NoError(t, err)
+	require.Equal(t, 1, advanced.Int())
 }

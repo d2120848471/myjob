@@ -61,6 +61,7 @@ type queryAttemptRow struct {
 	ProviderRequestOrderNo string    `db:"provider_request_order_no"`
 	ChannelOrderNo         string    `db:"channel_order_no"`
 	AttemptQuantity        int       `db:"attempt_quantity"`
+	AttemptStatus          string    `db:"attempt_status"`
 	QueryCount             int       `db:"query_count"`
 	QueryDeadlineAt        time.Time `db:"query_deadline_at"`
 }
@@ -77,6 +78,7 @@ SELECT
     a.provider_request_order_no,
     a.channel_order_no,
     a.attempt_quantity,
+    a.attempt_status,
     a.query_count,
     a.query_deadline_at
 FROM trade_order_attempt a
@@ -96,11 +98,18 @@ func (l *TradeOrderLogic) executeQueryAttempt(ctx context.Context, attemptID int
 	if err != nil {
 		return err
 	}
+	switch strings.TrimSpace(row.AttemptStatus) {
+	case "accepted", "waiting_callback", "querying", "unknown":
+		// ok
+	default:
+		// attempt 已被回调或其他任务推进到最终态；跳过，避免重复推进主订单数量。
+		return nil
+	}
 
 	now := l.core.Now()
 	// 超过查单截止时间：直接判定 timeout，并进入补单或收敛逻辑。
 	if !row.QueryDeadlineAt.IsZero() && !now.Before(row.QueryDeadlineAt) {
-		_, _ = l.core.DB().Exec(ctx, `
+		updated, _ := l.core.DB().Exec(ctx, `
 UPDATE trade_order_attempt
 SET attempt_status = 'timeout',
     error_category = CASE WHEN error_category != '' THEN error_category ELSE 'timeout' END,
@@ -108,6 +117,13 @@ SET attempt_status = 'timeout',
     updated_at = ?
 WHERE id = ? AND attempt_status IN ('accepted','waiting_callback','querying','unknown')
 `, now, now, attemptID)
+		affected := int64(0)
+		if updated != nil {
+			affected, _ = updated.RowsAffected()
+		}
+		if affected <= 0 {
+			return nil
+		}
 
 		createRow, loadErr := l.loadCreateAttemptRow(ctx, l.core.DB(), attemptID)
 		if loadErr == nil {
@@ -163,18 +179,29 @@ WHERE id = ? AND attempt_status IN ('accepted','waiting_callback','querying','un
 		}
 
 		// 先写入本次查单请求快照，便于排查。
-		_, _ = l.core.DB().Exec(ctx, `
-UPDATE trade_order_attempt
-SET attempt_status = 'querying',
-    request_url = ?,
-    request_method = ?,
+		updated, err := l.core.DB().Exec(ctx, `
+	UPDATE trade_order_attempt
+	SET attempt_status = 'querying',
+	    request_url = ?,
+	    request_method = ?,
     request_headers = ?,
     request_payload = ?,
-    trace_id = ?,
-    last_query_at = ?,
-    updated_at = ?
-WHERE id = ? AND attempt_status IN ('accepted','waiting_callback','querying','unknown')
-`, request.URL.String(), request.Method, headersSnapshot, bodySnapshot, traceID, now, now, attemptID)
+	    trace_id = ?,
+	    last_query_at = ?,
+	    updated_at = ?
+	WHERE id = ? AND attempt_status IN ('accepted','waiting_callback','querying','unknown')
+	`, request.URL.String(), request.Method, headersSnapshot, bodySnapshot, traceID, now, now, attemptID)
+		if err != nil {
+			return apiErr(consts.CodeInternalError, "更新attempt查单快照失败")
+		}
+		affected := int64(0)
+		if updated != nil {
+			affected, _ = updated.RowsAffected()
+		}
+		if affected <= 0 {
+			// attempt 已在其他路径推进到最终态（如回调成功/失败）；跳过即可。
+			return nil
+		}
 
 		response, requestErr := l.client.Do(request)
 		if requestErr != nil {
@@ -182,15 +209,25 @@ WHERE id = ? AND attempt_status IN ('accepted','waiting_callback','querying','un
 			if ne, ok := requestErr.(net.Error); ok && ne.Timeout() {
 				category = "timeout"
 			}
-			_, _ = l.core.DB().Exec(ctx, `
-UPDATE trade_order_attempt
-SET attempt_status = 'querying',
-    error_category = ?,
-    error_message = ?,
-    duration_ms = ?,
-    updated_at = ?
-WHERE id = ?
-`, category, truncateSnapshot(requestErr.Error()), int(time.Since(reqStart).Milliseconds()), l.core.Now(), attemptID)
+			updated, err := l.core.DB().Exec(ctx, `
+	UPDATE trade_order_attempt
+	SET attempt_status = 'querying',
+	    error_category = ?,
+	    error_message = ?,
+	    duration_ms = ?,
+	    updated_at = ?
+	WHERE id = ? AND attempt_status IN ('accepted','waiting_callback','querying','unknown')
+	`, category, truncateSnapshot(requestErr.Error()), int(time.Since(reqStart).Milliseconds()), l.core.Now(), attemptID)
+			if err != nil {
+				return apiErr(consts.CodeInternalError, "更新attempt查单错误失败")
+			}
+			affected := int64(0)
+			if updated != nil {
+				affected, _ = updated.RowsAffected()
+			}
+			if affected <= 0 {
+				return nil
+			}
 			continue
 		}
 
@@ -204,19 +241,55 @@ WHERE id = ?
 
 		result, parseErr := orderProvider.ParseQueryOrderResponse(response.StatusCode, body)
 		if parseErr != nil {
+			queryCount := row.QueryCount + 1
+			nextQueryAt := l.computeNextQueryAt(now, queryCount)
+
 			if shouldRetrySupplierCandidate(response, body, parseErr) {
+				updated, err := l.core.DB().Exec(ctx, `
+	UPDATE trade_order_attempt
+	SET response_payload = ?,
+	    http_status = ?,
+	    duration_ms = ?,
+	    error_category = 'unknown',
+	    error_message = ?,
+	    updated_at = ?
+	WHERE id = ? AND attempt_status IN ('accepted','waiting_callback','querying','unknown')
+	`, responseSnapshot, response.StatusCode, durationMS, truncateSnapshot(parseErr.Error()), l.core.Now(), attemptID)
+				if err != nil {
+					return apiErr(consts.CodeInternalError, "更新attempt查单解析错误失败")
+				}
+				affected := int64(0)
+				if updated != nil {
+					affected, _ = updated.RowsAffected()
+				}
+				if affected <= 0 {
+					return nil
+				}
 				continue
 			}
-			_, _ = l.core.DB().Exec(ctx, `
-UPDATE trade_order_attempt
-SET response_payload = ?,
-    http_status = ?,
-    duration_ms = ?,
-    error_category = 'unknown',
-    error_message = ?,
-    updated_at = ?
-WHERE id = ?
-`, responseSnapshot, response.StatusCode, durationMS, truncateSnapshot(parseErr.Error()), l.core.Now(), attemptID)
+
+			updated, err := l.core.DB().Exec(ctx, `
+	UPDATE trade_order_attempt
+	SET response_payload = ?,
+	    http_status = ?,
+	    duration_ms = ?,
+	    error_category = 'unknown',
+	    error_message = ?,
+	    query_count = ?,
+	    next_query_at = ?,
+	    updated_at = ?
+	WHERE id = ? AND attempt_status IN ('accepted','waiting_callback','querying','unknown')
+	`, responseSnapshot, response.StatusCode, durationMS, truncateSnapshot(parseErr.Error()), queryCount, nullableTimeArg(nextQueryAt), l.core.Now(), attemptID)
+			if err != nil {
+				return apiErr(consts.CodeInternalError, "更新attempt查单解析错误失败")
+			}
+			affected := int64(0)
+			if updated != nil {
+				affected, _ = updated.RowsAffected()
+			}
+			if affected <= 0 {
+				return nil
+			}
 			return nil
 		}
 
@@ -237,10 +310,10 @@ WHERE id = ?
 			finishedAt = now
 		}
 
-		_, _ = l.core.DB().Exec(ctx, `
-UPDATE trade_order_attempt
-SET attempt_status = ?,
-    upstream_status = ?,
+		finalRes, _ := l.core.DB().Exec(ctx, `
+	UPDATE trade_order_attempt
+	SET attempt_status = ?,
+	    upstream_status = ?,
     channel_order_no = ?,
     response_payload = ?,
     http_status = ?,
@@ -269,6 +342,13 @@ WHERE id = ? AND attempt_status IN ('accepted','waiting_callback','querying','un
 			l.core.Now(),
 			attemptID,
 		)
+		affected = int64(0)
+		if finalRes != nil {
+			affected, _ = finalRes.RowsAffected()
+		}
+		if affected <= 0 {
+			return nil
+		}
 
 		if attemptStatus == "success" {
 			_ = l.markOrderSuccess(ctx, row.OrderID, row.AttemptQuantity, result.ChannelOrderNo, now)
@@ -287,6 +367,28 @@ WHERE id = ? AND attempt_status IN ('accepted','waiting_callback','querying','un
 			}
 			return nil
 		}
+
+		return nil
+	}
+
+	// 所有候选域名都失败：推进退避调度，避免每轮扫描都重复打上游。
+	queryCount := row.QueryCount + 1
+	nextQueryAt := l.computeNextQueryAt(now, queryCount)
+	scheduleRes, err := l.core.DB().Exec(ctx, `
+UPDATE trade_order_attempt
+SET query_count = ?,
+    next_query_at = ?,
+    updated_at = ?
+WHERE id = ? AND attempt_status IN ('accepted','waiting_callback','querying','unknown')
+`, queryCount, nullableTimeArg(nextQueryAt), l.core.Now(), attemptID)
+	if err != nil {
+		return apiErr(consts.CodeInternalError, "推进attempt退避调度失败")
+	}
+	affected := int64(0)
+	if scheduleRes != nil {
+		affected, _ = scheduleRes.RowsAffected()
+	}
+	if affected <= 0 {
 		return nil
 	}
 	return nil

@@ -348,3 +348,125 @@ LIMIT 1
 	require.Equal(t, "timeout", strings.TrimSpace(attemptRecord["attempt_status"].String()))
 	require.NotEmpty(t, strings.TrimSpace(attemptRecord["callback_payload"].String()))
 }
+
+func TestTradeOrderLogic_HandleProviderOrderCallback_OrderFinalDoesNotReplenish(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"code":1000,"msg":"ok","data":{"ordersn":"CH-NEW"}}`))
+	}))
+	defer upstream.Close()
+
+	core, err := app.NewTestCore()
+	require.NoError(t, err)
+	defer core.Close()
+
+	ctx := context.Background()
+	now := core.Now()
+
+	subjectResult, err := core.DB().Exec(ctx, `
+INSERT INTO admin_subject (name, has_tax, created_at, updated_at)
+VALUES ('交易主体A', 1, ?, ?)
+`, now, now)
+	require.NoError(t, err)
+	subjectID, _ := subjectResult.LastInsertId()
+
+	goodsCode := "P-CALLBACK-FINAL-001"
+	goodsResult, err := core.DB().Exec(ctx, `
+INSERT INTO product_goods (goods_code, brand_id, name, goods_type, supply_type, has_tax, subject_id, default_sell_price, min_purchase_qty, max_purchase_qty, status, created_at, updated_at)
+VALUES (?, 1, '终态回调商品', 'card_secret', 'channel', 1, ?, '29.9000', 1, 5, 1, ?, ?)
+`, goodsCode, subjectID, now, now)
+	require.NoError(t, err)
+	goodsID, _ := goodsResult.LastInsertId()
+
+	_, err = core.DB().Exec(ctx, `
+INSERT INTO product_goods_channel_config (goods_id, smart_replenish_enabled, route_mode, created_at, updated_at)
+VALUES (?, 1, 'fixed_order', ?, ?)
+`, goodsID, now, now)
+	require.NoError(t, err)
+
+	account1Result, err := core.DB().Exec(ctx, `
+INSERT INTO supplier_platform_account (name, provider_code, provider_name, type_id, subject_id, has_tax, domain, token_id, secret_key, created_at, updated_at)
+VALUES ('渠道账号A', 'youkayun', '优卡云', 7, ?, 0, ?, 'token-a', 'secret', ?, ?)
+`, subjectID, upstream.URL, now, now)
+	require.NoError(t, err)
+	account1ID, _ := account1Result.LastInsertId()
+
+	account2Result, err := core.DB().Exec(ctx, `
+INSERT INTO supplier_platform_account (name, provider_code, provider_name, type_id, subject_id, has_tax, domain, token_id, secret_key, created_at, updated_at)
+VALUES ('渠道账号B', 'youkayun', '优卡云', 7, ?, 0, ?, 'token-b', 'secret', ?, ?)
+`, subjectID, upstream.URL, now, now)
+	require.NoError(t, err)
+	account2ID, _ := account2Result.LastInsertId()
+
+	binding1Result, err := core.DB().Exec(ctx, `
+INSERT INTO product_goods_channel_binding (goods_id, platform_account_id, supplier_goods_no, supplier_goods_name, source_cost_price, cost_price, dock_status, sort, is_auto_change, add_type, default_price, created_at, updated_at)
+VALUES (?, ?, '100', '上游商品A', '10.0000', '10.0000', 'enabled', 10, 0, 'fixed', '0.0000', ?, ?)
+`, goodsID, account1ID, now, now)
+	require.NoError(t, err)
+	binding1ID, _ := binding1Result.LastInsertId()
+
+	_, err = core.DB().Exec(ctx, `
+INSERT INTO product_goods_channel_binding (goods_id, platform_account_id, supplier_goods_no, supplier_goods_name, source_cost_price, cost_price, dock_status, sort, is_auto_change, add_type, default_price, created_at, updated_at)
+VALUES (?, ?, '200', '上游商品B', '11.0000', '11.0000', 'enabled', 20, 0, 'fixed', '0.0000', ?, ?)
+`, goodsID, account2ID, now, now)
+	require.NoError(t, err)
+
+	orderResult, err := core.DB().Exec(ctx, `
+INSERT INTO trade_order (
+    order_no, caller_id, client_order_no,
+    goods_id, goods_code_snapshot, goods_name_snapshot,
+    binding_id, platform_account_id, route_mode_snapshot,
+    quantity, payload_json,
+    sale_price, total_amount,
+    source_cost_price_snapshot, cost_price_snapshot,
+    loss_order, loss_amount,
+    status, created_at, updated_at
+) VALUES (
+    'TO-FINAL-001', 100, 'C-FINAL-001',
+    ?, ?, '终态回调商品',
+    ?, ?, 'fixed_order',
+    1, '{"mobile":"13800138000"}',
+    '29.9000', '29.9000',
+    '10.0000', '10.0000',
+    0, '0.0000',
+    'failed', ?, ?
+)
+`, goodsID, goodsCode, binding1ID, account1ID, now, now)
+	require.NoError(t, err)
+	orderID, _ := orderResult.LastInsertId()
+
+	_, err = core.DB().Exec(ctx, `
+INSERT INTO trade_order_attempt (
+    order_id, binding_id, platform_account_id, provider_code,
+    fulfillment_no, attempt_quantity, attempt_no, provider_request_order_no,
+    channel_order_no, attempt_status,
+    created_at, updated_at
+) VALUES (?, ?, ?, 'youkayun', 'F001', 1, 1, 'PR-FINAL-001', 'CH-OLD', 'accepted', ?, ?)
+`, orderID, binding1ID, account1ID, now, now)
+	require.NoError(t, err)
+
+	logic := NewTradeOrderLogic(core, nil, upstream.Client())
+
+	callbackBody, _ := json.Marshal(map[string]any{
+		"orderno":    "PR-FINAL-001",
+		"outorderno": "CH-OLD",
+		"userid":     "token-a",
+		"status":     5,
+	})
+
+	_, _, err = logic.HandleProviderOrderCallback(ctx, "youkayun", http.Header{"Content-Type": []string{"application/json"}}, callbackBody)
+	require.NoError(t, err)
+
+	attemptCount, err := core.DB().GetCore().GetValue(ctx, `SELECT COUNT(*) FROM trade_order_attempt WHERE order_id = ?`, orderID)
+	require.NoError(t, err)
+	require.Equal(t, 1, attemptCount.Int())
+
+	logRecord, err := core.DB().GetCore().GetOne(ctx, `
+SELECT process_result
+FROM provider_callback_log
+WHERE provider_code = 'youkayun' AND idempotency_key = 'PR-FINAL-001'
+LIMIT 1
+`)
+	require.NoError(t, err)
+	require.Equal(t, "late_failed_ignored", strings.TrimSpace(logRecord["process_result"].String()))
+}
