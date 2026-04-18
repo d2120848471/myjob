@@ -162,28 +162,34 @@ type ProductGoodsFormOptionsRes struct {
 
 // ProductGoodsListItem 是商品列表行展示项。
 type ProductGoodsListItem struct {
-	ID                        int64  `json:"id" dc:"商品ID"`
-	GoodsCode                 string `json:"goods_code" dc:"商品业务编码"`
-	BrandID                   int64  `json:"brand_id" dc:"品牌ID"`
-	BrandName                 string `json:"brand_name" dc:"品牌名称"`
-	BrandIcon                 string `json:"brand_icon" dc:"品牌图片"`
-	SubjectID                 *int64 `json:"subject_id" dc:"主体ID"`
-	SubjectName               string `json:"subject_name" dc:"主体名称"`
-	Name                      string `json:"name" dc:"商品名称"`
-	GoodsType                 string `json:"goods_type" dc:"商品类型"`
-	SupplyType                string `json:"supply_type" dc:"供货方式"`
-	IsExport                  int    `json:"is_export" dc:"是否可导出"`
-	IsDouyin                  int    `json:"is_douyin" dc:"是否可抖音"`
-	HasTax                    int    `json:"has_tax" dc:"是否含税"`
-	ExceptionNotify           int    `json:"exception_notify" dc:"是否异常提醒"`
-	ProductTemplateID         int64  `json:"product_template_id" dc:"商品模板ID"`
-	ProductTemplateTitle      string `json:"product_template_title" dc:"商品模板标题"`
-	PurchaseLimitStrategyID   int64  `json:"purchase_limit_strategy_id" dc:"购买数量限制策略ID"`
-	PurchaseLimitStrategyName string `json:"purchase_limit_strategy_name" dc:"购买数量限制策略名称"`
-	DefaultSellPrice          string `json:"default_sell_price" dc:"默认售价"`
-	TerminalPriceLimit        string `json:"terminal_price_limit" dc:"终端限价"`
-	Status                    int    `json:"status" dc:"状态"`
-	CreatedAt                 string `json:"created_at" dc:"创建时间"`
+	ID                           int64    `json:"id" dc:"商品ID"`
+	GoodsCode                    string   `json:"goods_code" dc:"商品业务编码"`
+	BrandID                      int64    `json:"brand_id" dc:"品牌ID"`
+	BrandName                    string   `json:"brand_name" dc:"品牌名称"`
+	BrandIcon                    string   `json:"brand_icon" dc:"品牌图片"`
+	SubjectID                    *int64   `json:"subject_id" dc:"主体ID"`
+	SubjectName                  string   `json:"subject_name" dc:"主体名称"`
+	Name                         string   `json:"name" dc:"商品名称"`
+	GoodsType                    string   `json:"goods_type" dc:"商品类型"`
+	SupplyType                   string   `json:"supply_type" dc:"供货方式"`
+	IsExport                     int      `json:"is_export" dc:"是否可导出"`
+	IsDouyin                     int      `json:"is_douyin" dc:"是否可抖音"`
+	HasTax                       int      `json:"has_tax" dc:"是否含税"`
+	ExceptionNotify              int      `json:"exception_notify" dc:"是否异常提醒"`
+	ProductTemplateID            int64    `json:"product_template_id" dc:"商品模板ID"`
+	ProductTemplateTitle         string   `json:"product_template_title" dc:"商品模板标题"`
+	PurchaseLimitStrategyID      int64    `json:"purchase_limit_strategy_id" dc:"购买数量限制策略ID"`
+	PurchaseLimitStrategyName    string   `json:"purchase_limit_strategy_name" dc:"购买数量限制策略名称"`
+	DefaultSellPrice             string   `json:"default_sell_price" dc:"默认售价"`
+	TerminalPriceLimit           string   `json:"terminal_price_limit" dc:"终端限价"`
+	BoundChannels                []string `json:"bound_channels" dc:"已启用绑定渠道名称"`
+	BoundChannelCount            int      `json:"bound_channel_count" dc:"已启用绑定数量"`
+	PrimaryChannelName           string   `json:"primary_channel_name" dc:"首选渠道名称"`
+	MinChannelCost               string   `json:"min_channel_cost" dc:"最低比较成本价"`
+	MinChannelEffectiveSellPrice string   `json:"min_channel_effective_sell_price" dc:"最低利润后价格"`
+	ChannelAutoPriceStatus       int      `json:"channel_auto_price_status" dc:"是否存在自动改价绑定"`
+	Status                       int      `json:"status" dc:"状态"`
+	CreatedAt                    string   `json:"created_at" dc:"创建时间"`
 }
 
 // ProductGoodsBrandTreeItem 是品牌树节点（用于表单下拉），包含子品牌。

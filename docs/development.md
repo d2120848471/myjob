@@ -159,6 +159,7 @@ bootstrap:
 - `manifest/sql/003_seed_admin.sql.tmpl`：超级管理员 SQL 模板
 - `manifest/sql/004_seed_config.sql`：系统配置初始值
 - `manifest/sql/005_supplier_platform.sql`：第三方平台类型、账号和余额日志结构
+- `manifest/sql/006_product_goods_channel_binding.sql`：商品渠道绑定表结构
 
 补充说明：
 

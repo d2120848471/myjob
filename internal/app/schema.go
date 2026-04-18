@@ -169,6 +169,34 @@ CREATE INDEX IF NOT EXISTS idx_product_goods_type
     ON product_goods(goods_type, is_deleted, id);
 CREATE INDEX IF NOT EXISTS idx_product_goods_name
     ON product_goods(name, is_deleted);
+CREATE TABLE IF NOT EXISTS product_goods_channel_binding (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    goods_id INTEGER NOT NULL,
+    platform_account_id INTEGER NOT NULL,
+    supplier_goods_no TEXT NOT NULL,
+    supplier_goods_name TEXT NOT NULL DEFAULT '',
+    source_cost_price TEXT NOT NULL DEFAULT '0.0000',
+    cost_price TEXT NOT NULL DEFAULT '0.0000',
+    tax_adjust_direction TEXT NOT NULL DEFAULT 'none',
+    tax_adjust_rate TEXT NOT NULL DEFAULT '0.0000',
+    tax_adjust_amount TEXT NOT NULL DEFAULT '0.0000',
+    dock_status INTEGER NOT NULL DEFAULT 1,
+    sort INTEGER NOT NULL DEFAULT 0,
+    validate_template_id INTEGER NULL,
+    is_auto_change INTEGER NOT NULL DEFAULT 0,
+    add_type TEXT NOT NULL DEFAULT '',
+    default_price TEXT NOT NULL DEFAULT '0.0000',
+    is_deleted INTEGER NOT NULL DEFAULT 0,
+    deleted_at DATETIME NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_product_goods_channel_binding_goods
+    ON product_goods_channel_binding(goods_id, is_deleted, sort, id);
+CREATE INDEX IF NOT EXISTS idx_product_goods_channel_binding_platform
+    ON product_goods_channel_binding(platform_account_id, is_deleted, id);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_product_goods_channel_binding_active
+    ON product_goods_channel_binding(goods_id, platform_account_id, supplier_goods_no, is_deleted);
 CREATE TABLE IF NOT EXISTS supplier_platform_type (
     id INTEGER PRIMARY KEY,
     type_name TEXT NOT NULL,
@@ -406,6 +434,31 @@ CREATE TABLE IF NOT EXISTS product_goods (
     KEY idx_product_goods_type (goods_type, is_deleted, id),
     KEY idx_product_goods_name (name, is_deleted)
 ) COMMENT='商品表';
+CREATE TABLE IF NOT EXISTS product_goods_channel_binding (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '绑定ID',
+    goods_id BIGINT UNSIGNED NOT NULL COMMENT '商品ID',
+    platform_account_id BIGINT UNSIGNED NOT NULL COMMENT '渠道账号ID',
+    supplier_goods_no VARCHAR(128) NOT NULL COMMENT '对接商品编号',
+    supplier_goods_name VARCHAR(255) NOT NULL DEFAULT '' COMMENT '对接商品名称',
+    source_cost_price DECIMAL(18,4) NOT NULL DEFAULT 0.0000 COMMENT '原始进货价',
+    cost_price DECIMAL(18,4) NOT NULL DEFAULT 0.0000 COMMENT '比较成本价',
+    tax_adjust_direction VARCHAR(32) NOT NULL DEFAULT 'none' COMMENT '税额调整方向',
+    tax_adjust_rate DECIMAL(10,4) NOT NULL DEFAULT 0.0000 COMMENT '税率',
+    tax_adjust_amount DECIMAL(18,4) NOT NULL DEFAULT 0.0000 COMMENT '税额调整值',
+    dock_status TINYINT NOT NULL DEFAULT 1 COMMENT '对接状态',
+    sort INT NOT NULL DEFAULT 0 COMMENT '排序值',
+    validate_template_id BIGINT UNSIGNED NULL COMMENT '充值模板ID',
+    is_auto_change TINYINT NOT NULL DEFAULT 0 COMMENT '是否启用自动改价',
+    add_type VARCHAR(16) NOT NULL DEFAULT '' COMMENT '自动改价类型',
+    default_price DECIMAL(18,4) NOT NULL DEFAULT 0.0000 COMMENT '利润值',
+    is_deleted TINYINT NOT NULL DEFAULT 0 COMMENT '软删除标记',
+    deleted_at DATETIME NULL COMMENT '删除时间',
+    created_at DATETIME NOT NULL COMMENT '创建时间',
+    updated_at DATETIME NOT NULL COMMENT '更新时间',
+    UNIQUE KEY uk_product_goods_channel_binding_active (goods_id, platform_account_id, supplier_goods_no, is_deleted),
+    KEY idx_product_goods_channel_binding_goods (goods_id, is_deleted, sort, id),
+    KEY idx_product_goods_channel_binding_platform (platform_account_id, is_deleted, id)
+) COMMENT='商品渠道绑定表';
 CREATE TABLE IF NOT EXISTS supplier_platform_type (
     id INT NOT NULL PRIMARY KEY COMMENT '平台类型ID',
     type_name VARCHAR(64) NOT NULL COMMENT '平台类型名称',

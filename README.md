@@ -42,6 +42,7 @@ MyJob Admin Backend 是当前仓库根目录下运行的 GoFrame 单体后台项
 - 商品模板管理：列表、新增、编辑、删除/批删、验证方式枚举
 - 商品购买数量限制策略：列表、新增、编辑、删除、启停、枚举
 - 商品管理：列表、详情、表单下拉选项、新增、编辑、删除、启停
+- 商品渠道绑定：商品列表渠道摘要、绑定弹窗列表、表单选项、新增、编辑、删除、单条自动改价
 - 第三方对接：平台类型字典、平台账号 CRUD、手动余额刷新、余额日志落库
 - 短信配置：读取、保存、脱敏展示
 - 系统参数配置：按组读取、单组/多组保存、配置校验与批量回滚
@@ -126,6 +127,7 @@ golangci-lint run --timeout=5m
 │   ├── industry.go
 │   ├── log.go
 │   ├── product_goods.go
+│   ├── product_goods_channel.go
 │   ├── product_template.go
 │   ├── purchase_limit.go
 │   ├── settings.go
@@ -169,6 +171,7 @@ golangci-lint run --timeout=5m
 说明：
 
 - `api/settings.go` 为薄入口/说明文件；短信配置与系统参数配置协议拆分到 `api/settings_sms.go` 与 `api/settings_system.go`
+- `api/product_goods.go` 保留商品主档协议；商品渠道绑定协议独立放到 `api/product_goods_channel.go`
 - `api/common.go` 只保留跨业务域复用的通用别名（例如分页），单域 `Item/Enum` 放回对应领域协议文件
 
 ### `docs`
@@ -205,6 +208,8 @@ golangci-lint run --timeout=5m
 
 - `brand*.go`
 - `industry*.go`
+- `product_goods*.go`
+- `product_goods_channel*.go`
 - `product_template*.go`
 - `purchase_limit*.go`
 - `user*.go`
@@ -243,6 +248,13 @@ golangci-lint run --timeout=5m
 初始化 SQL 资源目录，包含 schema、菜单、超级管理员模板和系统配置种子。
 这里的 MySQL 建表语句用于 Docker 首次初始化数据库；如果调整 MySQL 表结构或表/字段注释，需要和 `internal/app/schema.go` 一起修改。
 
+- `001_schema.sql`：基础表结构
+- `002_seed_menu.sql`：菜单与权限种子
+- `003_seed_admin.sql.tmpl`：超级管理员初始化模板
+- `004_seed_config.sql`：系统参数初始值
+- `005_supplier_platform.sql`：第三方平台类型、账号和余额日志结构
+- `006_product_goods_channel_binding.sql`：商品渠道绑定表结构
+
 ### `hack`
 
 - `hack/bootstrap-admin.sh`：根据手机号和 bcrypt hash 生成超级管理员 SQL
@@ -258,7 +270,7 @@ golangci-lint run --timeout=5m
 - 登录 / 短信二验 / 会话
 - 系统参数配置的单组读取、多组批量保存、super-only 鉴权与回滚
 - 品牌、行业、本地上传主流程
-- 商品模板、购买数量限制策略、商品管理、第三方对接主流程
+- 商品模板、购买数量限制策略、商品管理、商品渠道绑定、第三方对接主流程
 - 员工、用户组、主体、短信配置、日志等核心流程
 
 ### `test/integration`
@@ -274,6 +286,7 @@ golangci-lint run --timeout=5m
 - `docs/development.md`：开发依赖、配置、脚本和日常命令
 - `docs/testing.md`：测试分层、当前覆盖范围与执行命令
 - `docs/migration.md`：从历史后台迁到当前根应用结构的迁移背景
+- `docs/product_goods_channel_order_requirements.md`：商品渠道绑定、价格口径与后续下单闭环需求
 - `platform_docs/README.md`：第三方渠道原始接口文档总览；具体平台文档按 `platform_docs/*.md` 拆分
 - `docs/superpowers/specs/`：规格与设计说明（当前已有商品管理相关 specs）
 - `docs/superpowers/plans/`：阶段计划与拆解（当前已有商品管理相关 plans）

@@ -111,29 +111,58 @@ WHERE `+whereClause+`
 	items := make([]adminapi.ProductGoodsListItem, 0, len(rows))
 	for _, row := range rows {
 		items = append(items, adminapi.ProductGoodsListItem{
-			ID:                        row["id"].Int64(),
-			GoodsCode:                 row["goods_code"].String(),
-			BrandID:                   row["brand_id"].Int64(),
-			BrandName:                 row["brand_name"].String(),
-			BrandIcon:                 productGoodsRecordString(row, "brand_icon"),
-			SubjectID:                 nullableInt64Pointer(productGoodsRecordNullInt64(row, "subject_id")),
-			SubjectName:               productGoodsRecordString(row, "subject_name"),
-			Name:                      row["name"].String(),
-			GoodsType:                 row["goods_type"].String(),
-			SupplyType:                row["supply_type"].String(),
-			IsExport:                  row["is_export"].Int(),
-			IsDouyin:                  row["is_douyin"].Int(),
-			HasTax:                    row["has_tax"].Int(),
-			ExceptionNotify:           row["exception_notify"].Int(),
-			ProductTemplateID:         productGoodsRecordInt64(row, "product_template_id"),
-			ProductTemplateTitle:      productGoodsRecordString(row, "product_template_title"),
-			PurchaseLimitStrategyID:   productGoodsRecordInt64(row, "purchase_limit_strategy_id"),
-			PurchaseLimitStrategyName: productGoodsRecordString(row, "purchase_limit_strategy_name"),
-			DefaultSellPrice:          productGoodsRecordMoney(row, "default_sell_price"),
-			TerminalPriceLimit:        productGoodsRecordMoney(row, "terminal_price_limit"),
-			Status:                    row["status"].Int(),
-			CreatedAt:                 formatAppTime(parseRecordTime(row, "created_at")),
+			ID:                           row["id"].Int64(),
+			GoodsCode:                    row["goods_code"].String(),
+			BrandID:                      row["brand_id"].Int64(),
+			BrandName:                    row["brand_name"].String(),
+			BrandIcon:                    productGoodsRecordString(row, "brand_icon"),
+			SubjectID:                    nullableInt64Pointer(productGoodsRecordNullInt64(row, "subject_id")),
+			SubjectName:                  productGoodsRecordString(row, "subject_name"),
+			Name:                         row["name"].String(),
+			GoodsType:                    row["goods_type"].String(),
+			SupplyType:                   row["supply_type"].String(),
+			IsExport:                     row["is_export"].Int(),
+			IsDouyin:                     row["is_douyin"].Int(),
+			HasTax:                       row["has_tax"].Int(),
+			ExceptionNotify:              row["exception_notify"].Int(),
+			ProductTemplateID:            productGoodsRecordInt64(row, "product_template_id"),
+			ProductTemplateTitle:         productGoodsRecordString(row, "product_template_title"),
+			PurchaseLimitStrategyID:      productGoodsRecordInt64(row, "purchase_limit_strategy_id"),
+			PurchaseLimitStrategyName:    productGoodsRecordString(row, "purchase_limit_strategy_name"),
+			DefaultSellPrice:             productGoodsRecordMoney(row, "default_sell_price"),
+			TerminalPriceLimit:           productGoodsRecordMoney(row, "terminal_price_limit"),
+			BoundChannels:                []string{},
+			MinChannelCost:               "",
+			MinChannelEffectiveSellPrice: "",
+			Status:                       row["status"].Int(),
+			CreatedAt:                    formatAppTime(parseRecordTime(row, "created_at")),
 		})
+	}
+
+	if len(items) > 0 {
+		goodsIDs := make([]int64, 0, len(items))
+		indexByID := make(map[int64]int, len(items))
+		for idx, item := range items {
+			goodsIDs = append(goodsIDs, item.ID)
+			indexByID[item.ID] = idx
+		}
+
+		summaries, summaryErr := l.loadProductGoodsChannelSummaries(ctx, goodsIDs)
+		if summaryErr != nil {
+			return nil, apiErr(consts.CodeInternalError, "商品列表查询失败")
+		}
+		for goodsID, summary := range summaries {
+			idx, ok := indexByID[goodsID]
+			if !ok {
+				continue
+			}
+			items[idx].BoundChannels = summary.BoundChannels
+			items[idx].BoundChannelCount = summary.BoundChannelCount
+			items[idx].PrimaryChannelName = summary.PrimaryChannelName
+			items[idx].MinChannelCost = summary.MinChannelCost
+			items[idx].MinChannelEffectiveSellPrice = summary.MinChannelEffectiveSellPrice
+			items[idx].ChannelAutoPriceStatus = summary.ChannelAutoPriceStatus
+		}
 	}
 
 	return &adminapi.ProductGoodsListRes{

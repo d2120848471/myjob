@@ -181,12 +181,19 @@
 
 ### 商品管理
 
-- 协议：`api/product_goods.go`
-- controller：`internal/controller/admin/product_goods.go`
+- 协议：`api/product_goods.go`、`api/product_goods_channel.go`
+- controller：`internal/controller/admin/product_goods.go`、`internal/controller/admin/product_goods_channel.go`
 - service：`ProductGoodsService`
-- logic：`internal/logic/admin/product_goods*.go`
-- 路由前缀：`/api/admin/products*`
+- logic：`internal/logic/admin/product_goods*.go`、`internal/logic/admin/product_goods_channel*.go`
+- 路由前缀：`/api/admin/products*`、`/api/admin/products/{goodsId}/channel-bindings*`
 - 权限码：`product.goods`
+- 主要能力：
+  - 商品列表、详情、表单选项、新增、编辑、删除、启停
+  - 商品列表渠道摘要：已绑定渠道、主渠道、最低进货价、最低利润后价格、自动改价状态
+  - 商品渠道绑定弹窗：列表、表单选项、新增、编辑、删除、单条自动改价
+- 当前价格口径：
+  - 绑定列表和商品列表展示的“进货价”统一返回税态换算后的 `cost_price`
+  - 利润后价格单独返回 `effective_sell_price`
 
 ### 短信配置
 
@@ -259,6 +266,7 @@
 - `industry.go`
 - `log.go`
 - `product_goods.go`
+- `product_goods_channel.go`
 - `product_template.go`
 - `purchase_limit.go`
 - `settings.go`
@@ -353,12 +361,15 @@ HTTP 协议适配层，不直接写业务规则。
 - `003_seed_admin.sql.tmpl`：超级管理员初始化模板
 - `004_seed_config.sql`：系统参数初始值
 - `005_supplier_platform.sql`：第三方平台类型、账号和余额日志结构
+- `006_product_goods_channel_binding.sql`：商品渠道绑定表结构
 
 这里的 schema 文件用于 Docker 首次初始化 MySQL；如果修改 MySQL 表结构、表注释或字段注释，必须和 `internal/app/schema.go` 一起修改，避免首次建库和应用自建表出现漂移。
 
 ### `test/contract`
 
 契约测试目录，覆盖接口兼容和核心业务流。
+
+当前也覆盖商品列表渠道摘要与商品渠道绑定弹窗的主流程。
 
 ### `test/integration`
 

@@ -7,15 +7,16 @@ import (
 )
 
 const (
-	TableAdminUser         = "admin_user"
-	TableAdminGroup        = "admin_group"
-	TableAdminMenu         = "admin_menu"
-	TableAdminGroupMenu    = "admin_group_menu"
-	TableAdminOperationLog = "admin_operation_log"
-	TableAdminLoginLog     = "admin_login_log"
-	TableAdminSubject      = "admin_subject"
-	TableProductGoods      = "product_goods"
-	TableSystemConfig      = "system_config"
+	TableAdminUser                  = "admin_user"
+	TableAdminGroup                 = "admin_group"
+	TableAdminMenu                  = "admin_menu"
+	TableAdminGroupMenu             = "admin_group_menu"
+	TableAdminOperationLog          = "admin_operation_log"
+	TableAdminLoginLog              = "admin_login_log"
+	TableAdminSubject               = "admin_subject"
+	TableProductGoods               = "product_goods"
+	TableProductGoodsChannelBinding = "product_goods_channel_binding"
+	TableSystemConfig               = "system_config"
 )
 
 func AdminUserModel(db gdb.DB, ctx context.Context) *gdb.Model {
@@ -41,6 +42,9 @@ func AdminSubjectModel(db gdb.DB, ctx context.Context) *gdb.Model {
 }
 func ProductGoodsModel(db gdb.DB, ctx context.Context) *gdb.Model {
 	return db.Model(TableProductGoods).Ctx(ctx).Safe()
+}
+func ProductGoodsChannelBindingModel(db gdb.DB, ctx context.Context) *gdb.Model {
+	return db.Model(TableProductGoodsChannelBinding).Ctx(ctx).Safe()
 }
 func SystemConfigModel(db gdb.DB, ctx context.Context) *gdb.Model {
 	return db.Model(TableSystemConfig).Ctx(ctx).Safe()
