@@ -107,6 +107,8 @@ golangci-lint run --timeout=5m
 
 > CI 会执行 `go test/go build/golangci-lint`（见 `.github/workflows/ci.yml`）。当前 `.golangci.yml` 启用 `govet/staticcheck/ineffassign/unused/typecheck`。
 >
+> 契约测试和大部分应用级测试会通过 `NewTestCore()` 使用 MySQL 测试库 `admin_test`；测试启动时会自动建库并清空旧表，不会污染日常运行的 `admin`。
+>
 > MySQL 表结构和字段注释存在两条维护链路：Docker 首次建库使用 `manifest/sql/*.sql`，应用启动自建表使用 `internal/app/schema.go`。凡是修改 MySQL schema 或 `COMMENT`，必须同步这两处。
 
 ## 目录说明

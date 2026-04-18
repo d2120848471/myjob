@@ -77,6 +77,9 @@ docker exec $(docker compose ps -q mysql) mysql -uroot -proot123456 -D admin -e 
 go test ./... -count=1 -timeout 60s
 ```
 
+全量测试和契约测试都会通过 `NewTestCore()` 使用 MySQL 测试库 `admin_test`。
+测试启动前会自动建库并清空旧表，因此不会污染日常运行使用的 `admin`。
+
 ### 契约测试
 
 ```bash
