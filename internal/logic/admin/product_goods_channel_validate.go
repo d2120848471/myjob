@@ -3,7 +3,9 @@ package adminlogic
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"strings"
+	"time"
 
 	"myjob/internal/app"
 	"myjob/internal/consts"
@@ -22,6 +24,9 @@ type normalizedProductGoodsChannelBindingInput struct {
 	ValidateTemplateID *int64
 	DockStatus         int
 	Sort               int
+	OrderWeight        string
+	OrderTimeStart     string
+	OrderTimeEnd       string
 }
 
 type normalizedProductGoodsChannelAutoPriceInput struct {
@@ -30,7 +35,7 @@ type normalizedProductGoodsChannelAutoPriceInput struct {
 	DefaultPrice string
 }
 
-func (l *ProductGoodsLogic) normalizeProductGoodsChannelBindingInput(ctx context.Context, goods entity.ProductGoods, platformAccountID int64, supplierGoodsNo, supplierGoodsName, sourceCostPrice string, validateTemplateID *int64, dockStatus, sort int, currentBindingID *int64) (normalizedProductGoodsChannelBindingInput, error) {
+func (l *ProductGoodsLogic) normalizeProductGoodsChannelBindingInput(ctx context.Context, goods entity.ProductGoods, platformAccountID int64, supplierGoodsNo, supplierGoodsName, sourceCostPrice string, validateTemplateID *int64, dockStatus, sort int, orderWeight, orderTimeStart, orderTimeEnd string, currentBindingID *int64) (normalizedProductGoodsChannelBindingInput, error) {
 	if goods.ID <= 0 || goods.IsDeleted != 0 {
 		return normalizedProductGoodsChannelBindingInput{}, apiErr(consts.CodeBadRequest, "商品不存在")
 	}
@@ -83,6 +88,14 @@ func (l *ProductGoodsLogic) normalizeProductGoodsChannelBindingInput(ctx context
 	if sort < 0 {
 		return normalizedProductGoodsChannelBindingInput{}, apiErr(consts.CodeBadRequest, "排序值不能小于0")
 	}
+	normalizedOrderWeight, err := normalizeDefaultMoney(orderWeight, "0")
+	if err != nil {
+		return normalizedProductGoodsChannelBindingInput{}, apiErr(consts.CodeBadRequest, "下单权重格式错误")
+	}
+	normalizedOrderTimeStart, normalizedOrderTimeEnd, err := normalizeOrderTimeWindow(orderTimeStart, orderTimeEnd)
+	if err != nil {
+		return normalizedProductGoodsChannelBindingInput{}, apiErr(consts.CodeBadRequest, err.Error())
+	}
 
 	if err := l.ensureProductGoodsChannelBindingUnique(ctx, goods.ID, platformAccountID, supplierGoodsNo, currentBindingID); err != nil {
 		return normalizedProductGoodsChannelBindingInput{}, err
@@ -114,6 +127,9 @@ func (l *ProductGoodsLogic) normalizeProductGoodsChannelBindingInput(ctx context
 		ValidateTemplateID: normalizedTemplateID,
 		DockStatus:         dockStatus,
 		Sort:               normalizedSort,
+		OrderWeight:        normalizedOrderWeight,
+		OrderTimeStart:     normalizedOrderTimeStart,
+		OrderTimeEnd:       normalizedOrderTimeEnd,
 	}, nil
 }
 
@@ -189,6 +205,24 @@ func normalizeRequiredFinanceRate(items map[string]modelruntime.SystemConfigItem
 		return "", apiErr(consts.CodeBadRequest, label+"格式错误")
 	}
 	return rate.StringFixed(4), nil
+}
+
+func normalizeOrderTimeWindow(start, end string) (string, string, error) {
+	start = strings.TrimSpace(start)
+	end = strings.TrimSpace(end)
+	if start == "" && end == "" {
+		return "", "", nil
+	}
+	if start == "" || end == "" {
+		return "", "", fmt.Errorf("下单时段必须同时填写开始和结束时间")
+	}
+	if _, err := time.Parse("15:04", start); err != nil {
+		return "", "", fmt.Errorf("下单开始时段格式错误")
+	}
+	if _, err := time.Parse("15:04", end); err != nil {
+		return "", "", fmt.Errorf("下单结束时段格式错误")
+	}
+	return start, end, nil
 }
 
 func (l *ProductGoodsLogic) getActiveSupplierPlatformAccount(ctx context.Context, id int64) (entity.SupplierPlatformAccount, error) {

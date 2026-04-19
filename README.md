@@ -42,7 +42,7 @@ MyJob Admin Backend 是当前仓库根目录下运行的 GoFrame 单体后台项
 - 商品模板管理：列表、新增、编辑、删除/批删、验证方式枚举
 - 商品购买数量限制策略：列表、新增、编辑、删除、启停、枚举
 - 商品管理：列表、详情、表单下拉选项、新增、编辑、删除、启停
-- 商品渠道绑定：商品列表渠道摘要、绑定弹窗列表、表单选项、新增、编辑、删除、单条自动改价
+- 商品渠道绑定：商品列表渠道摘要、库存配置详情/保存、绑定弹窗列表、表单选项、新增、编辑、删除、单条自动改价
 - 第三方对接：平台类型字典、平台账号 CRUD/启停、手动余额刷新、余额日志落库、平台关闭后级联关停商品绑定
 - 短信配置：读取、保存、脱敏展示
 - 系统参数配置：按组读取、单组/多组保存、配置校验与批量回滚
@@ -128,6 +128,7 @@ golangci-lint run --timeout=5m
 │   ├── log.go
 │   ├── product_goods.go
 │   ├── product_goods_channel.go
+│   ├── product_goods_channel_config.go
 │   ├── product_template.go
 │   ├── purchase_limit.go
 │   ├── settings.go
@@ -171,7 +172,7 @@ golangci-lint run --timeout=5m
 说明：
 
 - `api/settings.go` 为薄入口/说明文件；短信配置与系统参数配置协议拆分到 `api/settings_sms.go` 与 `api/settings_system.go`
-- `api/product_goods.go` 保留商品主档协议；商品渠道绑定协议独立放到 `api/product_goods_channel.go`
+- `api/product_goods.go` 保留商品主档协议；商品渠道绑定与库存配置协议独立放到 `api/product_goods_channel.go`、`api/product_goods_channel_config.go`
 - `api/common.go` 只保留跨业务域复用的通用别名（例如分页），单域 `Item/Enum` 放回对应领域协议文件
 
 ### `docs`
@@ -254,6 +255,7 @@ golangci-lint run --timeout=5m
 - `004_seed_config.sql`：系统参数初始值
 - `005_supplier_platform.sql`：第三方平台类型、账号启停状态和余额日志结构
 - `006_product_goods_channel_binding.sql`：商品渠道绑定表结构
+- `007_product_goods_channel_config.sql`：商品库存配置表结构
 
 ### `hack`
 

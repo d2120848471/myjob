@@ -19,7 +19,7 @@ func TestMySQLSchemaIncludesTableAndColumnComments(t *testing.T) {
 }
 
 func TestManifestMySQLSchemaFilesIncludeTableAndColumnComments(t *testing.T) {
-	for _, name := range []string{"001_schema.sql", "005_supplier_platform.sql", "006_product_goods_channel_binding.sql"} {
+	for _, name := range []string{"001_schema.sql", "005_supplier_platform.sql", "006_product_goods_channel_binding.sql", "007_product_goods_channel_config.sql"} {
 		path := filepath.Join("..", "..", "manifest", "sql", name)
 		content, err := os.ReadFile(path)
 		require.NoError(t, err)

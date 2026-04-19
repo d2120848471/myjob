@@ -182,6 +182,9 @@ CREATE TABLE IF NOT EXISTS product_goods_channel_binding (
     tax_adjust_amount TEXT NOT NULL DEFAULT '0.0000',
     dock_status INTEGER NOT NULL DEFAULT 1,
     sort INTEGER NOT NULL DEFAULT 0,
+    order_weight TEXT NOT NULL DEFAULT '0.0000',
+    order_time_start TEXT NULL,
+    order_time_end TEXT NULL,
     validate_template_id INTEGER NULL,
     is_auto_change INTEGER NOT NULL DEFAULT 0,
     add_type TEXT NOT NULL DEFAULT '',
@@ -197,6 +200,20 @@ CREATE INDEX IF NOT EXISTS idx_product_goods_channel_binding_platform
     ON product_goods_channel_binding(platform_account_id, is_deleted, id);
 CREATE UNIQUE INDEX IF NOT EXISTS uk_product_goods_channel_binding_active
     ON product_goods_channel_binding(goods_id, platform_account_id, supplier_goods_no, is_deleted);
+CREATE TABLE IF NOT EXISTS product_goods_channel_config (
+    goods_id INTEGER PRIMARY KEY,
+    smart_reorder_enabled INTEGER NOT NULL DEFAULT 0,
+    reorder_timeout_enabled INTEGER NOT NULL DEFAULT 0,
+    reorder_timeout_minutes INTEGER NOT NULL DEFAULT 0,
+    order_strategy TEXT NOT NULL DEFAULT 'fixed_order',
+    sync_cost_price_enabled INTEGER NOT NULL DEFAULT 0,
+    sync_goods_name_enabled INTEGER NOT NULL DEFAULT 0,
+    allow_loss_sale_enabled INTEGER NOT NULL DEFAULT 0,
+    max_loss_amount TEXT NOT NULL DEFAULT '0.0000',
+    combo_goods_enabled INTEGER NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL
+);
 CREATE TABLE IF NOT EXISTS supplier_platform_type (
     id INTEGER PRIMARY KEY,
     type_name TEXT NOT NULL,
@@ -448,6 +465,9 @@ CREATE TABLE IF NOT EXISTS product_goods_channel_binding (
     tax_adjust_amount DECIMAL(18,4) NOT NULL DEFAULT 0.0000 COMMENT '税额调整值',
     dock_status TINYINT NOT NULL DEFAULT 1 COMMENT '对接状态',
     sort INT NOT NULL DEFAULT 0 COMMENT '排序值',
+    order_weight DECIMAL(10,4) NOT NULL DEFAULT 0.0000 COMMENT '下单权重',
+    order_time_start VARCHAR(5) NULL COMMENT '下单开始时段',
+    order_time_end VARCHAR(5) NULL COMMENT '下单结束时段',
     validate_template_id BIGINT UNSIGNED NULL COMMENT '充值模板ID',
     is_auto_change TINYINT NOT NULL DEFAULT 0 COMMENT '是否启用自动改价',
     add_type VARCHAR(16) NOT NULL DEFAULT '' COMMENT '自动改价类型',
@@ -460,6 +480,20 @@ CREATE TABLE IF NOT EXISTS product_goods_channel_binding (
     KEY idx_product_goods_channel_binding_goods (goods_id, is_deleted, sort, id),
     KEY idx_product_goods_channel_binding_platform (platform_account_id, is_deleted, id)
 ) COMMENT='商品渠道绑定表';
+CREATE TABLE IF NOT EXISTS product_goods_channel_config (
+    goods_id BIGINT UNSIGNED NOT NULL PRIMARY KEY COMMENT '商品ID',
+    smart_reorder_enabled TINYINT NOT NULL DEFAULT 0 COMMENT '智能补单开关',
+    reorder_timeout_enabled TINYINT NOT NULL DEFAULT 0 COMMENT '补单超时开关',
+    reorder_timeout_minutes INT NOT NULL DEFAULT 0 COMMENT '补单超时分钟数',
+    order_strategy VARCHAR(32) NOT NULL DEFAULT 'fixed_order' COMMENT '下单策略',
+    sync_cost_price_enabled TINYINT NOT NULL DEFAULT 0 COMMENT '同步进价开关',
+    sync_goods_name_enabled TINYINT NOT NULL DEFAULT 0 COMMENT '同步商品名称开关',
+    allow_loss_sale_enabled TINYINT NOT NULL DEFAULT 0 COMMENT '亏本销售开关',
+    max_loss_amount DECIMAL(18,4) NOT NULL DEFAULT 0.0000 COMMENT '允许亏本金额',
+    combo_goods_enabled TINYINT NOT NULL DEFAULT 0 COMMENT '组合商品开关',
+    created_at DATETIME NOT NULL COMMENT '创建时间',
+    updated_at DATETIME NOT NULL COMMENT '更新时间'
+) COMMENT='商品渠道库存配置表';
 CREATE TABLE IF NOT EXISTS supplier_platform_type (
     id INT NOT NULL PRIMARY KEY COMMENT '平台类型ID',
     type_name VARCHAR(64) NOT NULL COMMENT '平台类型名称',

@@ -16,6 +16,7 @@ const (
 	TableAdminSubject               = "admin_subject"
 	TableProductGoods               = "product_goods"
 	TableProductGoodsChannelBinding = "product_goods_channel_binding"
+	TableProductGoodsChannelConfig  = "product_goods_channel_config"
 	TableSystemConfig               = "system_config"
 )
 
@@ -45,6 +46,9 @@ func ProductGoodsModel(db gdb.DB, ctx context.Context) *gdb.Model {
 }
 func ProductGoodsChannelBindingModel(db gdb.DB, ctx context.Context) *gdb.Model {
 	return db.Model(TableProductGoodsChannelBinding).Ctx(ctx).Safe()
+}
+func ProductGoodsChannelConfigModel(db gdb.DB, ctx context.Context) *gdb.Model {
+	return db.Model(TableProductGoodsChannelConfig).Ctx(ctx).Safe()
 }
 func SystemConfigModel(db gdb.DB, ctx context.Context) *gdb.Model {
 	return db.Model(TableSystemConfig).Ctx(ctx).Safe()

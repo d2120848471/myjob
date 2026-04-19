@@ -47,6 +47,9 @@ func (c *Core) bootstrap(ctx context.Context) error {
 	if err := c.ensureProductGoodsSchema(ctx); err != nil {
 		return err
 	}
+	if err := c.ensureProductGoodsChannelSchema(ctx); err != nil {
+		return err
+	}
 	if err := c.ensureSupplierPlatformAccountSchema(ctx); err != nil {
 		return err
 	}
@@ -148,6 +151,97 @@ func (c *Core) ensureProductGoodsSchema(ctx context.Context) error {
 	}
 	_, err := c.DB().Exec(ctx, `ALTER TABLE product_goods ADD COLUMN subject_id BIGINT UNSIGNED NULL`)
 	return err
+}
+
+// ensureProductGoodsChannelSchema 为渠道绑定表补齐选渠字段，并确保商品库存配置表存在。
+func (c *Core) ensureProductGoodsChannelSchema(ctx context.Context) error {
+	if c.driver == "sqlite" {
+		if _, err := c.DB().Exec(ctx, `
+CREATE TABLE IF NOT EXISTS product_goods_channel_config (
+    goods_id INTEGER PRIMARY KEY,
+    smart_reorder_enabled INTEGER NOT NULL DEFAULT 0,
+    reorder_timeout_enabled INTEGER NOT NULL DEFAULT 0,
+    reorder_timeout_minutes INTEGER NOT NULL DEFAULT 0,
+    order_strategy TEXT NOT NULL DEFAULT 'fixed_order',
+    sync_cost_price_enabled INTEGER NOT NULL DEFAULT 0,
+    sync_goods_name_enabled INTEGER NOT NULL DEFAULT 0,
+    allow_loss_sale_enabled INTEGER NOT NULL DEFAULT 0,
+    max_loss_amount TEXT NOT NULL DEFAULT '0.0000',
+    combo_goods_enabled INTEGER NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL
+)`); err != nil {
+			return err
+		}
+
+		rows := make([]struct {
+			Name string `db:"name"`
+		}, 0)
+		if err := c.DB().GetCore().GetScan(ctx, &rows, `PRAGMA table_info(product_goods_channel_binding)`); err != nil {
+			return err
+		}
+		existing := map[string]struct{}{}
+		for _, row := range rows {
+			existing[row.Name] = struct{}{}
+		}
+		definitions := map[string]string{
+			"order_weight":     "TEXT NOT NULL DEFAULT '0.0000'",
+			"order_time_start": "TEXT NULL",
+			"order_time_end":   "TEXT NULL",
+		}
+		for column, definition := range definitions {
+			if _, ok := existing[column]; ok {
+				continue
+			}
+			if _, err := c.DB().Exec(ctx, `ALTER TABLE product_goods_channel_binding ADD COLUMN `+column+` `+definition); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	if _, err := c.DB().Exec(ctx, `
+CREATE TABLE IF NOT EXISTS product_goods_channel_config (
+    goods_id BIGINT UNSIGNED NOT NULL PRIMARY KEY COMMENT '商品ID',
+    smart_reorder_enabled TINYINT NOT NULL DEFAULT 0 COMMENT '智能补单开关',
+    reorder_timeout_enabled TINYINT NOT NULL DEFAULT 0 COMMENT '补单超时开关',
+    reorder_timeout_minutes INT NOT NULL DEFAULT 0 COMMENT '补单超时分钟数',
+    order_strategy VARCHAR(32) NOT NULL DEFAULT 'fixed_order' COMMENT '下单策略',
+    sync_cost_price_enabled TINYINT NOT NULL DEFAULT 0 COMMENT '同步进价开关',
+    sync_goods_name_enabled TINYINT NOT NULL DEFAULT 0 COMMENT '同步商品名称开关',
+    allow_loss_sale_enabled TINYINT NOT NULL DEFAULT 0 COMMENT '亏本销售开关',
+    max_loss_amount DECIMAL(18,4) NOT NULL DEFAULT 0.0000 COMMENT '允许亏本金额',
+    combo_goods_enabled TINYINT NOT NULL DEFAULT 0 COMMENT '组合商品开关',
+    created_at DATETIME NOT NULL COMMENT '创建时间',
+    updated_at DATETIME NOT NULL COMMENT '更新时间'
+) COMMENT='商品渠道库存配置表'`); err != nil {
+		return err
+	}
+
+	rows := make([]struct {
+		Field string `db:"Field"`
+	}, 0)
+	if err := c.DB().GetCore().GetScan(ctx, &rows, `SHOW COLUMNS FROM product_goods_channel_binding`); err != nil {
+		return err
+	}
+	existing := map[string]struct{}{}
+	for _, row := range rows {
+		existing[row.Field] = struct{}{}
+	}
+	definitions := map[string]string{
+		"order_weight":     "DECIMAL(10,4) NOT NULL DEFAULT 0.0000 COMMENT '下单权重'",
+		"order_time_start": "VARCHAR(5) NULL COMMENT '下单开始时段'",
+		"order_time_end":   "VARCHAR(5) NULL COMMENT '下单结束时段'",
+	}
+	for column, definition := range definitions {
+		if _, ok := existing[column]; ok {
+			continue
+		}
+		if _, err := c.DB().Exec(ctx, `ALTER TABLE product_goods_channel_binding ADD COLUMN `+column+` `+definition); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // ensureSupplierPlatformAccountSchema 为平台账号表补齐业务状态字段（用于控制是否允许参与商品对接）。

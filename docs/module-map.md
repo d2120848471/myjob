@@ -182,16 +182,17 @@
 
 ### 商品管理
 
-- 协议：`api/product_goods.go`、`api/product_goods_channel.go`
-- controller：`internal/controller/admin/product_goods.go`、`internal/controller/admin/product_goods_channel.go`
+- 协议：`api/product_goods.go`、`api/product_goods_channel.go`、`api/product_goods_channel_config.go`
+- controller：`internal/controller/admin/product_goods.go`、`internal/controller/admin/product_goods_channel.go`、`internal/controller/admin/product_goods_channel_config.go`
 - service：`ProductGoodsService`
 - logic：`internal/logic/admin/product_goods*.go`、`internal/logic/admin/product_goods_channel*.go`
-- 路由前缀：`/api/admin/products*`、`/api/admin/products/{goodsId}/channel-bindings*`
+- 路由前缀：`/api/admin/products*`、`/api/admin/products/{goodsId}/channel-bindings*`、`/api/admin/products/{goodsId}/inventory-config`
 - 权限码：`product.goods`
 - 主要能力：
   - 商品列表、详情、表单选项、新增、编辑、删除、启停
   - 商品列表渠道摘要：已绑定渠道、主渠道、最低进货价、最低利润后价格、自动改价状态
-  - 商品渠道绑定弹窗：列表、表单选项、新增、编辑、删除、单条自动改价
+  - 商品库存配置：独立读取/保存、默认值回显、顶部摘要回显
+  - 商品渠道绑定弹窗：列表、表单选项、新增、编辑、删除、单条自动改价、权重/时段回显
   - 仅允许选择已启用的平台账号；关闭平台后摘要与绑定列表不再把该平台视为可用渠道
 - 当前价格口径：
   - 绑定列表和商品列表展示的“进货价”统一返回税态换算后的 `cost_price`
@@ -269,6 +270,7 @@
 - `log.go`
 - `product_goods.go`
 - `product_goods_channel.go`
+- `product_goods_channel_config.go`
 - `product_template.go`
 - `purchase_limit.go`
 - `settings.go`
@@ -364,6 +366,7 @@ HTTP 协议适配层，不直接写业务规则。
 - `004_seed_config.sql`：系统参数初始值
 - `005_supplier_platform.sql`：第三方平台类型、账号和余额日志结构
 - `006_product_goods_channel_binding.sql`：商品渠道绑定表结构
+- `007_product_goods_channel_config.sql`：商品库存配置表结构
 
 这里的 schema 文件用于 Docker 首次初始化 MySQL；如果修改 MySQL 表结构、表注释或字段注释，必须和 `internal/app/schema.go` 一起修改，避免首次建库和应用自建表出现漂移。
 
@@ -371,7 +374,7 @@ HTTP 协议适配层，不直接写业务规则。
 
 契约测试目录，覆盖接口兼容和核心业务流。
 
-当前也覆盖商品列表渠道摘要与商品渠道绑定弹窗的主流程。
+当前也覆盖商品列表渠道摘要、商品库存配置与商品渠道绑定弹窗的主流程。
 
 ### `test/integration`
 

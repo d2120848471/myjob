@@ -39,6 +39,9 @@ type ProductGoodsChannelBindingCreateReq struct {
 	ValidateTemplateID *int64 `json:"validate_template_id" dc:"充值模板ID"`
 	DockStatus         int    `json:"dock_status" dc:"对接状态"`
 	Sort               int    `json:"sort" dc:"排序值"`
+	OrderWeight        string `json:"order_weight" dc:"下单权重"`
+	OrderTimeStart     string `json:"order_time_start" dc:"下单开始时段"`
+	OrderTimeEnd       string `json:"order_time_end" dc:"下单结束时段"`
 }
 
 // ProductGoodsChannelBindingCreateRes 返回新增后的绑定 ID。
@@ -58,6 +61,9 @@ type ProductGoodsChannelBindingUpdateReq struct {
 	ValidateTemplateID *int64 `json:"validate_template_id" dc:"充值模板ID"`
 	DockStatus         int    `json:"dock_status" dc:"对接状态"`
 	Sort               int    `json:"sort" dc:"排序值"`
+	OrderWeight        string `json:"order_weight" dc:"下单权重"`
+	OrderTimeStart     string `json:"order_time_start" dc:"下单开始时段"`
+	OrderTimeEnd       string `json:"order_time_end" dc:"下单结束时段"`
 }
 
 // ProductGoodsChannelBindingUpdateRes 表示商品渠道绑定编辑成功。
@@ -88,14 +94,15 @@ type ProductGoodsChannelBindingAutoPriceUpdateRes struct{}
 
 // ProductGoodsChannelGoodsSummary 是渠道弹窗顶部展示的商品摘要。
 type ProductGoodsChannelGoodsSummary struct {
-	ID               int64  `json:"id" dc:"商品ID"`
-	GoodsCode        string `json:"goods_code" dc:"商品编码"`
-	Name             string `json:"name" dc:"商品名称"`
-	BrandName        string `json:"brand_name" dc:"品牌名称"`
-	SubjectID        *int64 `json:"subject_id" dc:"主体ID"`
-	SubjectName      string `json:"subject_name" dc:"主体名称"`
-	HasTax           int    `json:"has_tax" dc:"是否含税"`
-	DefaultSellPrice string `json:"default_sell_price" dc:"默认售价"`
+	ID                     int64                              `json:"id" dc:"商品ID"`
+	GoodsCode              string                             `json:"goods_code" dc:"商品编码"`
+	Name                   string                             `json:"name" dc:"商品名称"`
+	BrandName              string                             `json:"brand_name" dc:"品牌名称"`
+	SubjectID              *int64                             `json:"subject_id" dc:"主体ID"`
+	SubjectName            string                             `json:"subject_name" dc:"主体名称"`
+	HasTax                 int                                `json:"has_tax" dc:"是否含税"`
+	DefaultSellPrice       string                             `json:"default_sell_price" dc:"默认售价"`
+	InventoryConfigSummary ProductGoodsInventoryConfigSummary `json:"inventory_config_summary" dc:"库存配置摘要"`
 }
 
 // ProductGoodsChannelBindingItem 是商品渠道绑定弹窗中的单行绑定数据。
@@ -119,6 +126,9 @@ type ProductGoodsChannelBindingItem struct {
 	ValidateTemplateTitle string `json:"validate_template_title" dc:"充值模板标题"`
 	DockStatus            int    `json:"dock_status" dc:"对接状态"`
 	Sort                  int    `json:"sort" dc:"排序值"`
+	OrderWeight           string `json:"order_weight" dc:"下单权重"`
+	OrderTimeStart        string `json:"order_time_start" dc:"下单开始时段"`
+	OrderTimeEnd          string `json:"order_time_end" dc:"下单结束时段"`
 	IsAutoChange          int    `json:"is_auto_change" dc:"是否启用自动改价"`
 	AddType               string `json:"add_type" dc:"加价类型"`
 	DefaultPrice          string `json:"default_price" dc:"利润值"`

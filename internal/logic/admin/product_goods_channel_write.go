@@ -19,7 +19,7 @@ func (l *ProductGoodsLogic) CreateChannelBinding(ctx context.Context, req *admin
 		return nil, apiErr(consts.CodeBadRequest, "商品不存在")
 	}
 
-	normalized, err := l.normalizeProductGoodsChannelBindingInput(ctx, goods, req.PlatformAccountID, req.SupplierGoodsNo, req.SupplierGoodsName, req.SourceCostPrice, req.ValidateTemplateID, req.DockStatus, req.Sort, nil)
+	normalized, err := l.normalizeProductGoodsChannelBindingInput(ctx, goods, req.PlatformAccountID, req.SupplierGoodsNo, req.SupplierGoodsName, req.SourceCostPrice, req.ValidateTemplateID, req.DockStatus, req.Sort, req.OrderWeight, req.OrderTimeStart, req.OrderTimeEnd, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -30,10 +30,10 @@ func (l *ProductGoodsLogic) CreateChannelBinding(ctx context.Context, req *admin
 		result, txErr := tx.Exec(`
 INSERT INTO product_goods_channel_binding (
     goods_id, platform_account_id, supplier_goods_no, supplier_goods_name, source_cost_price, cost_price,
-    tax_adjust_direction, tax_adjust_rate, tax_adjust_amount, dock_status, sort, validate_template_id,
+    tax_adjust_direction, tax_adjust_rate, tax_adjust_amount, dock_status, sort, order_weight, order_time_start, order_time_end, validate_template_id,
     is_auto_change, add_type, default_price, is_deleted, created_at, updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, '', '0.0000', 0, ?, ?)
-`, goods.ID, normalized.PlatformAccountID, normalized.SupplierGoodsNo, normalized.SupplierGoodsName, normalized.SourceCostPrice, normalized.CostSnapshot.CostPrice, normalized.CostSnapshot.TaxAdjustDirection, normalized.CostSnapshot.TaxAdjustRate, normalized.CostSnapshot.TaxAdjustAmount, normalized.DockStatus, normalized.Sort, nullableInt64Arg(normalized.ValidateTemplateID), now, now)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, '', '0.0000', 0, ?, ?)
+`, goods.ID, normalized.PlatformAccountID, normalized.SupplierGoodsNo, normalized.SupplierGoodsName, normalized.SourceCostPrice, normalized.CostSnapshot.CostPrice, normalized.CostSnapshot.TaxAdjustDirection, normalized.CostSnapshot.TaxAdjustRate, normalized.CostSnapshot.TaxAdjustAmount, normalized.DockStatus, normalized.Sort, normalized.OrderWeight, nullableStringArg(normalized.OrderTimeStart), nullableStringArg(normalized.OrderTimeEnd), nullableInt64Arg(normalized.ValidateTemplateID), now, now)
 		if txErr != nil {
 			return txErr
 		}
@@ -61,7 +61,7 @@ func (l *ProductGoodsLogic) UpdateChannelBinding(ctx context.Context, req *admin
 		return nil, apiErr(consts.CodeInternalError, "商品渠道绑定查询失败")
 	}
 
-	normalized, err := l.normalizeProductGoodsChannelBindingInput(ctx, goods, req.PlatformAccountID, req.SupplierGoodsNo, req.SupplierGoodsName, req.SourceCostPrice, req.ValidateTemplateID, req.DockStatus, req.Sort, &current.ID)
+	normalized, err := l.normalizeProductGoodsChannelBindingInput(ctx, goods, req.PlatformAccountID, req.SupplierGoodsNo, req.SupplierGoodsName, req.SourceCostPrice, req.ValidateTemplateID, req.DockStatus, req.Sort, req.OrderWeight, req.OrderTimeStart, req.OrderTimeEnd, &current.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -71,10 +71,10 @@ func (l *ProductGoodsLogic) UpdateChannelBinding(ctx context.Context, req *admin
 		result, txErr := tx.Exec(`
 UPDATE product_goods_channel_binding
 SET platform_account_id = ?, supplier_goods_no = ?, supplier_goods_name = ?, source_cost_price = ?, cost_price = ?,
-    tax_adjust_direction = ?, tax_adjust_rate = ?, tax_adjust_amount = ?, dock_status = ?, sort = ?, validate_template_id = ?,
+    tax_adjust_direction = ?, tax_adjust_rate = ?, tax_adjust_amount = ?, dock_status = ?, sort = ?, order_weight = ?, order_time_start = ?, order_time_end = ?, validate_template_id = ?,
     updated_at = ?
 WHERE id = ? AND goods_id = ? AND is_deleted = 0
-`, normalized.PlatformAccountID, normalized.SupplierGoodsNo, normalized.SupplierGoodsName, normalized.SourceCostPrice, normalized.CostSnapshot.CostPrice, normalized.CostSnapshot.TaxAdjustDirection, normalized.CostSnapshot.TaxAdjustRate, normalized.CostSnapshot.TaxAdjustAmount, normalized.DockStatus, normalized.Sort, nullableInt64Arg(normalized.ValidateTemplateID), now, req.BindingId, req.GoodsId)
+`, normalized.PlatformAccountID, normalized.SupplierGoodsNo, normalized.SupplierGoodsName, normalized.SourceCostPrice, normalized.CostSnapshot.CostPrice, normalized.CostSnapshot.TaxAdjustDirection, normalized.CostSnapshot.TaxAdjustRate, normalized.CostSnapshot.TaxAdjustAmount, normalized.DockStatus, normalized.Sort, normalized.OrderWeight, nullableStringArg(normalized.OrderTimeStart), nullableStringArg(normalized.OrderTimeEnd), nullableInt64Arg(normalized.ValidateTemplateID), now, req.BindingId, req.GoodsId)
 		if txErr != nil {
 			return txErr
 		}
@@ -150,7 +150,7 @@ func (l *ProductGoodsLogic) getActiveProductGoodsChannelBinding(ctx context.Cont
 	row, err := l.core.DB().GetCore().GetOne(ctx, `
 SELECT
     id, goods_id, platform_account_id, supplier_goods_no, supplier_goods_name, source_cost_price, cost_price,
-    tax_adjust_direction, tax_adjust_rate, tax_adjust_amount, dock_status, sort, validate_template_id,
+    tax_adjust_direction, tax_adjust_rate, tax_adjust_amount, dock_status, sort, order_weight, order_time_start, order_time_end, validate_template_id,
     is_auto_change, add_type, default_price, is_deleted, deleted_at, created_at, updated_at
 FROM product_goods_channel_binding
 WHERE id = ? AND goods_id = ? AND is_deleted = 0
@@ -174,6 +174,9 @@ WHERE id = ? AND goods_id = ? AND is_deleted = 0
 		TaxAdjustAmount:    productGoodsRecordMoney(row, "tax_adjust_amount"),
 		DockStatus:         row["dock_status"].Int(),
 		Sort:               row["sort"].Int(),
+		OrderWeight:        productGoodsRecordMoney(row, "order_weight"),
+		OrderTimeStart:     productGoodsRecordNullString(row, "order_time_start"),
+		OrderTimeEnd:       productGoodsRecordNullString(row, "order_time_end"),
 		ValidateTemplateID: productGoodsRecordNullInt64(row, "validate_template_id"),
 		IsAutoChange:       row["is_auto_change"].Int(),
 		AddType:            productGoodsRecordString(row, "add_type"),

@@ -18,6 +18,9 @@ type channelBindingContractRow struct {
 	EffectiveSellPrice string `json:"effective_sell_price"`
 	DockStatus         int    `json:"dock_status"`
 	Sort               int    `json:"sort"`
+	OrderWeight        string `json:"order_weight"`
+	OrderTimeStart     string `json:"order_time_start"`
+	OrderTimeEnd       string `json:"order_time_end"`
 	IsAutoChange       int    `json:"is_auto_change"`
 	AddType            string `json:"add_type"`
 	DefaultPrice       string `json:"default_price"`
@@ -32,6 +35,9 @@ func TestOpenAPI_ProductGoodsChannelPathsExposed(t *testing.T) {
 	require.Contains(t, res.body, "/api/admin/products/{goodsId}/channel-bindings/form-options")
 	require.Contains(t, res.body, "/api/admin/products/{goodsId}/channel-bindings/{bindingId}")
 	require.Contains(t, res.body, "/api/admin/products/{goodsId}/channel-bindings/{bindingId}/auto-price")
+	require.Contains(t, res.body, "order_weight")
+	require.Contains(t, res.body, "order_time_start")
+	require.Contains(t, res.body, "order_time_end")
 }
 
 func TestProductGoodsChannelBindingFlows(t *testing.T) {
@@ -84,6 +90,9 @@ func TestProductGoodsChannelBindingFlows(t *testing.T) {
 		"validate_template_id": productTemplateID,
 		"dock_status":          1,
 		"sort":                 10,
+		"order_weight":         "60.0000",
+		"order_time_start":     "09:00",
+		"order_time_end":       "18:00",
 	}, token)
 	require.Equal(t, 0, createFirst.Code)
 
@@ -105,6 +114,9 @@ func TestProductGoodsChannelBindingFlows(t *testing.T) {
 		"validate_template_id": productTemplateID,
 		"dock_status":          1,
 		"sort":                 20,
+		"order_weight":         "40.0000",
+		"order_time_start":     "18:00",
+		"order_time_end":       "02:00",
 	}, token)
 	require.Equal(t, 0, createSecond.Code)
 
@@ -140,12 +152,18 @@ func TestProductGoodsChannelBindingFlows(t *testing.T) {
 	require.Equal(t, "10.0000", firstBinding.SourceCostPrice)
 	require.Equal(t, "10.0000", firstBinding.CostPrice)
 	require.Equal(t, "18.8000", firstBinding.EffectiveSellPrice)
+	require.Equal(t, "60.0000", firstBinding.OrderWeight)
+	require.Equal(t, "09:00", firstBinding.OrderTimeStart)
+	require.Equal(t, "18:00", firstBinding.OrderTimeEnd)
 	require.Equal(t, 0, firstBinding.IsAutoChange)
 
 	secondBinding := findBindingByID(t, bindingsData.List, createSecondData.ID)
 	require.Equal(t, "10.0000", secondBinding.SourceCostPrice)
 	require.Equal(t, "9.6200", secondBinding.CostPrice)
 	require.Equal(t, "18.8000", secondBinding.EffectiveSellPrice)
+	require.Equal(t, "40.0000", secondBinding.OrderWeight)
+	require.Equal(t, "18:00", secondBinding.OrderTimeStart)
+	require.Equal(t, "02:00", secondBinding.OrderTimeEnd)
 	require.Equal(t, 0, secondBinding.IsAutoChange)
 
 	listRes := h.getJSON("/api/admin/products?page=1&page_size=20&keyword=渠道商品A", token)
@@ -196,8 +214,19 @@ func TestProductGoodsChannelBindingFlows(t *testing.T) {
 		"validate_template_id": productTemplateID,
 		"dock_status":          1,
 		"sort":                 5,
+		"order_weight":         "55.0000",
+		"order_time_start":     "20:00",
+		"order_time_end":       "03:00",
 	}, token)
 	require.Equal(t, 0, updateBinding.Code)
+
+	afterUpdateBindings := h.getJSON("/api/admin/products/"+int64ToString(goodsID)+"/channel-bindings", token)
+	require.Equal(t, 0, afterUpdateBindings.Code)
+	require.NoError(t, json.Unmarshal(afterUpdateBindings.Data, &bindingsData))
+	secondBinding = findBindingByID(t, bindingsData.List, createSecondData.ID)
+	require.Equal(t, "55.0000", secondBinding.OrderWeight)
+	require.Equal(t, "20:00", secondBinding.OrderTimeStart)
+	require.Equal(t, "03:00", secondBinding.OrderTimeEnd)
 
 	afterUpdateList := h.getJSON("/api/admin/products?page=1&page_size=20&keyword=渠道商品A", token)
 	require.Equal(t, 0, afterUpdateList.Code)

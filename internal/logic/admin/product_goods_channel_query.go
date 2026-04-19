@@ -49,6 +49,9 @@ SELECT
     COALESCE(t.title, '') AS validate_template_title,
     b.dock_status,
     b.sort,
+    b.order_weight,
+    b.order_time_start,
+    b.order_time_end,
     b.is_auto_change,
     b.add_type,
     b.default_price,
@@ -96,6 +99,9 @@ ORDER BY b.sort ASC, b.id ASC
 			ValidateTemplateTitle: productGoodsRecordString(row, "validate_template_title"),
 			DockStatus:            row["dock_status"].Int(),
 			Sort:                  row["sort"].Int(),
+			OrderWeight:           productGoodsRecordMoney(row, "order_weight"),
+			OrderTimeStart:        productGoodsRecordString(row, "order_time_start"),
+			OrderTimeEnd:          productGoodsRecordString(row, "order_time_end"),
 			IsAutoChange:          row["is_auto_change"].Int(),
 			AddType:               productGoodsRecordString(row, "add_type"),
 			DefaultPrice:          productGoodsRecordMoney(row, "default_price"),
@@ -197,16 +203,21 @@ WHERE p.id = ? AND p.is_deleted = 0
 	if row == nil || len(row) == 0 {
 		return adminapi.ProductGoodsChannelGoodsSummary{}, apiErr(consts.CodeBadRequest, "商品不存在")
 	}
+	configState, err := l.loadProductGoodsInventoryConfigState(ctx, goodsID)
+	if err != nil {
+		return adminapi.ProductGoodsChannelGoodsSummary{}, apiErr(consts.CodeInternalError, "商品渠道绑定查询失败")
+	}
 
 	return adminapi.ProductGoodsChannelGoodsSummary{
-		ID:               row["id"].Int64(),
-		GoodsCode:        row["goods_code"].String(),
-		Name:             row["name"].String(),
-		BrandName:        productGoodsRecordString(row, "brand_name"),
-		SubjectID:        nullableInt64Pointer(productGoodsRecordNullInt64(row, "subject_id")),
-		SubjectName:      productGoodsRecordString(row, "subject_name"),
-		HasTax:           row["has_tax"].Int(),
-		DefaultSellPrice: productGoodsRecordMoney(row, "default_sell_price"),
+		ID:                     row["id"].Int64(),
+		GoodsCode:              row["goods_code"].String(),
+		Name:                   row["name"].String(),
+		BrandName:              productGoodsRecordString(row, "brand_name"),
+		SubjectID:              nullableInt64Pointer(productGoodsRecordNullInt64(row, "subject_id")),
+		SubjectName:            productGoodsRecordString(row, "subject_name"),
+		HasTax:                 row["has_tax"].Int(),
+		DefaultSellPrice:       productGoodsRecordMoney(row, "default_sell_price"),
+		InventoryConfigSummary: configState.toAPISummary(),
 	}, nil
 }
 

@@ -12,9 +12,10 @@
 
 ### 1.1 当前已落地范围
 
-截至 2026-04-18，仓库内已经先落地“商品渠道绑定最小闭环”，当前实现范围固定为：
+截至 2026-04-19，仓库内已经先落地“商品渠道绑定最小闭环”，当前实现范围固定为：
 
 - 商品列表渠道摘要展示
+- 商品级库存配置读取 / 保存
 - 商品渠道绑定弹窗列表
 - 绑定表单选项读取
 - 单条绑定新增、编辑、删除
@@ -24,7 +25,6 @@
 
 - 真实渠道下单
 - 上游价格通知
-- 商品级渠道配置
 - 批量启停、批量删除、批量自动改价
 - 一键排序或拖拽排序
 
@@ -406,7 +406,7 @@
 
 补充说明：
 
-- `primary_channel_name` 的计算应尽量与当前 `route_mode` 一致。
+- `primary_channel_name` 的计算应尽量与当前 `order_strategy` 一致。
 - 若当前路由模式无法静态确定固定首选渠道，则允许展示“按规则选路”或展示当前主排序第一条绑定。
 
 ## 6.2 商品渠道绑定弹窗
@@ -564,14 +564,14 @@
 
 字段建议：
 
-- `route_mode`
+- `order_strategy`
 
 一期支持以下 5 种模式：
 
 - `fixed_order`
-- `lowest_cost_first`
-- `weight_percent`
-- `time_period`
+- `lowest_cost`
+- `weighted_percent`
+- `time_window`
 - `random`
 
 #### 1. `fixed_order` 固定顺序
@@ -583,7 +583,7 @@
 
 首单取第一条，补单按剩余顺序依次取下一条。
 
-#### 2. `lowest_cost_first` 进价从低到高
+#### 2. `lowest_cost` 进价从低到高
 
 候选顺序：
 
@@ -595,7 +595,7 @@
 
 - 这里的 `cost_price` 是税态换算后的比较成本价。
 
-#### 3. `weight_percent` 百分比分配
+#### 3. `weighted_percent` 百分比分配
 
 规则：
 
@@ -605,7 +605,7 @@
 - 若所有有效绑定 `weight = 0`，则视为无可用绑定
 - 禁止自动回退到其他路由模式
 
-#### 4. `time_period` 按时段提交
+#### 4. `time_window` 按时段提交
 
 规则：
 
@@ -633,7 +633,7 @@
 
 字段建议：
 
-- `sync_cost_enabled`
+- `sync_cost_price_enabled`
 
 业务语义：
 
@@ -652,21 +652,15 @@
 业务语义：
 
 - 开启：
-  - 当主渠道绑定的上游商品名称变化时，可同步更新商品名称快照
+  - 当渠道绑定对应的上游商品名称变化时，可同步更新该绑定的 `supplier_goods_name`
 - 关闭：
-  - 商品名称只允许人工维护
-
-说明：
-
-- 一期默认只同步“主渠道绑定”的名称
-- 主渠道绑定的判定应尽量与 `route_mode` 保持一致
-- 若无法静态确定，则以当前排序第一条绑定为名称同步来源
+  - 绑定名称只允许人工维护
 
 ### 6.3.6 亏本销售
 
 字段建议：
 
-- `allow_loss`
+- `allow_loss_sale_enabled`
 - `max_loss_amount`
 
 业务语义：
@@ -691,7 +685,7 @@
 
 字段建议：
 
-- `is_bundle`
+- `combo_goods_enabled`
 
 一期业务定义：
 
@@ -796,7 +790,7 @@
 
 业务语义：
 
-- 仅在 `weight_percent` 模式下生效
+- 仅在 `weighted_percent` 模式下生效
 - `0` 表示不参与权重池
 
 ### 6.4.9 时段
@@ -808,7 +802,7 @@
 
 业务语义：
 
-- 仅在 `time_period` 模式下生效
+- 仅在 `time_window` 模式下生效
 
 ### 6.4.10 自动改价
 
@@ -895,15 +889,15 @@
 
 ### 6.4.12 路由模式与绑定字段生效关系
 
-不同 `route_mode` 下，绑定字段生效规则如下：
+不同 `order_strategy` 下，绑定字段生效规则如下：
 
 - `fixed_order`
   - 生效字段：`sort`
-- `lowest_cost_first`
+- `lowest_cost`
   - 生效字段：`cost_price`、`sort`
-- `weight_percent`
+- `weighted_percent`
   - 生效字段：`weight`
-- `time_period`
+- `time_window`
   - 生效字段：`start_time`、`end_time`、`sort`
 - `random`
   - 无额外排序字段强依赖，基础过滤通过即可参与随机
@@ -1016,12 +1010,12 @@
 - `smart_replenish_enabled`
 - `attempt_timeout_enabled`
 - `attempt_timeout_minutes`
-- `route_mode`
-- `sync_cost_enabled`
+- `order_strategy`
+- `sync_cost_price_enabled`
 - `sync_goods_name_enabled`
-- `allow_loss`
+- `allow_loss_sale_enabled`
 - `max_loss_amount`
-- `is_bundle`
+- `combo_goods_enabled`
 - 默认售价
 - 列表摘要字段
 
@@ -1103,7 +1097,7 @@
 - 若商品税态与渠道税态不一致，则对应税点配置存在
 - 若绑定配置了 `validate_template_id`，则必须与本次订单 `payload` 匹配
 
-在生成基础集合后，再根据商品 `route_mode` 生成最终候选顺序或抽取规则。
+在生成基础集合后，再根据商品 `order_strategy` 生成最终候选顺序或抽取规则。
 
 补充说明：
 
@@ -1117,7 +1111,7 @@
 1. `sort asc`
 2. `id asc`
 
-### 7.1.2 `lowest_cost_first`
+### 7.1.2 `lowest_cost`
 
 排序规则：
 
@@ -1125,7 +1119,7 @@
 2. `sort asc`
 3. `id asc`
 
-### 7.1.3 `weight_percent`
+### 7.1.3 `weighted_percent`
 
 规则：
 
@@ -1134,7 +1128,7 @@
 - 补单时从剩余未尝试绑定中继续按权重抽取
 - 若过滤后无绑定，则视为无可用绑定
 
-### 7.1.4 `time_period`
+### 7.1.4 `time_window`
 
 规则：
 
@@ -1162,7 +1156,7 @@
 5. 校验购买数量是否符合购买限制策略。
 6. 校验调用方传入的 `payload` 是否满足商品模板。
 7. 生成基础可用绑定集合。
-8. 根据商品 `route_mode` 生成首个候选绑定。
+8. 根据商品 `order_strategy` 生成首个候选绑定。
 9. 若无可用绑定，则直接拒单。
 10. 基于首个候选绑定计算并锁定 `sale_price`。
 11. 创建内部订单，状态初始化为对外 `processing`。
@@ -1217,9 +1211,9 @@
 
 各路由模式下的补单规则：
 
-- `fixed_order / lowest_cost_first / time_period`
+- `fixed_order / lowest_cost / time_window`
   - 按首次生成的候选顺序，跳过已尝试绑定，继续尝试下一条
-- `weight_percent`
+- `weighted_percent`
   - 从剩余未尝试且 `weight > 0` 的绑定中重新按权重抽取
 - `random`
   - 从剩余未尝试绑定中重新随机抽取
@@ -1712,12 +1706,12 @@
 - `smart_replenish_enabled`
 - `attempt_timeout_enabled`
 - `attempt_timeout_minutes`
-- `route_mode`
-- `sync_cost_enabled`
+- `order_strategy`
+- `sync_cost_price_enabled`
 - `sync_goods_name_enabled`
-- `allow_loss`
+- `allow_loss_sale_enabled`
 - `max_loss_amount`
-- `is_bundle`
+- `combo_goods_enabled`
 - `created_at`
 - `updated_at`
 
@@ -2015,9 +2009,9 @@
 
 - 单绑定商品可以成功下单
 - 多绑定商品在 `fixed_order` 模式下按 `sort` 优先命中绑定
-- 多绑定商品在 `lowest_cost_first` 模式下优先命中最低 `cost_price` 绑定
-- 多绑定商品在 `weight_percent` 模式下，多次下单后命中分布基本符合权重配置
-- 多绑定商品在 `time_period` 模式下，仅当前时间窗口命中的绑定参与下单
+- 多绑定商品在 `lowest_cost` 模式下优先命中最低 `cost_price` 绑定
+- 多绑定商品在 `weighted_percent` 模式下，多次下单后命中分布基本符合权重配置
+- 多绑定商品在 `time_window` 模式下，仅当前时间窗口命中的绑定参与下单
 - 多绑定商品在 `random` 模式下，多次下单可随机命中不同绑定
 - 首个绑定明确失败且开启智能补单时，可按当前模式自动切换到剩余绑定
 - 首个绑定长时间未完成且达到等待超时阈值时，可自动补单

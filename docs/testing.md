@@ -20,7 +20,7 @@
 - 登录 / 短信二验 / `me` / 退出登录
 - 品牌三级结构、行业关联约束与本地上传主流程
 - 商品模板验证方式枚举、列表筛选、增删改、批删与非法 ID 校验
-- 商品列表渠道摘要、商品渠道绑定弹窗、表单选项、新增、编辑、删除与单条自动改价
+- 商品列表渠道摘要、商品库存配置详情/保存、商品渠道绑定弹窗、表单选项、新增、编辑、删除与单条自动改价
 - 第三方对接 OpenAPI 路径暴露、菜单种子同步、平台账号 CRUD、启停级联关停绑定、余额刷新与软删重建回归
 - 员工、用户组、主体、短信配置、系统参数配置、日志查询主流程
 - 短信发送失败时 Redis 清理行为
@@ -83,7 +83,7 @@ go test ./test/integration -run TestSupplierPlatformRefresh_LiveProviderBalance 
 
 - `internal/library/region`
 - `internal/library/sms`
-- `internal/app/mysql_schema_comment_test.go`：静态校验 MySQL `CREATE TABLE` 是否同时声明表注释和字段注释，并检查 `manifest/sql/001_schema.sql`、`manifest/sql/005_supplier_platform.sql`、`manifest/sql/006_product_goods_channel_binding.sql` 与 `internal/app/schema.go` 不要在注释约束上漂移
+- `internal/app/mysql_schema_comment_test.go`：静态校验 MySQL `CREATE TABLE` 是否同时声明表注释和字段注释，并检查 `manifest/sql/001_schema.sql`、`manifest/sql/005_supplier_platform.sql`、`manifest/sql/006_product_goods_channel_binding.sql`、`manifest/sql/007_product_goods_channel_config.sql` 与 `internal/app/schema.go` 不要在注释约束上漂移
 
 适用于纯逻辑或基础库的回归验证。
 
