@@ -163,6 +163,20 @@ func normalizeSupplierTaxFilter(value string) (int, bool, error) {
 	}
 }
 
+func normalizeSupplierStatusFilter(value string) (int, bool, error) {
+	value = strings.TrimSpace(value)
+	switch value {
+	case "", "-1":
+		return 0, false, nil
+	case "0":
+		return 0, true, nil
+	case "1":
+		return 1, true, nil
+	default:
+		return 0, false, fmt.Errorf("平台状态筛选值错误")
+	}
+}
+
 func normalizeSupplierConnectStatus(value string) (int, bool, error) {
 	value = strings.TrimSpace(value)
 	switch value {

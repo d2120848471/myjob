@@ -31,6 +31,7 @@ type SupplierPlatformListReq struct {
 	TypeID        int    `json:"type_id" dc:"平台类型ID"`
 	SubjectID     int64  `json:"subject_id" dc:"主体ID"`
 	HasTax        string `json:"has_tax" dc:"含税筛选"`
+	Status        string `json:"status" dc:"平台业务状态筛选"`
 	ConnectStatus string `json:"connect_status" dc:"对接状态筛选"`
 }
 

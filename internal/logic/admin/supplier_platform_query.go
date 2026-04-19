@@ -21,10 +21,14 @@ func (l *SupplierPlatformLogic) TypeList(ctx context.Context, _ *adminapi.Suppli
 	return &adminapi.SupplierPlatformTypeListRes{List: items}, nil
 }
 
-// List 分页查询平台账号列表，支持关键词/类型/主体/含税/连接状态筛选。
+// List 分页查询平台账号列表，支持关键词/类型/主体/含税/平台状态/连接状态筛选。
 func (l *SupplierPlatformLogic) List(ctx context.Context, req *adminapi.SupplierPlatformListReq) (*adminapi.SupplierPlatformListRes, error) {
 	page, pageSize := app.ParsePagination(req.Page, req.PageSize)
 	hasTax, hasTaxFilter, err := normalizeSupplierTaxFilter(req.HasTax)
+	if err != nil {
+		return nil, apiErr(consts.CodeBadRequest, err.Error())
+	}
+	status, hasStatusFilter, err := normalizeSupplierStatusFilter(req.Status)
 	if err != nil {
 		return nil, apiErr(consts.CodeBadRequest, err.Error())
 	}
@@ -51,6 +55,10 @@ func (l *SupplierPlatformLogic) List(ctx context.Context, req *adminapi.Supplier
 	if hasTaxFilter {
 		conditions = append(conditions, "a.has_tax = ?")
 		args = append(args, hasTax)
+	}
+	if hasStatusFilter {
+		conditions = append(conditions, "a.status = ?")
+		args = append(args, status)
 	}
 	if hasConnectFilter {
 		conditions = append(conditions, "a.last_balance_status = ?")

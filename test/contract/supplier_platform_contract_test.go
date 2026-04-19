@@ -511,3 +511,49 @@ WHERE goods_id = ? AND platform_account_id = ? AND is_deleted = 0
 	require.Empty(t, listAfterDisableData.List[0].BoundChannels)
 	require.Equal(t, 0, listAfterDisableData.List[0].BoundChannelCount)
 }
+
+func TestSupplierPlatformList_StatusFilter(t *testing.T) {
+	h := newTestHarness(t)
+	token := h.loginAdmin(t)
+
+	platformSubjectID := h.createSubject(t, token, "平台筛选主体", 0)
+	enabledPlatformID := h.createSupplierPlatformAccount(t, token, "平台筛选账号", platformSubjectID, 0, "status-filter-enabled")
+	disabledPlatformID := h.createSupplierPlatformAccount(t, token, "平台筛选账号", platformSubjectID, 0, "status-filter-disabled")
+	h.updateSupplierPlatformStatus(t, token, disabledPlatformID, "平台筛选账号", platformSubjectID, 0, "status-filter-disabled", 0)
+
+	assertList := func(res apiEnvelope, expectedIDs ...int64) {
+		t.Helper()
+		require.Equal(t, 0, res.Code)
+
+		var data struct {
+			List []struct {
+				ID     int64 `json:"id"`
+				Status int   `json:"status"`
+			} `json:"list"`
+		}
+		require.NoError(t, json.Unmarshal(res.Data, &data))
+		require.Len(t, data.List, len(expectedIDs))
+		for index, expectedID := range expectedIDs {
+			require.Equal(t, expectedID, data.List[index].ID)
+		}
+	}
+
+	allRes := h.getJSON("/api/admin/supplier-platforms?page=1&page_size=20&keyword=平台筛选账号", token)
+	assertList(allRes, disabledPlatformID, enabledPlatformID)
+
+	allWithSentinelRes := h.getJSON("/api/admin/supplier-platforms?page=1&page_size=20&keyword=平台筛选账号&status=-1", token)
+	assertList(allWithSentinelRes, disabledPlatformID, enabledPlatformID)
+
+	enabledOnlyRes := h.getJSON("/api/admin/supplier-platforms?page=1&page_size=20&keyword=平台筛选账号&status=1", token)
+	assertList(enabledOnlyRes, enabledPlatformID)
+
+	disabledOnlyRes := h.getJSON("/api/admin/supplier-platforms?page=1&page_size=20&keyword=平台筛选账号&status=0", token)
+	assertList(disabledOnlyRes, disabledPlatformID)
+
+	invalidStatusRes := h.getJSON("/api/admin/supplier-platforms?page=1&page_size=20&keyword=平台筛选账号&status=2", token)
+	require.Equal(t, 400, invalidStatusRes.Code)
+	require.Equal(t, "平台状态筛选值错误", invalidStatusRes.Message)
+
+	detailEnabledRes := h.getJSON("/api/admin/supplier-platforms/"+int64ToString(enabledPlatformID), token)
+	require.Equal(t, 0, detailEnabledRes.Code)
+}
