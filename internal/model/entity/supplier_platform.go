@@ -23,6 +23,7 @@ type SupplierPlatformAccount struct {
 	TypeID             int            `db:"type_id" json:"type_id"`
 	SubjectID          int64          `db:"subject_id" json:"subject_id"`
 	HasTax             int            `db:"has_tax" json:"has_tax"`
+	Status             int            `db:"status" json:"status"`
 	Domain             string         `db:"domain" json:"domain"`
 	BackupDomain       string         `db:"backup_domain" json:"backup_domain"`
 	TokenID            string         `db:"token_id" json:"token_id"`
@@ -54,6 +55,7 @@ type SupplierPlatformListItem struct {
 	SubjectID          int64  `json:"subject_id"`
 	SubjectName        string `json:"subject_name"`
 	HasTax             int    `json:"has_tax"`
+	Status             int    `json:"status"`
 	LastBalance        string `json:"last_balance"`
 	ThresholdAmount    string `json:"threshold_amount"`
 	BalanceWarning     int    `json:"balance_warning"`

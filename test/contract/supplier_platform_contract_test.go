@@ -374,3 +374,140 @@ WHERE platform_id = ?
 	require.Contains(t, firstTokenID, "__deleted__")
 	require.Contains(t, secondTokenID, "__deleted__")
 }
+
+func TestSupplierPlatformStatus_DisableCascadesBindingsAndReenableKeepsBindingsDisabled(t *testing.T) {
+	h := newTestHarness(t)
+	token := h.loginAdmin(t)
+
+	_, _, leafBrandID := h.createBrandPath(t, token, "平台状态联动", "视频充值", "会员周卡")
+	platformSubjectID := h.createSubject(t, token, "平台状态主体", 0)
+	goodsID := h.createChannelProductGoods(t, token, leafBrandID, "平台状态商品", "18.8000")
+	platformID := h.createSupplierPlatformAccount(t, token, "平台状态账号", platformSubjectID, 0, "platform-status-account")
+
+	createBindingRes := h.postJSON("/api/admin/products/"+int64ToString(goodsID)+"/channel-bindings", map[string]any{
+		"platform_account_id": platformID,
+		"supplier_goods_no":   "SKU-STATUS-1",
+		"supplier_goods_name": "平台状态渠道商品",
+		"source_cost_price":   "10.0000",
+		"dock_status":         1,
+		"sort":                1,
+	}, token)
+	require.Equal(t, 0, createBindingRes.Code)
+
+	detailBeforeDisable := h.getJSON("/api/admin/supplier-platforms/"+int64ToString(platformID), token)
+	require.Equal(t, 0, detailBeforeDisable.Code)
+
+	var detailBeforeDisableData struct {
+		Status int `json:"status"`
+	}
+	require.NoError(t, json.Unmarshal(detailBeforeDisable.Data, &detailBeforeDisableData))
+	require.Equal(t, 1, detailBeforeDisableData.Status)
+
+	listBeforeDisable := h.getJSON("/api/admin/supplier-platforms?page=1&page_size=20&keyword=平台状态账号", token)
+	require.Equal(t, 0, listBeforeDisable.Code)
+
+	var listBeforeDisableData struct {
+		List []struct {
+			ID     int64 `json:"id"`
+			Status int   `json:"status"`
+		} `json:"list"`
+	}
+	require.NoError(t, json.Unmarshal(listBeforeDisable.Data, &listBeforeDisableData))
+	require.Len(t, listBeforeDisableData.List, 1)
+	require.Equal(t, platformID, listBeforeDisableData.List[0].ID)
+	require.Equal(t, 1, listBeforeDisableData.List[0].Status)
+
+	h.updateSupplierPlatformStatus(t, token, platformID, "平台状态账号", platformSubjectID, 0, "platform-status-account", 0)
+
+	var platformAccount struct {
+		Status int `db:"status"`
+	}
+	err := h.app.Core().DB().GetCore().GetScan(context.Background(), &platformAccount, `
+SELECT status
+FROM supplier_platform_account
+WHERE id = ?
+`, platformID)
+	require.NoError(t, err)
+	require.Equal(t, 0, platformAccount.Status)
+
+	var binding struct {
+		DockStatus int `db:"dock_status"`
+	}
+	err = h.app.Core().DB().GetCore().GetScan(context.Background(), &binding, `
+SELECT dock_status
+FROM product_goods_channel_binding
+WHERE goods_id = ? AND platform_account_id = ? AND is_deleted = 0
+`, goodsID, platformID)
+	require.NoError(t, err)
+	require.Equal(t, 0, binding.DockStatus)
+
+	listAfterDisablePlatform := h.getJSON("/api/admin/supplier-platforms?page=1&page_size=20&keyword=平台状态账号", token)
+	require.Equal(t, 0, listAfterDisablePlatform.Code)
+
+	var listAfterDisablePlatformData struct {
+		List []struct {
+			ID     int64 `json:"id"`
+			Status int   `json:"status"`
+		} `json:"list"`
+	}
+	require.NoError(t, json.Unmarshal(listAfterDisablePlatform.Data, &listAfterDisablePlatformData))
+	require.Len(t, listAfterDisablePlatformData.List, 1)
+	require.Equal(t, platformID, listAfterDisablePlatformData.List[0].ID)
+	require.Equal(t, 0, listAfterDisablePlatformData.List[0].Status)
+
+	listAfterDisable := h.getJSON("/api/admin/products?page=1&page_size=20&keyword=平台状态商品", token)
+	require.Equal(t, 0, listAfterDisable.Code)
+
+	var listAfterDisableData struct {
+		List []struct {
+			ID                int64    `json:"id"`
+			BoundChannels     []string `json:"bound_channels"`
+			BoundChannelCount int      `json:"bound_channel_count"`
+		} `json:"list"`
+	}
+	require.NoError(t, json.Unmarshal(listAfterDisable.Data, &listAfterDisableData))
+	require.Len(t, listAfterDisableData.List, 1)
+	require.Equal(t, goodsID, listAfterDisableData.List[0].ID)
+	require.Empty(t, listAfterDisableData.List[0].BoundChannels)
+	require.Equal(t, 0, listAfterDisableData.List[0].BoundChannelCount)
+
+	h.updateSupplierPlatformStatus(t, token, platformID, "平台状态账号", platformSubjectID, 0, "platform-status-account", 1)
+
+	detailAfterEnable := h.getJSON("/api/admin/supplier-platforms/"+int64ToString(platformID), token)
+	require.Equal(t, 0, detailAfterEnable.Code)
+
+	var detailAfterEnableData struct {
+		Status int `json:"status"`
+	}
+	require.NoError(t, json.Unmarshal(detailAfterEnable.Data, &detailAfterEnableData))
+	require.Equal(t, 1, detailAfterEnableData.Status)
+
+	listAfterEnablePlatform := h.getJSON("/api/admin/supplier-platforms?page=1&page_size=20&keyword=平台状态账号", token)
+	require.Equal(t, 0, listAfterEnablePlatform.Code)
+
+	var listAfterEnablePlatformData struct {
+		List []struct {
+			ID     int64 `json:"id"`
+			Status int   `json:"status"`
+		} `json:"list"`
+	}
+	require.NoError(t, json.Unmarshal(listAfterEnablePlatform.Data, &listAfterEnablePlatformData))
+	require.Len(t, listAfterEnablePlatformData.List, 1)
+	require.Equal(t, platformID, listAfterEnablePlatformData.List[0].ID)
+	require.Equal(t, 1, listAfterEnablePlatformData.List[0].Status)
+
+	err = h.app.Core().DB().GetCore().GetScan(context.Background(), &binding, `
+SELECT dock_status
+FROM product_goods_channel_binding
+WHERE goods_id = ? AND platform_account_id = ? AND is_deleted = 0
+`, goodsID, platformID)
+	require.NoError(t, err)
+	require.Equal(t, 0, binding.DockStatus)
+
+	listAfterEnable := h.getJSON("/api/admin/products?page=1&page_size=20&keyword=平台状态商品", token)
+	require.Equal(t, 0, listAfterEnable.Code)
+	require.NoError(t, json.Unmarshal(listAfterEnable.Data, &listAfterDisableData))
+	require.Len(t, listAfterDisableData.List, 1)
+	require.Empty(t, listAfterDisableData.List[0].BoundChannels)
+	require.Equal(t, 0, listAfterDisableData.List[0].BoundChannelCount)
+}

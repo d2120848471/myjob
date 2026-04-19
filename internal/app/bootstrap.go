@@ -47,6 +47,9 @@ func (c *Core) bootstrap(ctx context.Context) error {
 	if err := c.ensureProductGoodsSchema(ctx); err != nil {
 		return err
 	}
+	if err := c.ensureSupplierPlatformAccountSchema(ctx); err != nil {
+		return err
+	}
 	if err := c.ensureDefaultGroup(ctx); err != nil {
 		return err
 	}
@@ -144,6 +147,39 @@ func (c *Core) ensureProductGoodsSchema(ctx context.Context) error {
 		}
 	}
 	_, err := c.DB().Exec(ctx, `ALTER TABLE product_goods ADD COLUMN subject_id BIGINT UNSIGNED NULL`)
+	return err
+}
+
+// ensureSupplierPlatformAccountSchema 为平台账号表补齐业务状态字段（用于控制是否允许参与商品对接）。
+func (c *Core) ensureSupplierPlatformAccountSchema(ctx context.Context) error {
+	if c.driver == "sqlite" {
+		rows := make([]struct {
+			Name string `db:"name"`
+		}, 0)
+		if err := c.DB().GetCore().GetScan(ctx, &rows, `PRAGMA table_info(supplier_platform_account)`); err != nil {
+			return err
+		}
+		for _, row := range rows {
+			if row.Name == "status" {
+				return nil
+			}
+		}
+		_, err := c.DB().Exec(ctx, `ALTER TABLE supplier_platform_account ADD COLUMN status INTEGER NOT NULL DEFAULT 1`)
+		return err
+	}
+
+	rows := make([]struct {
+		Field string `db:"Field"`
+	}, 0)
+	if err := c.DB().GetCore().GetScan(ctx, &rows, `SHOW COLUMNS FROM supplier_platform_account`); err != nil {
+		return err
+	}
+	for _, row := range rows {
+		if row.Field == "status" {
+			return nil
+		}
+	}
+	_, err := c.DB().Exec(ctx, `ALTER TABLE supplier_platform_account ADD COLUMN status TINYINT NOT NULL DEFAULT 1`)
 	return err
 }
 

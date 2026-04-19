@@ -48,6 +48,9 @@ func (l *ProductGoodsLogic) normalizeProductGoodsChannelBindingInput(ctx context
 		}
 		return normalizedProductGoodsChannelBindingInput{}, apiErr(consts.CodeInternalError, "渠道账号校验失败")
 	}
+	if account.Status != consts.StatusEnabled {
+		return normalizedProductGoodsChannelBindingInput{}, apiErr(consts.CodeBadRequest, "渠道账号已关闭")
+	}
 
 	if goods.SubjectID.Valid && goods.SubjectID.Int64 != account.SubjectID {
 		return normalizedProductGoodsChannelBindingInput{}, apiErr(consts.CodeBadRequest, "渠道账号主体必须与商品主体一致")
@@ -191,7 +194,7 @@ func normalizeRequiredFinanceRate(items map[string]modelruntime.SystemConfigItem
 func (l *ProductGoodsLogic) getActiveSupplierPlatformAccount(ctx context.Context, id int64) (entity.SupplierPlatformAccount, error) {
 	rows, err := l.core.DB().GetCore().GetAll(ctx, `
 SELECT
-    id, name, provider_code, provider_name, type_id, subject_id, has_tax, domain, backup_domain,
+    id, name, provider_code, provider_name, type_id, subject_id, has_tax, status, domain, backup_domain,
     token_id, secret_key, extra_config, threshold_amount, sort, crowd_name, last_balance,
     last_balance_status, last_balance_message, last_balance_at, last_balance_trace_id, is_deleted,
     deleted_at, created_at, updated_at

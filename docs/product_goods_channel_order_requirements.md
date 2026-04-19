@@ -946,6 +946,8 @@
 - 后台新增/编辑绑定时，不主动调用 `CatalogProvider` 或其他上游商品查询接口校验 `supplier_goods_no` 是否存在、当前是否可售
 - `supplier_goods_no`、`supplier_goods_name`、`source_cost_price` 允许人工录入，由运营侧自行核验真实性
 - 若后续某个平台额外实现商品查询能力，也仅作为运营辅助，不作为保存前必经校验链路
+- 当 `supplier_platform_account.status = 0` 时，该平台不得继续出现在商品渠道绑定表单选项中，且该平台下已有绑定应被系统同步关闭
+- 平台重新开启时，仅恢复平台自身可选状态，不自动恢复此前被连带关闭的绑定
 
 ## 6.6 一键排序规则
 

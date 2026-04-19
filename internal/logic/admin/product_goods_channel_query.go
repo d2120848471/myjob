@@ -58,7 +58,7 @@ FROM product_goods_channel_binding b
 JOIN supplier_platform_account a ON a.id = b.platform_account_id
 JOIN admin_subject s ON s.id = a.subject_id
 LEFT JOIN product_template t ON t.id = b.validate_template_id
-WHERE b.goods_id = ? AND b.is_deleted = 0 AND a.is_deleted = 0
+WHERE b.goods_id = ? AND b.is_deleted = 0 AND a.is_deleted = 0 AND a.status = 1
 ORDER BY b.sort ASC, b.id ASC
 `, req.GoodsId)
 	if err != nil {
@@ -130,7 +130,7 @@ SELECT
     a.last_balance_status
 FROM supplier_platform_account a
 JOIN admin_subject s ON s.id = a.subject_id
-WHERE a.is_deleted = 0
+WHERE a.is_deleted = 0 AND a.status = 1
 ORDER BY a.sort ASC, a.id DESC
 `); err != nil {
 		return nil, apiErr(consts.CodeInternalError, "商品渠道绑定选项查询失败")
@@ -232,7 +232,7 @@ SELECT
 FROM product_goods_channel_binding b
 JOIN supplier_platform_account a ON a.id = b.platform_account_id
 JOIN product_goods p ON p.id = b.goods_id
-WHERE b.is_deleted = 0 AND b.dock_status = 1 AND a.is_deleted = 0 AND b.goods_id IN (`+sqlPlaceholders(len(goodsIDs))+`)
+WHERE b.is_deleted = 0 AND b.dock_status = 1 AND a.is_deleted = 0 AND a.status = 1 AND b.goods_id IN (`+sqlPlaceholders(len(goodsIDs))+`)
 ORDER BY b.goods_id ASC, b.sort ASC, b.id ASC
 `, args...)
 	if err != nil {

@@ -82,6 +82,7 @@ SELECT
     a.subject_id,
     s.name AS subject_name,
     a.has_tax,
+    a.status,
     a.last_balance,
     a.threshold_amount,
     a.last_balance_status,
@@ -132,6 +133,7 @@ func (l *SupplierPlatformLogic) Detail(ctx context.Context, req *adminapi.Suppli
 		TypeID:          account.TypeID,
 		SubjectID:       account.SubjectID,
 		HasTax:          account.HasTax,
+		Status:          account.Status,
 		TokenID:         account.TokenID,
 		SecretKey:       account.SecretKey,
 		ThresholdAmount: formatMoney(account.ThresholdAmount),
@@ -146,7 +148,7 @@ func (l *SupplierPlatformLogic) Detail(ctx context.Context, req *adminapi.Suppli
 func (l *SupplierPlatformLogic) getSupplierPlatform(ctx context.Context, id int64) (entity.SupplierPlatformAccount, error) {
 	rows, err := l.core.DB().GetCore().GetAll(ctx, `
 SELECT
-    id, name, provider_code, provider_name, type_id, subject_id, has_tax, domain, backup_domain,
+    id, name, provider_code, provider_name, type_id, subject_id, has_tax, status, domain, backup_domain,
     token_id, secret_key, extra_config, threshold_amount, sort, crowd_name, last_balance,
     last_balance_status, last_balance_message, last_balance_at, last_balance_trace_id, is_deleted,
     deleted_at, created_at, updated_at

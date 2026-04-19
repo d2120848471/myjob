@@ -322,6 +322,96 @@ func TestProductGoodsChannelBinding_HidesSoftDeletedPlatformAccounts(t *testing.
 	require.Equal(t, 0, listData.List[0].ChannelAutoPriceStatus)
 }
 
+func TestProductGoodsChannelBinding_RejectsDisabledPlatformAccounts(t *testing.T) {
+	h := newTestHarness(t)
+	token := h.loginAdmin(t)
+
+	_, _, leafBrandID := h.createBrandPath(t, token, "渠道商品-停用平台", "视频充值", "会员周卡")
+	platformSubjectID := h.createSubject(t, token, "渠道主体-停用平台", 0)
+	goodsID := h.createChannelProductGoods(t, token, leafBrandID, "渠道商品-停用平台", "18.8000")
+	disabledPlatformID := h.createSupplierPlatformAccount(t, token, "渠道账号-停用", platformSubjectID, 0, "disabled-platform")
+	enabledPlatformID := h.createSupplierPlatformAccount(t, token, "渠道账号-启用", platformSubjectID, 0, "enabled-platform")
+
+	createBindingRes := h.postJSON("/api/admin/products/"+int64ToString(goodsID)+"/channel-bindings", map[string]any{
+		"platform_account_id": disabledPlatformID,
+		"supplier_goods_no":   "SKU-DISABLED-EXISTING",
+		"supplier_goods_name": "停用平台既有绑定",
+		"source_cost_price":   "10.0000",
+		"dock_status":         1,
+		"sort":                1,
+	}, token)
+	require.Equal(t, 0, createBindingRes.Code)
+
+	var createBindingData struct {
+		ID int64 `json:"id"`
+	}
+	require.NoError(t, json.Unmarshal(createBindingRes.Data, &createBindingData))
+	require.NotZero(t, createBindingData.ID)
+
+	h.updateSupplierPlatformStatus(t, token, disabledPlatformID, "渠道账号-停用", platformSubjectID, 0, "disabled-platform", 0)
+
+	formOptionsRes := h.getJSON("/api/admin/products/"+int64ToString(goodsID)+"/channel-bindings/form-options", token)
+	require.Equal(t, 0, formOptionsRes.Code)
+
+	var formOptionsData struct {
+		PlatformAccounts []struct {
+			ID int64 `json:"id"`
+		} `json:"platform_accounts"`
+	}
+	require.NoError(t, json.Unmarshal(formOptionsRes.Data, &formOptionsData))
+	require.Contains(t, formOptionsData.PlatformAccounts, struct {
+		ID int64 `json:"id"`
+	}{ID: enabledPlatformID})
+	require.NotContains(t, formOptionsData.PlatformAccounts, struct {
+		ID int64 `json:"id"`
+	}{ID: disabledPlatformID})
+
+	bindingListRes := h.getJSON("/api/admin/products/"+int64ToString(goodsID)+"/channel-bindings", token)
+	require.Equal(t, 0, bindingListRes.Code)
+
+	var bindingListData struct {
+		List []channelBindingContractRow `json:"list"`
+	}
+	require.NoError(t, json.Unmarshal(bindingListRes.Data, &bindingListData))
+	require.Empty(t, bindingListData.List)
+
+	createDisabledRes := h.postJSON("/api/admin/products/"+int64ToString(goodsID)+"/channel-bindings", map[string]any{
+		"platform_account_id": disabledPlatformID,
+		"supplier_goods_no":   "SKU-DISABLED-PLATFORM",
+		"supplier_goods_name": "停用平台渠道商品",
+		"source_cost_price":   "10.0000",
+		"dock_status":         1,
+		"sort":                1,
+	}, token)
+	require.Equal(t, 400, createDisabledRes.Code)
+
+	createEnabledRes := h.postJSON("/api/admin/products/"+int64ToString(goodsID)+"/channel-bindings", map[string]any{
+		"platform_account_id": enabledPlatformID,
+		"supplier_goods_no":   "SKU-ENABLED-PLATFORM",
+		"supplier_goods_name": "启用平台渠道商品",
+		"source_cost_price":   "10.0000",
+		"dock_status":         1,
+		"sort":                1,
+	}, token)
+	require.Equal(t, 0, createEnabledRes.Code)
+
+	var createEnabledData struct {
+		ID int64 `json:"id"`
+	}
+	require.NoError(t, json.Unmarshal(createEnabledRes.Data, &createEnabledData))
+	require.NotZero(t, createEnabledData.ID)
+
+	updateToDisabledRes := h.patchJSON("/api/admin/products/"+int64ToString(goodsID)+"/channel-bindings/"+int64ToString(createEnabledData.ID), map[string]any{
+		"platform_account_id": disabledPlatformID,
+		"supplier_goods_no":   "SKU-ENABLED-PLATFORM",
+		"supplier_goods_name": "启用平台渠道商品",
+		"source_cost_price":   "10.0000",
+		"dock_status":         1,
+		"sort":                1,
+	}, token)
+	require.Equal(t, 400, updateToDisabledRes.Code)
+}
+
 func TestProductGoodsChannelBinding_UpdatePreservesExplicitZeroSort(t *testing.T) {
 	h := newTestHarness(t)
 	token := h.loginAdmin(t)
@@ -428,6 +518,25 @@ func (h *testHarness) createSupplierPlatformAccount(t *testing.T, token, name st
 	require.NoError(t, json.Unmarshal(res.Data, &data))
 	require.NotZero(t, data.ID)
 	return data.ID
+}
+
+func (h *testHarness) updateSupplierPlatformStatus(t *testing.T, token string, id int64, name string, subjectID int64, hasTax int, tokenID string, status int) {
+	t.Helper()
+	res := h.putJSON("/api/admin/supplier-platforms/"+int64ToString(id), map[string]any{
+		"name":             name,
+		"domain":           tokenID + ".test.local",
+		"backup_domain":    tokenID + ".backup.local",
+		"type_id":          35,
+		"subject_id":       subjectID,
+		"has_tax":          hasTax,
+		"token_id":         tokenID,
+		"secret_key":       "secret-key",
+		"threshold_amount": "5000.0000",
+		"sort":             5,
+		"crowd_name":       "运营群",
+		"status":           status,
+	}, token)
+	require.Equal(t, 0, res.Code)
 }
 
 func (h *testHarness) saveFinanceTaxConfig(t *testing.T, token, exclusiveRate, inclusiveRate string) {

@@ -55,6 +55,7 @@ type SupplierPlatformDetailRes struct {
 	TypeID          int            `json:"type_id" dc:"平台类型ID"`
 	SubjectID       int64          `json:"subject_id" dc:"主体ID"`
 	HasTax          int            `json:"has_tax" dc:"是否含税"`
+	Status          int            `json:"status" dc:"平台业务状态，控制该平台是否允许参与商品对接与后续履约"`
 	TokenID         string         `json:"token_id" dc:"商户号或平台账号ID"`
 	SecretKey       string         `json:"secret_key" dc:"平台密钥"`
 	ThresholdAmount string         `json:"threshold_amount" dc:"余额阈值"`
@@ -74,6 +75,7 @@ type SupplierPlatformCreateReq struct {
 	TypeID          int    `json:"type_id" dc:"平台类型ID"`
 	SubjectID       int64  `json:"subject_id" dc:"主体ID"`
 	HasTax          int    `json:"has_tax" dc:"是否含税"`
+	Status          *int   `json:"status" dc:"平台业务状态，控制该平台是否允许参与商品对接与后续履约；为空时默认开启"`
 	TokenID         string `json:"token_id" dc:"商户号或平台账号ID"`
 	SecretKey       string `json:"secret_key" dc:"平台密钥"`
 	ThresholdAmount string `json:"threshold_amount" dc:"余额阈值"`
@@ -96,6 +98,7 @@ type SupplierPlatformUpdateReq struct {
 	TypeID          int    `json:"type_id" dc:"平台类型ID"`
 	SubjectID       int64  `json:"subject_id" dc:"主体ID"`
 	HasTax          int    `json:"has_tax" dc:"是否含税"`
+	Status          *int   `json:"status" dc:"平台业务状态，控制该平台是否允许参与商品对接与后续履约；为空时沿用当前状态"`
 	TokenID         string `json:"token_id" dc:"商户号或平台账号ID"`
 	SecretKey       string `json:"secret_key" dc:"平台密钥"`
 	ThresholdAmount string `json:"threshold_amount" dc:"余额阈值"`

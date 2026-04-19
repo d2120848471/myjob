@@ -18,6 +18,7 @@ type normalizedSupplierPlatformInput struct {
 	TypeID          int
 	SubjectID       int64
 	HasTax          int
+	Status          int
 	Domain          string
 	BackupDomain    string
 	TokenID         string
@@ -27,7 +28,7 @@ type normalizedSupplierPlatformInput struct {
 	CrowdName       string
 }
 
-func (l *SupplierPlatformLogic) normalizeSupplierPlatformInput(ctx context.Context, name, domain, backupDomain string, typeID int, subjectID int64, hasTax int, tokenID, secretKey, thresholdAmount string, sortValue int, crowdName string) (normalizedSupplierPlatformInput, error) {
+func (l *SupplierPlatformLogic) normalizeSupplierPlatformInput(ctx context.Context, name, domain, backupDomain string, typeID int, subjectID int64, hasTax int, status *int, defaultStatus int, tokenID, secretKey, thresholdAmount string, sortValue int, crowdName string) (normalizedSupplierPlatformInput, error) {
 	name = strings.TrimSpace(name)
 	domain = strings.TrimSpace(domain)
 	backupDomain = strings.TrimSpace(backupDomain)
@@ -51,6 +52,13 @@ func (l *SupplierPlatformLogic) normalizeSupplierPlatformInput(ctx context.Conte
 	}
 	if hasTax != 0 && hasTax != 1 {
 		return normalizedSupplierPlatformInput{}, fmt.Errorf("含税值错误")
+	}
+	normalizedStatus := defaultStatus
+	if status != nil {
+		normalizedStatus = *status
+	}
+	if err := validateBooleanFlag(normalizedStatus, "平台状态"); err != nil {
+		return normalizedSupplierPlatformInput{}, err
 	}
 	if tokenID == "" {
 		return normalizedSupplierPlatformInput{}, fmt.Errorf("平台账号ID不能为空")
@@ -93,6 +101,7 @@ func (l *SupplierPlatformLogic) normalizeSupplierPlatformInput(ctx context.Conte
 		TypeID:          typeID,
 		SubjectID:       subjectID,
 		HasTax:          hasTax,
+		Status:          normalizedStatus,
 		Domain:          domain,
 		BackupDomain:    backupDomain,
 		TokenID:         tokenID,

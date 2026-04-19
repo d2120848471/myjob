@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS supplier_platform_account (
   type_id INT NOT NULL COMMENT '平台类型ID',
   subject_id BIGINT UNSIGNED NOT NULL COMMENT '主体ID',
   has_tax TINYINT NOT NULL DEFAULT 0 COMMENT '是否含税',
+  status TINYINT NOT NULL DEFAULT 1 COMMENT '平台业务状态',
   domain VARCHAR(255) NOT NULL COMMENT '主域名',
   backup_domain VARCHAR(255) NOT NULL DEFAULT '' COMMENT '备用域名',
   token_id VARCHAR(128) NOT NULL COMMENT '平台账号ID',
