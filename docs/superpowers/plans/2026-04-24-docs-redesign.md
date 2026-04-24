@@ -1324,7 +1324,7 @@ Expected: no output and exit code 0.
 Run:
 
 ```bash
-go test ./test/contract -run TestAPILayout -count=1 -timeout 60s
+go test ./test/contract -run TestAPIProtocolLayout -count=1 -timeout 60s
 ```
 
 Expected: PASS.
