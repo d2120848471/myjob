@@ -56,6 +56,59 @@ golangci-lint run --timeout=5m
 
 更细的测试分层和 CI 口径见 `testing.md`。
 
+## 新增后台业务域示例流程
+
+以下流程适用于新增一个相对独立的后台管理域，例如“活动配置”“渠道分组”这类有独立列表、表单和权限点的能力。若只是给现有业务域加字段或动作，优先在现有域文件内按职责补充，不要新建无意义目录。
+
+### 1. 先确认边界
+
+- 在 `docs/module-map.md` 找是否已有相近业务域。
+- 如果只是商品、订单、第三方平台、设置等既有域的子能力，优先沿用对应 package 和文件前缀。
+- 只有当它有稳定的协议、权限、数据和业务编排边界时，才按新业务域处理。
+
+### 2. 补协议和接口
+
+- 在 `api/` 新增或扩展扁平协议文件，例如 `api/example.go`。
+- 只放请求、响应、列表项、枚举和路由协议元信息。
+- 在 `internal/service/` 新增接口文件，例如 `example.go`，只定义 service 接口。
+- 导出 Req / Res / Item / Enum 和 service 接口都要写 Go 风格注释。
+
+### 3. 补 controller 和 logic
+
+- 在 `internal/controller/admin/` 新增 controller 文件，例如 `example.go`。
+- controller 只做参数接收、调用 service、返回统一响应，不写业务判断。
+- 在 `internal/logic/admin/` 新增同 package 多文件实现。推荐起步：
+  - `example.go`：只放 `ExampleLogic` 声明和构造。
+  - `example_query.go`：列表、详情、选项读取。
+  - `example_write.go`：新增、编辑、删除、启停。
+  - `example_validate.go`：参数和业务规则校验。
+  - `example_mapper.go`：实体到响应结构映射。
+- 若当前只需要一两个简单方法，可以少建文件；后续职责变多时再按职责拆开。
+
+### 4. 挂路由、权限和种子
+
+- 在 `internal/bootstrap/application.go` 装配 controller，并按权限边界挂到 `/api/admin`。
+- 如果新增权限点，同步 `manifest/sql/002_seed_menu.sql` 和启动期 seed 逻辑。
+- 如果新增表，同步 `manifest/sql/*.sql` 与 `internal/app/schema.go`。
+- 配置项变化同步 `manifest/config/config.local.yaml`、`internal/model/config` 和本文档配置项列表。
+
+### 5. 补测试和文档
+
+- 协议、路由、权限或文件布局变化，优先补 `test/contract`。
+- 业务规则、边界条件或事务分支变化，优先补包内单测或 `test/integration`。
+- 同步 `docs/module-map.md` 的业务域映射、核心业务流速览和路由权限摘要。
+- 同步 `docs/testing.md` 中新增的聚焦验证命令。
+
+### 6. 提交前自检
+
+```bash
+go test ./... -count=1 -timeout 60s
+go build ./...
+golangci-lint run --timeout=5m
+```
+
+若 `golangci-lint` 本机未安装，最终说明要写明未跑原因；CI 仍会按 `.github/workflows/ci.yml` 执行 lint。
+
 ## 配置项
 
 当前本地配置主要包含：

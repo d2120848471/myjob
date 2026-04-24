@@ -283,6 +283,7 @@
 
 优先检查并同步：
 - `README.md`
+- `docs/README.md`
 - `docs/overview.md`
 - `docs/module-map.md`
 - `docs/architecture.md`
@@ -293,8 +294,24 @@
 - `test/contract/README.md`
 - `test/integration/README.md`
 
+### 文档分工（必须保持）
+- `README.md`：项目入口，只放定位、快速开始、最常用验证命令和文档索引；不要承载完整模块事实。
+- `docs/README.md`：文档门户，负责告诉读者“去哪里找什么”。
+- `docs/overview.md`：项目概览，解释当前系统做什么、边界是什么。
+- `docs/architecture.md`：架构说明，解释层级、依赖方向和关键运行链路。
+- `docs/module-map.md`：模块事实主参考，集中维护业务域、核心业务流、文件归属、路由前缀和权限边界。
+- `docs/development.md`：开发操作说明，集中维护本地启动、配置、schema 同步、DAO 生成和“新增后台业务域示例流程”。
+- `docs/testing.md`：测试主参考，集中维护测试分层、CI/lint 口径、聚焦命令和“常见测试失败排查”。
+- `docs/migration.md`：迁移和历史背景，解释为什么形成当前结构，不重复模块事实表。
+- `docs/superpowers/**`：仅保存本次或历史 spec / plan / 设计记录，不替代稳定文档。
+
 额外要求：
 - 若 README 中存在目录树或文档索引，必须与当前仓库真实结构一致。
+- 若新增、删除或改名稳定文档入口，必须同步 `README.md`、`docs/README.md` 和本节文档分工。
+- 若新增或改变业务域，必须同步 `docs/module-map.md` 的“核心业务流速览”“业务域映射”和“路由与权限摘要”。
+- 若新增开发流程、配置、schema、DAO 或本地启动约束，必须同步 `docs/development.md`，不要塞进 README。
+- 若新增测试命令、CI/lint 约束、测试依赖或常见失败处理方式，必须同步 `docs/testing.md`。
+- 若只是解释架构理念或历史迁移原因，优先落到 `docs/architecture.md` 或 `docs/migration.md`，不要复制 `docs/module-map.md` 的事实表。
 - 若仓库 CI 已包含 lint，但 README / docs 只写了 test/build，则需要补齐 lint 说明。
 - 若 README / docs 仍把已拆分域写成单文件（例如 `brand.go`、`industry.go`、`user.go`、`product_template.go`、`purchase_limit.go`），应改成能反映现状的写法，例如 `brand*.go`、`user*.go`，或直接列出新的拆分文件。
 
@@ -309,8 +326,8 @@
 ### P1
 - 对 `api/*.go` 做导出协议类型注释扫除。
 - 对 `internal/controller/admin/*.go` 做导出 controller / constructor / handler 注释扫除。
-- 更新 `README.md`、`docs/module-map.md`、`docs/development.md`、`docs/testing.md`，补齐当前拆分结构与 lint/CI 约束。
-- 把 `README.md` 的文档索引补到 `docs/superpowers/**`。
+- 维护 `README.md`、`docs/README.md`、`docs/module-map.md`、`docs/development.md`、`docs/testing.md` 的文档分工，避免模块事实、开发流程和测试排查多处重复。
+- 若新增或调整 spec / plan，同步 `docs/superpowers/README.md` 的索引语义，避免历史设计记录和稳定文档入口脱节。
 
 ### P2
 - 处理 `internal/controller/admin/helper.go` 的命名与注释问题，确保它保持极小且不继续膨胀。
@@ -355,6 +372,8 @@
 - [ ] 若触碰了 `api/settings.go` / `api/common.go`，是否同步检查了契约测试？
 - [ ] 是否补了足够的测试？
 - [ ] 是否同步更新了 README / docs / test README / AGENTS？
+- [ ] 若新增或调整业务域，`docs/module-map.md` 的核心业务流、业务域映射、路由权限摘要是否同步？
+- [ ] 若新增开发流程或测试排查经验，是否分别放入 `docs/development.md` / `docs/testing.md`？
 - [ ] 是否补齐了 lint 验证说明？
 
 ---

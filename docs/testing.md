@@ -112,6 +112,85 @@ CI workflow 位于 `.github/workflows/ci.yml`：
 golangci-lint run --timeout=5m
 ```
 
+## 常见测试失败排查
+
+### MySQL 连接失败
+
+现象通常是 `dial tcp 127.0.0.1:3306`、认证失败或 `admin_test` 初始化失败。
+
+处理顺序：
+
+1. 确认依赖已启动：`docker compose up -d mysql redis`
+2. 确认端口没有被其它 MySQL 占用：`docker compose ps`
+3. 重新跑单包测试缩小范围：`go test ./internal/app -count=1 -timeout 60s`
+4. 如果库结构异常，重建本地测试依赖后再跑：`docker compose down -v && docker compose up -d mysql redis`
+
+### 测试库锁等待或相互踩数据
+
+`NewTestCore()` 会使用 MySQL 命名锁串行化 `admin_test` 的建库和清库流程。若测试被强制中断，可能出现锁等待到超时。
+
+处理顺序：
+
+1. 先确认没有残留的 `go test` 进程。
+2. 重新执行失败包：`go test ./test/integration -count=1 -timeout 60s`
+3. 若仍超时，重启 MySQL 容器释放残留连接。
+
+### 契约测试提示 API 布局不符合预期
+
+常见原因是新增了 `api/` 子目录、改名或删除了被契约测试锚定的协议文件。
+
+处理顺序：
+
+1. 查看 `test/contract/api_layout_test.go` 的失败文件名。
+2. 若只是职责拆分，优先保留原文件为薄入口。
+3. 若确实改变协议文件集合，同步更新 `test/contract/README.md`、`README.md`、`docs/module-map.md`。
+4. 复跑：`go test ./test/contract -run TestAPIProtocolLayout -count=1 -timeout 60s`
+
+### schema 或 SQL 注释测试失败
+
+常见原因是只改了 `internal/app/schema.go` 或只改了 `manifest/sql/*.sql`，两边没有同步。
+
+处理顺序：
+
+1. 对照失败提示补齐表注释、字段注释或索引定义。
+2. 同步修改 `manifest/sql/*.sql` 和 `internal/app/schema.go`。
+3. 复跑：
+
+```bash
+go test ./internal/app -run 'Test(MySQLSchemaIncludesTableAndColumnComments|ManifestMySQLSchemaFilesIncludeTableAndColumnComments)' -count=1 -timeout 60s
+```
+
+### 订单 worker 测试失败
+
+先看失败点是提交、轮询、补单还是恢复异常提交状态。订单 worker 测试依赖 `httptest.Server` 模拟上游，不应访问真实第三方平台。
+
+处理顺序：
+
+1. 聚焦复现：`go test ./test/integration -run TestOrderWorker -count=1 -timeout 60s -v`
+2. 单独运行失败用例，判断是否和前置用例顺序相关。
+3. 若单独通过、组合失败，优先排查全局状态、测试库清理、时间精度和后台 goroutine。
+4. 修改后必须复跑完整 `test/integration`，不能只看单个用例。
+
+### live 测试被跳过或失败
+
+live 测试默认跳过是预期行为。只有设置 `MYJOB_RUN_SUPPLIER_LIVE=1` 且提供真实账号环境变量时，才会访问外部平台。
+
+处理顺序：
+
+1. 确认是否真的需要 live 验证。
+2. 检查 `SUPPLIER_LIVE_*` 环境变量是否完整。
+3. 失败时先确认账号、域名和上游平台状态，不要把 live 失败直接等同于本仓库逻辑错误。
+
+### lint 命令不存在
+
+本地出现 `golangci-lint: command not found` 表示当前机器没有安装 lint 工具。
+
+处理顺序：
+
+1. 记录该项未运行，不要写成 lint 通过。
+2. 仍需执行 `go test ./... -count=1 -timeout 60s` 和 `go build ./...`。
+3. 依赖 CI 的 lint job 做最终校验，或在本机安装与 CI 兼容的 `golangci-lint` 后复跑。
+
 ## 当前认知边界
 
 文档只描述已经存在的测试覆盖，不把建议补充项写成已经覆盖。
