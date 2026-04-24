@@ -96,6 +96,21 @@ func sha1Lower(value string) string {
 	return hex.EncodeToString(sum[:])
 }
 
+func kakayunSign(payload map[string]any, secretKey string) string {
+	params := make(map[string]string, len(payload))
+	for key, value := range payload {
+		if key == "sign" || value == nil {
+			continue
+		}
+		text := strings.TrimSpace(fmt.Sprint(value))
+		if text == "" || text == "<nil>" {
+			continue
+		}
+		params[key] = text
+	}
+	return md5Lower(sortedQuery(params) + strings.TrimSpace(secretKey))
+}
+
 func newJSONRequest(ctx context.Context, url string, payload any, headers map[string]string) (*http.Request, error) {
 	body := []byte{}
 	if payload != nil {

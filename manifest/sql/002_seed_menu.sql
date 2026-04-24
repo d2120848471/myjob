@@ -11,7 +11,8 @@ INSERT INTO admin_menu (id, parent_id, name, code, menu_type, menu_level, status
 (10, 0, '商品模板管理', 'product.template', 'permission', 1, 1, 0, 10, NOW(), NOW()),
 (11, 0, '商品购买数量限制策略', 'product.purchase_limit', 'permission', 1, 1, 0, 11, NOW(), NOW()),
 (12, 0, '第三方对接', 'supplier.index', 'permission', 1, 1, 0, 12, NOW(), NOW()),
-(13, 0, '商品管理', 'product.goods', 'permission', 1, 1, 0, 13, NOW(), NOW())
+(13, 0, '商品管理', 'product.goods', 'permission', 1, 1, 0, 13, NOW(), NOW()),
+(14, 0, '订单记录', 'order.manage', 'permission', 1, 1, 0, 14, NOW(), NOW())
 ON DUPLICATE KEY UPDATE
   parent_id = VALUES(parent_id),
   name = VALUES(name),
@@ -24,6 +25,7 @@ ON DUPLICATE KEY UPDATE
   updated_at = VALUES(updated_at);
 
 INSERT INTO admin_group_menu (group_id, menu_id, created_at) VALUES
-(1, 13, NOW())
+(1, 13, NOW()),
+(1, 14, NOW())
 ON DUPLICATE KEY UPDATE
   created_at = created_at;

@@ -211,6 +211,64 @@ func TestKayixinBuildRequest_UsesObjectBodyWhenConfigured(t *testing.T) {
 	require.Equal(t, expected, req.Header.Get("X-Signature"))
 }
 
+func TestKakayunOrderProviderBuildCreateRequest(t *testing.T) {
+	provider, ok := LookupOrder("kakayun")
+	require.True(t, ok)
+	account := AccountConfig{
+		ProviderCode: "kakayun",
+		Domain:       "qqlogin.yxp8.cn",
+		TokenID:      "10052",
+		SecretKey:    "9aa3034b6beba7cf5bfcf6089218a674",
+	}
+	req, err := provider.BuildCreateOrderRequest(context.Background(), account, time.Unix(1735002156, 0), "http://qqlogin.yxp8.cn", CreateOrderInput{
+		SupplierGoodsNo:   "720938",
+		Quantity:          1,
+		Account:           "13088888888",
+		SupplierUSOrderNo: "O20260424153000123456-T1",
+	})
+	require.NoError(t, err)
+	require.Equal(t, http.MethodPost, req.Method)
+	require.Equal(t, "http://qqlogin.yxp8.cn/dockapiv3/order/create", req.URL.String())
+	body, err := io.ReadAll(req.Body)
+	require.NoError(t, err)
+	require.Contains(t, string(body), `"userid":"10052"`)
+	require.Contains(t, string(body), `"goodsid":"720938"`)
+	require.Contains(t, string(body), `"attach":"13088888888"`)
+	require.Contains(t, string(body), `"usorderno":"O20260424153000123456-T1"`)
+	require.Contains(t, string(body), `"sign":"`)
+}
+
+func TestKakayunOrderProviderParseCreateAndQuery(t *testing.T) {
+	provider, ok := LookupOrder("kakayun")
+	require.True(t, ok)
+
+	create, err := provider.ParseCreateOrderResponse(http.StatusOK, []byte(`{"code":1,"message":"下单成功","data":{"orderno":"SD202604240001","usorderno":"O20260424153000123456-T1"}}`))
+	require.NoError(t, err)
+	require.True(t, create.Accepted)
+	require.Equal(t, "SD202604240001", create.SupplierOrderNo)
+	require.Equal(t, "O20260424153000123456-T1", create.SupplierUSOrderNo)
+
+	processing, err := provider.ParseQueryOrderResponse(http.StatusOK, []byte(`{"code":1,"message":"ok","data":{"orderno":"SD202604240001","usorderno":"O20260424153000123456-T1","status":3,"refundstatus":0,"receipt":"处理中"}}`))
+	require.NoError(t, err)
+	require.Equal(t, SupplierOrderStatusProcessing, processing.Status)
+
+	success, err := provider.ParseQueryOrderResponse(http.StatusOK, []byte(`{"code":1,"message":"ok","data":{"orderno":"SD202604240001","usorderno":"O20260424153000123456-T1","status":5,"refundstatus":0,"receipt":"成功"}}`))
+	require.NoError(t, err)
+	require.Equal(t, SupplierOrderStatusSuccess, success.Status)
+
+	failed, err := provider.ParseQueryOrderResponse(http.StatusOK, []byte(`{"code":1,"message":"ok","data":{"orderno":"SD202604240001","usorderno":"O20260424153000123456-T1","status":4,"refundstatus":1,"receipt":"失败"}}`))
+	require.NoError(t, err)
+	require.Equal(t, SupplierOrderStatusFailed, failed.Status)
+}
+
+func TestKakayunOrderProviderNonJSONIsUnknown(t *testing.T) {
+	provider, ok := LookupOrder("kakayun")
+	require.True(t, ok)
+	_, err := provider.ParseCreateOrderResponse(http.StatusOK, []byte(`<html>bad gateway</html>`))
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrSupplierUnknownResponse)
+}
+
 func TestProvidersParseBalanceResponse(t *testing.T) {
 	cases := []struct {
 		name           string

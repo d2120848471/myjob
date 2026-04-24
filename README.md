@@ -6,7 +6,7 @@ MyJob Admin Backend 是当前仓库根目录下运行的 GoFrame 单体后台项
 ## 当前状态
 
 - 主入口在仓库根：`main.go` -> `internal/cmd` -> `internal/bootstrap`
-- HTTP 接口统一挂在 `/api/admin`
+- 后台接口挂在 `/api/admin`，外部开放下单接口挂在 `/api/open`
 - 统一响应格式为 `code / message / data`
 - 运行时默认使用 MySQL + Redis，配置来源是 `manifest/config/config.local.yaml` 或 `ADMIN_CONFIG`
 - OpenAPI 文档默认暴露在 `/api.json`，Swagger UI 默认暴露在 `/swagger/`
@@ -44,6 +44,7 @@ MyJob Admin Backend 是当前仓库根目录下运行的 GoFrame 单体后台项
 - 商品管理：列表、详情、表单下拉选项、新增、编辑、删除、启停
 - 商品渠道绑定：商品列表渠道摘要、库存配置详情/保存、绑定弹窗列表、表单选项、新增、编辑、删除、单条自动改价
 - 第三方对接：平台类型字典、平台账号 CRUD/启停、手动余额刷新、余额日志落库、平台关闭后级联关停商品绑定
+- 订单履约：外部开放下单/查单、云发卡异步提交与轮询、后台订单记录列表和基础统计
 - 短信配置：读取、保存、脱敏展示
 - 系统参数配置：按组读取、单组/多组保存、配置校验与批量回滚
 - 审计日志：操作日志、登录日志
@@ -126,6 +127,8 @@ golangci-lint run --timeout=5m
 │   ├── group.go
 │   ├── industry.go
 │   ├── log.go
+│   ├── open_order.go
+│   ├── order.go
 │   ├── product_goods.go
 │   ├── product_goods_channel.go
 │   ├── product_goods_channel_config.go
@@ -156,9 +159,11 @@ golangci-lint run --timeout=5m
 │   ├── cmd
 │   ├── consts
 │   ├── controller/admin
+│   ├── controller/open
 │   ├── dao
 │   ├── library
 │   ├── logic/admin
+│   ├── logic/order
 │   ├── middleware
 │   ├── model
 │   └── service
@@ -181,6 +186,7 @@ golangci-lint run --timeout=5m
 
 - `api/settings.go` 为薄入口/说明文件；短信配置与系统参数配置协议拆分到 `api/settings_sms.go` 与 `api/settings_system.go`
 - `api/product_goods.go` 保留商品主档协议；商品渠道绑定与库存配置协议独立放到 `api/product_goods_channel.go`、`api/product_goods_channel_config.go`
+- `api/open_order.go` 放外部开放下单/查单协议，`api/order.go` 放后台订单记录协议
 - `api/common.go` 只保留跨业务域复用的通用别名（例如分页），单域 `Item/Enum` 放回对应领域协议文件
 
 ### `docs`
@@ -206,6 +212,10 @@ golangci-lint run --timeout=5m
 
 负责 HTTP 协议适配，方法签名统一是 GoFrame 标准 `Req/Res + error`。
 
+### `internal/controller/open`
+
+负责开放接口协议适配，当前提供 `/api/open/orders` 创建订单与查单入口，不依赖后台登录态。
+
 ### `internal/service`
 
 定义 controller 依赖的服务接口，是模块边界层。
@@ -223,6 +233,10 @@ golangci-lint run --timeout=5m
 - `product_template*.go`
 - `purchase_limit*.go`
 - `user*.go`
+
+### `internal/logic/order`
+
+负责订单履约编排，当前按职责拆分为创建、查单、后台列表、选渠、提交、轮询、补单和 worker 生命周期等文件。订单逻辑不放进商品、第三方平台或通用 helper 文件。
 
 ### `internal/app`
 
@@ -248,6 +262,7 @@ golangci-lint run --timeout=5m
 - `audit`：审计日志写入器
 - `region`：IP 归属地解析与脱敏工具
 - `supplierplatform/provider`：第三方供货平台适配器（余额刷新等对接能力）
+  - 其中云发卡适配器同时支持开放订单下单和查单
 
 ### `manifest/config`
 
@@ -265,6 +280,7 @@ golangci-lint run --timeout=5m
 - `005_supplier_platform.sql`：第三方平台类型、账号启停状态和余额日志结构
 - `006_product_goods_channel_binding.sql`：商品渠道绑定表结构
 - `007_product_goods_channel_config.sql`：商品库存配置表结构
+- `008_external_order.sql`：外部订单主表和渠道尝试表结构
 
 ### `hack`
 
@@ -282,11 +298,12 @@ golangci-lint run --timeout=5m
 - 系统参数配置的单组读取、多组批量保存、super-only 鉴权与回滚
 - 品牌、行业、本地上传主流程
 - 商品模板、购买数量限制策略、商品管理、商品渠道绑定、第三方对接主流程
+- 开放订单创建/查单、后台订单列表权限、筛选和统计
 - 员工、用户组、主体、短信配置、日志等核心流程
 
 ### `test/integration`
 
-集成测试目录当前包含 runtime smoke test 与第三方平台余额刷新集成回归。
+集成测试目录当前包含 runtime smoke test、第三方平台余额刷新集成回归和订单 worker 集成回归。
 其中 runtime smoke test 仍由显式环境开关控制；整体也不是完整的 MySQL / Redis / 短信 / 日志闭环回归集。
 
 ## 文档索引
@@ -297,5 +314,5 @@ golangci-lint run --timeout=5m
 - `docs/development.md`：开发依赖、配置、脚本和日常命令
 - `docs/testing.md`：测试分层、当前覆盖范围与执行命令
 - `docs/migration.md`：从历史后台迁到当前根应用结构的迁移背景
-- `docs/superpowers/README.md`：规格与实施计划文档入口；当前仅保留入口说明，不声明尚未落地的历史 spec / plan
+- `docs/superpowers/README.md`：规格与实施计划文档入口；当前记录本轮开放订单与云发卡异步履约计划
 - `platform_docs/README.md`：第三方渠道原始接口文档总览；具体平台文档按 `platform_docs/*.md` 拆分

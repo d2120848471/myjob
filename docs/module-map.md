@@ -84,6 +84,27 @@
   - `platform_docs/` 记录渠道原始接口与签名规则
   - `docs/*.md` 记录本仓库怎样落地这些渠道能力
 
+### 订单履约
+
+- 协议：`api/open_order.go`、`api/order.go`
+- 开放 controller：`internal/controller/open/order.go`
+- 后台 controller：`internal/controller/admin/order.go`
+- service：`OrderService`
+- logic：`internal/logic/order/*.go`
+- provider 适配层：`internal/library/supplierplatform/provider/*`
+- 路由前缀：`/api/open/orders*`、`/api/admin/orders`
+- 权限码：`order.manage`
+- 主要能力：
+  - 外部调用方用固定 `open_order.token` 创建直充渠道订单
+  - 外部按订单号查询我方订单状态，不暴露渠道、成本和利润
+  - 进程内 worker 扫描 `pending_submit` 订单并异步提交云发卡
+  - worker 按配置间隔轮询 `processing/unknown` 订单，并在失败且补单窗口内切换下一个云发卡渠道
+  - 后台订单列表支持关键词、状态、含税、渠道、时间范围筛选，并返回今日/昨日基础统计
+- 当前实现限制：
+  - 一期只支持直充、渠道供货商品
+  - 一期只接入云发卡真实下单和查单
+  - 不做外部幂等、客户体系、卡密交付、退款、催单、导出或人工处理
+
 ### 品牌管理
 
 - 协议：`api/brand.go`
@@ -268,6 +289,8 @@
 - `group.go`
 - `industry.go`
 - `log.go`
+- `open_order.go`
+- `order.go`
 - `product_goods.go`
 - `product_goods_channel.go`
 - `product_goods_channel_config.go`
@@ -307,10 +330,15 @@
 - 绑定 `/api/admin` 路由
 - 注册统一响应中间件和鉴权中间件
 - 注册 OpenAPI / Swagger
+- 在 `open_order.worker_enabled=true` 时启动订单提交/轮询 worker，并在 `Core.Close()` 前停止
 
 ### `internal/controller/admin`
 
 HTTP 协议适配层，不直接写业务规则。
+
+### `internal/controller/open`
+
+开放接口协议适配层，当前只放外部订单下单和查单入口。
 
 ### `internal/service`
 
@@ -339,6 +367,20 @@ HTTP 协议适配层，不直接写业务规则。
 - `config.go`
 - `system_config.go`
 - `log.go`
+
+### `internal/logic/order`
+
+订单履约业务编排层，当前按职责拆分为：
+
+- `order.go`
+- `order_create.go`
+- `order_query.go`
+- `order_channel.go`
+- `order_submit.go`
+- `order_poll.go`
+- `order_reorder.go`
+- `order_mapper.go`
+- `order_worker.go`
 
 ### `internal/app`
 
@@ -380,6 +422,7 @@ HTTP 协议适配层，不直接写业务规则。
 - `005_supplier_platform.sql`：第三方平台类型、账号和余额日志结构
 - `006_product_goods_channel_binding.sql`：商品渠道绑定表结构
 - `007_product_goods_channel_config.sql`：商品库存配置表结构
+- `008_external_order.sql`：外部订单主表与渠道尝试表结构
 
 这里的 schema 文件用于 Docker 首次初始化 MySQL；如果修改 MySQL 表结构、表注释或字段注释，必须和 `internal/app/schema.go` 一起修改，避免首次建库和应用自建表出现漂移。
 
@@ -387,11 +430,11 @@ HTTP 协议适配层，不直接写业务规则。
 
 契约测试目录，覆盖接口兼容和核心业务流。
 
-当前也覆盖商品列表渠道摘要、商品库存配置与商品渠道绑定弹窗的主流程。
+当前也覆盖商品列表渠道摘要、商品库存配置、商品渠道绑定弹窗、开放订单和后台订单记录的主流程。
 
 ### `test/integration`
 
-集成测试目录，当前包括 runtime smoke test、第三方平台余额刷新回归和可选 live 验证。
+集成测试目录，当前包括 runtime smoke test、第三方平台余额刷新回归、订单 worker 回归和可选 live 验证。
 
 ## 当前路由与权限摘要
 
@@ -408,6 +451,8 @@ HTTP 协议适配层，不直接写业务规则。
 | 商品购买数量限制策略 | `/api/admin/purchase-limit-strategies*` | `product.purchase_limit` |
 | 商品管理 | `/api/admin/products*` | `product.goods` |
 | 第三方对接 | `/api/admin/supplier-platform-types`、`/api/admin/supplier-platforms*` | `supplier.index` |
+| 开放订单 | `/api/open/orders*` | 固定 `open_order.token` |
+| 后台订单记录 | `/api/admin/orders` | `order.manage` |
 | 短信配置 | `/api/admin/settings/sms` | super-only |
 | 系统参数配置 | `/api/admin/settings/system` | super-only |
 | 操作日志 | `/api/admin/logs/operations` | `admin.action` |

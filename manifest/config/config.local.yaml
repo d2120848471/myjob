@@ -25,3 +25,8 @@ upload:
   local_dir: "storage/uploads"
   public_prefix: "/uploads"
   max_image_size_mb: 2
+open_order:
+  token: "${OPEN_ORDER_TOKEN:-test-open-order-token}"
+  worker_enabled: true
+  poll_interval_seconds: 30
+  submit_scan_interval_seconds: 5

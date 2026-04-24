@@ -22,6 +22,7 @@
 - 商品模板验证方式枚举、列表筛选、增删改、批删与非法 ID 校验
 - 商品列表渠道摘要、商品库存配置详情/保存、商品渠道绑定弹窗、表单选项、新增、编辑、删除与单条自动改价
 - 第三方对接 OpenAPI 路径暴露、菜单种子同步、平台账号 CRUD、启停级联关停绑定、余额刷新与软删重建回归
+- 开放订单创建/查单、后台订单列表权限、筛选和统计
 - 员工、用户组、主体、短信配置、系统参数配置、日志查询主流程
 - 短信发送失败时 Redis 清理行为
 
@@ -44,11 +45,18 @@ go test ./test/contract -count=1 -timeout 60s
 - 确认接口能返回成功响应
 - 第三方平台余额刷新在主域名 / 备用域名 / `https` 降级下的真实执行顺序
 - 业务失败和传输失败的分流、余额日志脱敏与 trace_id 落库
+- 订单 worker 对待提交订单的云发卡提交、查单成功、失败后窗口内补单行为
 
 其中 `supplier-platform` 集成测试默认使用 `httptest.Server` 模拟平台，不依赖真实外部账号：
 
 ```bash
 go test ./test/integration -run 'TestSupplierPlatformRefresh_' -count=1 -timeout 60s
+```
+
+订单 worker 集成测试同样使用 `httptest.Server` 模拟云发卡，不依赖真实外部账号：
+
+```bash
+go test ./test/integration -run TestOrderWorker -count=1 -timeout 60s
 ```
 
 它需要显式开启：
@@ -131,6 +139,18 @@ docker exec $(docker compose ps -q mysql) mysql -uroot -proot123456 -D admin -e 
 
 ```bash
 go test ./test/contract -count=1 -timeout 60s
+```
+
+订单相关接口变更可先跑聚焦集合：
+
+```bash
+go test ./test/contract -run 'TestOpenOrder|TestAdminOrder|TestOrderManage' -count=1 -timeout 60s
+```
+
+云发卡订单 provider 变更可先跑：
+
+```bash
+go test ./internal/library/supplierplatform/provider -run TestKakayunOrderProvider -count=1 -timeout 60s
 ```
 
 ### 影响真实配置或启动链路时

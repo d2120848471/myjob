@@ -3,6 +3,7 @@ package config
 import (
 	"context"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/gogf/gf/v2/os/gcfg"
@@ -19,6 +20,7 @@ type Config struct {
 	SMS       RuntimeSMSConfig `json:"sms" yaml:"sms"`
 	Audit     AuditConfig      `json:"audit" yaml:"audit"`
 	Upload    UploadConfig     `json:"upload" yaml:"upload"`
+	OpenOrder OpenOrderConfig  `json:"open_order" yaml:"open_order"`
 }
 
 type ServerConfig struct {
@@ -63,6 +65,13 @@ type UploadConfig struct {
 	MaxImageSizeMB int    `json:"max_image_size_mb" yaml:"max_image_size_mb"`
 }
 
+type OpenOrderConfig struct {
+	Token                     string `json:"token" yaml:"token"`
+	WorkerEnabled             bool   `json:"worker_enabled" yaml:"worker_enabled"`
+	PollIntervalSeconds       int    `json:"poll_interval_seconds" yaml:"poll_interval_seconds"`
+	SubmitScanIntervalSeconds int    `json:"submit_scan_interval_seconds" yaml:"submit_scan_interval_seconds"`
+}
+
 func Default() Config {
 	return Config{
 		AppEnv: "dev",
@@ -77,6 +86,12 @@ func Default() Config {
 		SMS:       RuntimeSMSConfig{Provider: "aliyun"},
 		Audit:     AuditConfig{Async: true, BufferSize: 128},
 		Upload:    UploadConfig{LocalDir: "storage/uploads", PublicPrefix: "/uploads", MaxImageSizeMB: 2},
+		OpenOrder: OpenOrderConfig{
+			Token:                     "test-open-order-token",
+			WorkerEnabled:             false,
+			PollIntervalSeconds:       30,
+			SubmitScanIntervalSeconds: 5,
+		},
 	}
 }
 
@@ -113,6 +128,7 @@ func normalize(cfg *Config) {
 	cfg.SMS.Provider = strings.TrimSpace(expand(cfg.SMS.Provider))
 	cfg.Upload.LocalDir = expand(cfg.Upload.LocalDir)
 	cfg.Upload.PublicPrefix = strings.TrimSpace(expand(cfg.Upload.PublicPrefix))
+	cfg.OpenOrder.Token = strings.TrimSpace(expand(cfg.OpenOrder.Token))
 	if cfg.Database.Driver == "" {
 		cfg.Database.Driver = "mysql"
 	}
@@ -144,14 +160,33 @@ func normalize(cfg *Config) {
 	if cfg.Upload.MaxImageSizeMB <= 0 {
 		cfg.Upload.MaxImageSizeMB = 2
 	}
+	if cfg.OpenOrder.PollIntervalSeconds <= 0 {
+		cfg.OpenOrder.PollIntervalSeconds = 30
+	}
+	if cfg.OpenOrder.SubmitScanIntervalSeconds <= 0 {
+		cfg.OpenOrder.SubmitScanIntervalSeconds = 5
+	}
 	if cfg.Bootstrap.SuperAdminUsername == "" {
 		cfg.Bootstrap.SuperAdminUsername = "admin"
 	}
 }
 
+var envDefaultRegexp = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*):-([^}]*)}`)
+
 func expand(value string) string {
 	if value == "" {
 		return value
 	}
+	// 本地 YAML 使用 ${VAR:-default} 形式，Go 标准库只支持 ${VAR}，这里先补齐默认值语义。
+	value = envDefaultRegexp.ReplaceAllStringFunc(value, func(match string) string {
+		parts := envDefaultRegexp.FindStringSubmatch(match)
+		if len(parts) != 3 {
+			return match
+		}
+		if envValue := os.Getenv(parts[1]); envValue != "" {
+			return envValue
+		}
+		return parts[2]
+	})
 	return os.ExpandEnv(value)
 }

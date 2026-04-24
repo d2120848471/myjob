@@ -43,6 +43,7 @@ type Core struct {
 	mock           *sms.MockSender
 	regionResolver region.RegionResolver
 	auditWriter    *audit.Writer
+	orderStop      func()
 	testLockDB     *sql.DB
 	testLockConn   *sql.Conn
 	tempDBFile     string
@@ -170,6 +171,11 @@ func (c *Core) Now() time.Time {
 // Sender 返回当前 Core 使用的短信发送器实现。
 func (c *Core) Sender() sms.Sender {
 	return c.sender
+}
+
+// SetOrderStop 注册订单 worker 停止函数，Core.Close 会在关闭数据库前调用它。
+func (c *Core) SetOrderStop(stop func()) {
+	c.orderStop = stop
 }
 
 // UsernameRegexp 返回用户名校验正则（字母开头，长度 6-10，仅字母数字）。

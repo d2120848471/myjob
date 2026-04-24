@@ -10,9 +10,11 @@ import (
 
 	"myjob/internal/app"
 	admincontroller "myjob/internal/controller/admin"
+	opencontroller "myjob/internal/controller/open"
 	authlib "myjob/internal/library/auth"
 	smslib "myjob/internal/library/sms"
 	adminlogic "myjob/internal/logic/admin"
+	orderlogic "myjob/internal/logic/order"
 	"myjob/internal/middleware"
 	modelconfig "myjob/internal/model/config"
 	modelruntime "myjob/internal/model/runtime"
@@ -94,6 +96,10 @@ func assemble(core *app.Core) (*Application, error) {
 	settingsCtrl := admincontroller.NewSettings(services.SMSConfig, services.System)
 	operationLogCtrl := admincontroller.NewOperationLog(services.AuditLog)
 	loginLogCtrl := admincontroller.NewLoginLog(services.AuditLog)
+	orderLogic := orderlogic.NewOrderLogic(core)
+	orderSvc := orderLogic
+	openOrderCtrl := opencontroller.NewOrder(orderSvc)
+	adminOrderCtrl := admincontroller.NewOrder(orderSvc)
 	guard := middleware.NewAuthGuard(core)
 
 	s := ghttp.GetServer(fmt.Sprintf("myjob-admin-%d", time.Now().UnixNano()))
@@ -104,6 +110,11 @@ func assemble(core *app.Core) (*Application, error) {
 	if err := mountUploadStaticPath(s, core.Config().Upload); err != nil {
 		return nil, err
 	}
+
+	s.Group("/api/open", func(group *ghttp.RouterGroup) {
+		group.Middleware(middleware.Response)
+		group.Bind(openOrderCtrl)
+	})
 
 	s.Group("/api/admin", func(group *ghttp.RouterGroup) {
 		group.Middleware(middleware.Response)
@@ -150,6 +161,10 @@ func assemble(core *app.Core) (*Application, error) {
 			group.Bind(supplierPlatformCtrl)
 		})
 		group.Group("", func(group *ghttp.RouterGroup) {
+			group.Middleware(guard.Require("order.manage", false))
+			group.Bind(adminOrderCtrl)
+		})
+		group.Group("", func(group *ghttp.RouterGroup) {
 			group.Middleware(guard.Require("", true))
 			group.Bind(settingsCtrl)
 		})
@@ -162,6 +177,12 @@ func assemble(core *app.Core) (*Application, error) {
 			group.Bind(loginLogCtrl)
 		})
 	})
+
+	if core.Config().OpenOrder.WorkerEnabled {
+		worker := orderlogic.NewWorker(orderLogic)
+		worker.Start()
+		core.SetOrderStop(worker.Stop)
+	}
 
 	return &Application{core: core, server: s}, nil
 }

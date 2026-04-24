@@ -269,6 +269,10 @@ func (c *Core) initAuditWriter() {
 
 // Close 释放 Core 持有的资源（审计写入器、Redis/DB 连接、测试临时资源等）。
 func (c *Core) Close() error {
+	if c.orderStop != nil {
+		c.orderStop()
+		c.orderStop = nil
+	}
 	if c.auditWriter != nil {
 		c.auditWriter.Close()
 	}

@@ -9,6 +9,7 @@
 - runtime smoke test（`runtime_smoke_test.go`）：需要真实配置参与，验证应用能启动并完成一次 `/api/admin/auth/login` 请求
 - supplier 平台余额刷新集成回归（`supplier_platform_balance_test.go`）：验证主/备域名请求策略、HTTP 降级、余额日志落库等行为
   - 文件内还包含一个可选的 live provider 验证用例，用环境变量显式开启
+- 订单 worker 集成回归（`order_worker_test.go`）：验证外部订单创建后待提交扫描、云发卡提交、查单成功和失败后窗口内补单
 
 它目前不是完整的 MySQL / Redis / 短信 / 日志闭环回归集。
 
@@ -18,6 +19,12 @@
 
 ```bash
 go test ./test/integration -count=1 -timeout 60s
+```
+
+运行订单 worker 集成回归：
+
+```bash
+go test ./test/integration -run TestOrderWorker -count=1 -timeout 60s
 ```
 
 运行 runtime smoke test：

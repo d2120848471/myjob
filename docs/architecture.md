@@ -12,10 +12,11 @@ main.go
         -> app.NewCoreFromConfigFile()
           -> loadConfig()
             -> model/config.LoadFromGoFrame()
-          -> newCore()
+      -> newCore()
             -> initStores()
             -> bootstrap()
       -> assemble()
+        -> 按配置启动订单 worker（可选）
       -> ghttp.Server.Run()
 ```
 
@@ -25,6 +26,7 @@ main.go
 - `internal/cmd` 负责启动命令，不承载业务逻辑
 - `internal/app` 负责配置解析、MySQL / Redis 初始化、种子初始化和运行时资源装配
 - `internal/bootstrap` 负责路由、中间件、controller、service、logic 的组合
+- `open_order.worker_enabled=true` 时，`internal/bootstrap` 会启动订单提交/轮询 worker，并把停止函数注册到 `Core.Close()`
 
 ## 分层职责
 
@@ -42,6 +44,10 @@ main.go
 - 调用 `service` 接口
 - 不直接拼接统一响应壳
 
+### `internal/controller/open`
+
+负责开放接口协议适配，当前只承载外部订单下单和查单入口，不依赖后台 Bearer 登录态。
+
 ### `internal/service`
 
 只定义模块接口，是 controller 依赖的抽象边界。
@@ -55,6 +61,10 @@ main.go
 - 权限相关业务判断
 - 数据访问编排
 - 审计写入
+
+### `internal/logic/order`
+
+负责订单履约编排，包括外部下单、查单、后台订单列表、云发卡选渠提交、轮询和补单 worker。
 
 ### `internal/app`
 
@@ -80,9 +90,9 @@ main.go
 HTTP Request
   -> middleware.Response
   -> middleware.AuthGuard (按路由分组决定是否启用)
-  -> controller/admin
+  -> controller/admin 或 controller/open
   -> service interface
-  -> logic/admin
+  -> logic/admin 或 logic/order
   -> app / dao / library
   -> MySQL / Redis / provider
 ```
@@ -92,6 +102,7 @@ HTTP Request
 - `middleware.Response` 统一在出口包装 `code / message / data`
 - `middleware.AuthGuard` 负责解析 Bearer token、加载用户并校验权限
 - 若路由声明 `superOnly=true`，则只有 `group_id = 0` 的超级管理员可访问
+- `/api/open/orders*` 不走后台 Bearer 鉴权，开放订单 token 由订单 logic 校验
 
 ## 认证与短信流程
 
@@ -180,6 +191,13 @@ POST /api/admin/auth/sms/verify
 - `internal/library/supplierplatform/provider` 负责平台 provider 注册、按平台类型和域名解析 provider，以及封装余额刷新请求
 - `internal/logic/admin/supplier_platform*.go` 负责账号状态、余额日志、平台启停级联等业务编排
 - 平台关闭后会同步关停该平台下的商品渠道绑定；重新开启平台不会自动恢复历史绑定
+
+### 订单 worker
+
+- worker 使用进程内 goroutine，不引入外部 MQ
+- `SubmitPendingOnce` 扫描 `pending_submit` 订单并提交云发卡
+- `PollDueOnce` 扫描到期的 `processing/unknown` 订单并查询上游状态
+- `Core.Close()` 会先停止订单 worker，再释放审计写入器、Redis 和 DB 连接
 
 ## OpenAPI 与文档
 

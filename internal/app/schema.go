@@ -277,6 +277,76 @@ CREATE INDEX IF NOT EXISTS idx_supplier_platform_balance_log_platform
     ON supplier_platform_balance_log(platform_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_supplier_platform_balance_log_trace
     ON supplier_platform_balance_log(trace_id);
+CREATE TABLE IF NOT EXISTS external_order (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_no TEXT NOT NULL,
+    goods_id INTEGER NOT NULL,
+    goods_code TEXT NOT NULL,
+    goods_name TEXT NOT NULL,
+    goods_type TEXT NOT NULL,
+    supply_type TEXT NOT NULL,
+    subject_id INTEGER NULL,
+    subject_name TEXT NOT NULL DEFAULT '',
+    has_tax INTEGER NOT NULL DEFAULT 0,
+    account TEXT NOT NULL,
+    quantity INTEGER NOT NULL,
+    unit_price TEXT NOT NULL DEFAULT '0.0000',
+    order_amount TEXT NOT NULL DEFAULT '0.0000',
+    cost_amount TEXT NOT NULL DEFAULT '0.0000',
+    profit_amount TEXT NOT NULL DEFAULT '0.0000',
+    status TEXT NOT NULL,
+    current_attempt_id INTEGER NULL,
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    last_receipt TEXT NOT NULL DEFAULT '',
+    next_poll_at DATETIME NULL,
+    last_poll_at DATETIME NULL,
+    poll_count INTEGER NOT NULL DEFAULT 0,
+    last_poll_error TEXT NOT NULL DEFAULT '',
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_external_order_order_no
+    ON external_order(order_no);
+CREATE INDEX IF NOT EXISTS idx_external_order_status_poll
+    ON external_order(status, next_poll_at, id);
+CREATE INDEX IF NOT EXISTS idx_external_order_created
+    ON external_order(created_at, id);
+CREATE INDEX IF NOT EXISTS idx_external_order_goods
+    ON external_order(goods_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_external_order_account
+    ON external_order(account, created_at);
+CREATE TABLE IF NOT EXISTS external_order_attempt (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id INTEGER NOT NULL,
+    order_no TEXT NOT NULL,
+    attempt_no INTEGER NOT NULL,
+    channel_binding_id INTEGER NOT NULL,
+    platform_account_id INTEGER NOT NULL,
+    platform_account_name TEXT NOT NULL DEFAULT '',
+    provider_code TEXT NOT NULL,
+    supplier_goods_no TEXT NOT NULL,
+    supplier_goods_name TEXT NOT NULL DEFAULT '',
+    supplier_us_order_no TEXT NOT NULL,
+    supplier_order_no TEXT NOT NULL DEFAULT '',
+    supplier_status TEXT NOT NULL DEFAULT '',
+    refund_status TEXT NOT NULL DEFAULT '',
+    request_snapshot TEXT NOT NULL,
+    response_snapshot TEXT NOT NULL,
+    receipt TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL,
+    submitted_at DATETIME NULL,
+    last_checked_at DATETIME NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_external_order_attempt_order_no
+    ON external_order_attempt(order_id, attempt_no);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_external_order_attempt_supplier_us
+    ON external_order_attempt(provider_code, supplier_us_order_no);
+CREATE INDEX IF NOT EXISTS idx_external_order_attempt_order
+    ON external_order_attempt(order_id, id);
+CREATE INDEX IF NOT EXISTS idx_external_order_attempt_platform
+    ON external_order_attempt(platform_account_id, created_at);
 CREATE TABLE IF NOT EXISTS system_config (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     config_key TEXT NOT NULL UNIQUE,
@@ -553,6 +623,67 @@ CREATE TABLE IF NOT EXISTS supplier_platform_balance_log (
     KEY idx_supplier_platform_balance_log_platform (platform_id, created_at),
     KEY idx_supplier_platform_balance_log_trace (trace_id)
 ) COMMENT='平台余额刷新日志表';
+CREATE TABLE IF NOT EXISTS external_order (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '订单ID',
+    order_no VARCHAR(40) NOT NULL COMMENT '订单号',
+    goods_id BIGINT UNSIGNED NOT NULL COMMENT '商品ID',
+    goods_code VARCHAR(32) NOT NULL COMMENT '商品编码快照',
+    goods_name VARCHAR(255) NOT NULL COMMENT '商品名称快照',
+    goods_type VARCHAR(32) NOT NULL COMMENT '商品类型快照',
+    supply_type VARCHAR(32) NOT NULL COMMENT '供货方式快照',
+    subject_id BIGINT UNSIGNED NULL COMMENT '商品主体ID快照',
+    subject_name VARCHAR(64) NOT NULL DEFAULT '' COMMENT '商品主体名称快照',
+    has_tax TINYINT NOT NULL DEFAULT 0 COMMENT '商品含税快照',
+    account VARCHAR(255) NOT NULL COMMENT '充值账号',
+    quantity INT NOT NULL COMMENT '购买数量',
+    unit_price DECIMAL(18,4) NOT NULL DEFAULT 0.0000 COMMENT '下单单价',
+    order_amount DECIMAL(18,4) NOT NULL DEFAULT 0.0000 COMMENT '订单金额',
+    cost_amount DECIMAL(18,4) NOT NULL DEFAULT 0.0000 COMMENT '成本金额',
+    profit_amount DECIMAL(18,4) NOT NULL DEFAULT 0.0000 COMMENT '利润金额',
+    status VARCHAR(32) NOT NULL COMMENT '订单状态',
+    current_attempt_id BIGINT UNSIGNED NULL COMMENT '当前尝试ID',
+    attempt_count INT NOT NULL DEFAULT 0 COMMENT '尝试次数',
+    last_receipt VARCHAR(512) NOT NULL DEFAULT '' COMMENT '最近回执',
+    next_poll_at DATETIME NULL COMMENT '下次查单时间',
+    last_poll_at DATETIME NULL COMMENT '最近查单时间',
+    poll_count INT NOT NULL DEFAULT 0 COMMENT '查单次数',
+    last_poll_error VARCHAR(512) NOT NULL DEFAULT '' COMMENT '最近查单异常',
+    created_at DATETIME NOT NULL COMMENT '创建时间',
+    updated_at DATETIME NOT NULL COMMENT '更新时间',
+    UNIQUE KEY uk_external_order_order_no (order_no),
+    KEY idx_external_order_status_poll (status, next_poll_at, id),
+    KEY idx_external_order_created (created_at, id),
+    KEY idx_external_order_goods (goods_id, created_at),
+    KEY idx_external_order_account (account, created_at)
+) COMMENT='外部订单主表';
+CREATE TABLE IF NOT EXISTS external_order_attempt (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '尝试ID',
+    order_id BIGINT UNSIGNED NOT NULL COMMENT '订单ID',
+    order_no VARCHAR(40) NOT NULL COMMENT '订单号',
+    attempt_no INT NOT NULL COMMENT '尝试序号',
+    channel_binding_id BIGINT UNSIGNED NOT NULL COMMENT '商品渠道绑定ID',
+    platform_account_id BIGINT UNSIGNED NOT NULL COMMENT '平台账号ID',
+    platform_account_name VARCHAR(128) NOT NULL DEFAULT '' COMMENT '平台账号名称快照',
+    provider_code VARCHAR(32) NOT NULL COMMENT '适配器编码',
+    supplier_goods_no VARCHAR(128) NOT NULL COMMENT '上游商品编号',
+    supplier_goods_name VARCHAR(255) NOT NULL DEFAULT '' COMMENT '上游商品名称快照',
+    supplier_us_order_no VARCHAR(64) NOT NULL COMMENT '上游商家单号',
+    supplier_order_no VARCHAR(128) NOT NULL DEFAULT '' COMMENT '上游订单号',
+    supplier_status VARCHAR(32) NOT NULL DEFAULT '' COMMENT '上游原始状态',
+    refund_status VARCHAR(32) NOT NULL DEFAULT '' COMMENT '上游退款状态',
+    request_snapshot TEXT NOT NULL COMMENT '请求快照',
+    response_snapshot TEXT NOT NULL COMMENT '响应快照',
+    receipt VARCHAR(512) NOT NULL DEFAULT '' COMMENT '上游回执',
+    status VARCHAR(32) NOT NULL COMMENT '尝试状态',
+    submitted_at DATETIME NULL COMMENT '提交时间',
+    last_checked_at DATETIME NULL COMMENT '最近查单时间',
+    created_at DATETIME NOT NULL COMMENT '创建时间',
+    updated_at DATETIME NOT NULL COMMENT '更新时间',
+    UNIQUE KEY uk_external_order_attempt_order_no (order_id, attempt_no),
+    UNIQUE KEY uk_external_order_attempt_supplier_us (provider_code, supplier_us_order_no),
+    KEY idx_external_order_attempt_order (order_id, id),
+    KEY idx_external_order_attempt_platform (platform_account_id, created_at)
+) COMMENT='外部订单渠道尝试表';
 CREATE TABLE IF NOT EXISTS system_config (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '配置ID',
     config_key VARCHAR(64) NOT NULL UNIQUE COMMENT '配置键',

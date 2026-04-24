@@ -2,6 +2,7 @@ package supplierprovider
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -50,6 +51,97 @@ func (kakayunProvider) ParseBalanceResponse(statusCode int, body []byte) (decima
 		return decimal.Decimal{}, "响应解析失败", err
 	}
 	return parseSuccessBalance(payload, "1", "data", "money")
+}
+
+func (kakayunProvider) BuildCreateOrderRequest(ctx context.Context, account AccountConfig, now time.Time, baseURL string, input CreateOrderInput) (*http.Request, error) {
+	timestamp := now.Unix()
+	payload := map[string]any{
+		"userid":    strings.TrimSpace(account.TokenID),
+		"timestamp": timestamp,
+		"goodsid":   strings.TrimSpace(input.SupplierGoodsNo),
+		"buynum":    input.Quantity,
+		"attach":    strings.TrimSpace(input.Account),
+		"usorderno": strings.TrimSpace(input.SupplierUSOrderNo),
+	}
+	payload["sign"] = kakayunSign(payload, account.SecretKey)
+	return newJSONRequest(ctx, strings.TrimRight(baseURL, "/")+"/dockapiv3/order/create", payload, map[string]string{
+		"User-Agent": "curl/7.81.0",
+	})
+}
+
+func (kakayunProvider) ParseCreateOrderResponse(statusCode int, body []byte) (CreateOrderResult, error) {
+	raw := string(body)
+	payload, err := decodeJSONMap(body)
+	if err != nil {
+		return CreateOrderResult{Status: SupplierOrderStatusUnknown, Raw: raw}, ErrSupplierUnknownResponse
+	}
+	if codeString(payload["code"]) != "1" {
+		message := responseMessage(payload)
+		if message == "" {
+			message = "云发卡下单失败"
+		}
+		return CreateOrderResult{Accepted: false, Status: SupplierOrderStatusFailed, Message: message, Raw: raw}, errors.New(message)
+	}
+	data := nestedMap(payload, "data")
+	return CreateOrderResult{
+		Accepted:          true,
+		Status:            SupplierOrderStatusProcessing,
+		SupplierOrderNo:   codeString(data["orderno"]),
+		SupplierUSOrderNo: codeString(data["usorderno"]),
+		SupplierStatus:    SupplierOrderStatusProcessing,
+		Message:           responseMessage(payload),
+		Raw:               raw,
+	}, nil
+}
+
+func (kakayunProvider) BuildQueryOrderRequest(ctx context.Context, account AccountConfig, now time.Time, baseURL string, input QueryOrderInput) (*http.Request, error) {
+	timestamp := now.Unix()
+	payload := map[string]any{
+		"userid":    strings.TrimSpace(account.TokenID),
+		"timestamp": timestamp,
+		"orderno":   strings.TrimSpace(input.SupplierOrderNo),
+		"usorderno": strings.TrimSpace(input.SupplierUSOrderNo),
+	}
+	payload["sign"] = kakayunSign(payload, account.SecretKey)
+	return newJSONRequest(ctx, strings.TrimRight(baseURL, "/")+"/dockapiv3/order/get", payload, map[string]string{
+		"User-Agent": "curl/7.81.0",
+	})
+}
+
+func (kakayunProvider) ParseQueryOrderResponse(statusCode int, body []byte) (QueryOrderResult, error) {
+	raw := string(body)
+	payload, err := decodeJSONMap(body)
+	if err != nil {
+		return QueryOrderResult{Status: SupplierOrderStatusUnknown, Raw: raw}, ErrSupplierUnknownResponse
+	}
+	if codeString(payload["code"]) != "1" {
+		message := responseMessage(payload)
+		if message == "" {
+			message = "云发卡查单失败"
+		}
+		return QueryOrderResult{Status: SupplierOrderStatusUnknown, Message: message, Raw: raw}, errors.New(message)
+	}
+	data := nestedMap(payload, "data")
+	statusCodeText := codeString(data["status"])
+	status := SupplierOrderStatusUnknown
+	switch statusCodeText {
+	case "2", "3":
+		status = SupplierOrderStatusProcessing
+	case "4":
+		status = SupplierOrderStatusFailed
+	case "5":
+		status = SupplierOrderStatusSuccess
+	}
+	return QueryOrderResult{
+		Status:            status,
+		SupplierOrderNo:   codeString(data["orderno"]),
+		SupplierUSOrderNo: codeString(data["usorderno"]),
+		SupplierStatus:    statusCodeText,
+		RefundStatus:      codeString(data["refundstatus"]),
+		Receipt:           codeString(data["receipt"]),
+		Message:           responseMessage(payload),
+		Raw:               raw,
+	}, nil
 }
 
 func (kayixinProvider) Code() string { return "kayixin" }
