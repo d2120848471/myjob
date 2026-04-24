@@ -1,34 +1,19 @@
 # Contract Tests
 
-这里放接口契约和核心业务流测试。
+契约测试用于约束接口兼容、协议布局和核心业务流。完整测试策略见 `../../docs/testing.md`。
 
-## 当前覆盖范围
-
-- 扁平 `api/*.go` 协议目录约束
-- `api/settings.go` 薄入口与 `api/settings_sms.go`、`api/settings_system.go` 的设置协议拆分约束
-- `api/product_goods_channel.go` 与 `api/product_goods_channel_config.go` 的商品渠道绑定 / 库存配置协议拆分约束
-- 禁止继续引用历史嵌套协议包路径
-- OpenAPI `/api.json` 和 Swagger `/swagger/` 暴露
-- 统一响应字段 `code / message / data`
-- 账号密码登录、短信二验、`me`、退出登录
-- 品牌、行业、本地上传主流程
-- 商品模板管理、购买数量限制策略、商品管理主流程
-- 商品列表渠道摘要、商品库存配置详情/保存与商品渠道绑定弹窗的列表、新增、编辑、删除、自动改价主流程
-- 第三方对接平台账号与余额刷新契约
-- 开放订单创建/查单接口、后台订单列表权限、筛选和统计
-- 员工、用户组、主体、短信配置、系统参数配置、日志查询主流程
-- 短信发送失败时的 Redis 清理行为
-
-## 当前运行方式
-
-契约测试会启动测试态应用，底层默认使用：
-
-- MySQL 测试库 `admin_test`（启动时自动创建，并在每次启动前清空旧表）
-- `miniredis`
-- mock 短信 sender
-
-运行命令：
+## 运行
 
 ```bash
 go test ./test/contract -count=1 -timeout 60s
 ```
+
+## 当前重点
+
+- 扁平 `api/*.go` 协议目录。
+- OpenAPI `/api.json` 和 Swagger `/swagger/`。
+- 统一响应 `code / message / data`。
+- 登录、短信二验、权限和核心后台业务流。
+- 商品、第三方对接、开放订单和后台订单主流程。
+
+契约测试会启动测试态应用，使用 MySQL 测试库 `admin_test`、`miniredis` 和 mock 短信 sender。
