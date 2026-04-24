@@ -180,7 +180,7 @@
 
 文档重构完成后至少执行：
 
-- `go test ./test/contract -run TestAPILayout -count=1 -timeout 60s`：确认被文档强调的 API 文件布局约束仍然真实。
+- `go test ./test/contract -run TestAPIProtocolLayout -count=1 -timeout 60s`：确认被文档强调的 API 文件布局约束仍然真实。
 - `go test ./test/contract -run TestCIWorkflow -count=1 -timeout 60s`：确认 CI/lint 文档口径和 workflow 约束一致。
 - `go test ./... -count=1 -timeout 60s`：全量回归，确保文档变更没有破坏嵌入式路径或契约检查。
 - `go build ./...`：构建验证。

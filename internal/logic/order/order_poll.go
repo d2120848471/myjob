@@ -290,6 +290,8 @@ func (l *OrderLogic) recoverStuckSubmittingOrder(ctx context.Context, order enti
 	attemptNo := order.AttemptCount + 1
 	supplierUSOrderNo := order.OrderNo + "-T" + intToString(attemptNo)
 	now := l.core.Now()
+	// 恢复后的订单需要在本轮继续查单；MySQL DATETIME 无小数秒时可能把 now 四舍五入到下一秒。
+	immediatePollAt := now.Add(-time.Second)
 	costAmount := multiplyMoneyByQuantity(candidate.CostPrice, order.Quantity)
 	profitAmount := subtractMoney(order.OrderAmount, costAmount)
 	receipt := "提交状态异常，转入查单确认"
@@ -303,7 +305,7 @@ WHERE id = ?
   AND status = ?
   AND (current_attempt_id IS NULL OR current_attempt_id = 0)
   AND next_poll_at IS NULL
-`, OrderStatusUnknown, attemptNo, receipt, now, costAmount, profitAmount, now, order.ID, OrderStatusProcessing)
+`, OrderStatusUnknown, attemptNo, receipt, immediatePollAt, costAmount, profitAmount, now, order.ID, OrderStatusProcessing)
 		if err != nil {
 			return err
 		}

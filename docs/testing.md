@@ -1,174 +1,124 @@
 # 测试说明
 
-## 当前测试分层
+## 推荐默认命令
 
-### 1. 契约测试
+```bash
+go test ./... -count=1 -timeout 60s
+go build ./...
+golangci-lint run --timeout=5m
+```
 
-契约测试位于 `test/contract/`，当前是最主要的接口回归入口。
-它通过 `NewTestApplication()` 启动应用，底层使用：
+`go test ./...` 会覆盖包内测试、契约测试和默认可运行的集成测试。部分 live 或真实配置测试需要显式环境变量。
 
-- MySQL 测试库 `admin_test`（启动时自动创建，并在每次启动前清空旧表）
-- `miniredis`
-- `mock` 短信 sender
+## 契约测试
 
-当前已覆盖的重点包括：
+目录：`test/contract/`
 
-- 扁平 `api/*.go` 协议目录约束
-- 禁止继续引用历史嵌套协议包路径
-- OpenAPI / Swagger 暴露
-- 统一响应 `message` 字段
-- 登录 / 短信二验 / `me` / 退出登录
-- 品牌三级结构、行业关联约束与本地上传主流程
-- 商品模板验证方式枚举、列表筛选、增删改、批删与非法 ID 校验
-- 商品列表渠道摘要、商品库存配置详情/保存、商品渠道绑定弹窗、表单选项、新增、编辑、删除与单条自动改价
-- 第三方对接 OpenAPI 路径暴露、菜单种子同步、平台账号 CRUD、启停级联关停绑定、余额刷新与软删重建回归
-- 开放订单创建/查单、后台订单列表权限、筛选和统计
-- 后台订单快捷时间口径：`month` 为本月，`three_months` 为本月及前两个月自然月
-- 员工、用户组、主体、短信配置、系统参数配置、日志查询主流程
-- 短信发送失败时 Redis 清理行为
+用途：
 
-运行命令：
+- 约束扁平 `api/*.go` 协议目录。
+- 防止回退到历史嵌套协议包。
+- 验证 OpenAPI / Swagger 暴露。
+- 验证统一响应 `code / message / data`。
+- 覆盖登录、短信二验、权限、主要后台业务、开放订单和后台订单主流程。
+
+运行：
 
 ```bash
 go test ./test/contract -count=1 -timeout 60s
 ```
 
-### 2. 集成测试
+契约测试通过 `NewTestApplication()` 启动测试态应用，底层使用 MySQL 测试库 `admin_test`、`miniredis` 和 mock 短信 sender。
 
-集成测试位于 `test/integration/`。
-当前已经包含两类入口，不再只有 runtime smoke test。
+## 集成测试
 
-它当前验证的是：
+目录：`test/integration/`
 
-- 按真实配置创建应用
-- 启动 HTTP server
-- 使用超级管理员密码完成一次 `/api/admin/auth/login` 请求
-- 确认接口能返回成功响应
-- 第三方平台余额刷新在主域名 / 备用域名 / `https` 降级下的真实执行顺序
-- 业务失败和传输失败的分流、余额日志脱敏与 trace_id 落库
-- 订单 worker 对待提交订单的云发卡提交、`code=9999` 未知状态、查单成功、失败后窗口内补单和异常提交状态恢复行为
+默认可运行的集成测试使用 `httptest.Server` 模拟第三方平台或云发卡，不依赖真实外部账号。
 
-其中 `supplier-platform` 集成测试默认使用 `httptest.Server` 模拟平台，不依赖真实外部账号：
+运行：
 
 ```bash
-go test ./test/integration -run 'TestSupplierPlatformRefresh_' -count=1 -timeout 60s
+go test ./test/integration -count=1 -timeout 60s
 ```
 
-订单 worker 集成测试同样使用 `httptest.Server` 模拟云发卡，不依赖真实外部账号：
+订单 worker 聚焦回归：
 
 ```bash
 go test ./test/integration -run TestOrderWorker -count=1 -timeout 60s
 ```
 
-它需要显式开启：
+runtime smoke test 需要显式开启：
 
 ```bash
 export MYJOB_RUN_INTEGRATION=1
 go test ./test/integration -count=1 -timeout 60s
 ```
 
-它会使用本地默认超管 `admin / abc123` 完成登录烟测。
-
-### 2.1 第三方平台 live 验证
-
-第三方平台余额刷新还支持显式开启 live 验证，用真实 `domain/token_id/secret_key` 跑一次 `/api/admin/supplier-platforms/{id}/balance/refresh`：
+第三方平台 live 验证需要真实账号并显式开启：
 
 ```bash
 export MYJOB_RUN_SUPPLIER_LIVE=1
 export SUPPLIER_LIVE_TYPE_ID=35
-export SUPPLIER_LIVE_NAME='木木（星权益未税）'
-export SUPPLIER_LIVE_DOMAIN=xqy.api.xqy1.cn
-export SUPPLIER_LIVE_BACKUP_DOMAIN=xqy.api.xqy1.cn
-export SUPPLIER_LIVE_TOKEN_ID=74
-export SUPPLIER_LIVE_SECRET_KEY='***'
+export SUPPLIER_LIVE_NAME='示例平台'
+export SUPPLIER_LIVE_DOMAIN=example.com
+export SUPPLIER_LIVE_BACKUP_DOMAIN=example.com
+export SUPPLIER_LIVE_TOKEN_ID=1008612345
+export SUPPLIER_LIVE_SECRET_KEY=secret
 go test ./test/integration -run TestSupplierPlatformRefresh_LiveProviderBalance -count=1 -v
 ```
 
-这个入口只在显式设置环境变量时执行，适合做单平台连通性核验，不作为默认 CI 套件。
+## 包内测试
 
-### 3. 包内测试
+包内测试集中在基础能力和业务逻辑边界，例如：
 
-当前仓库里已经有的包内测试主要集中在基础能力层，例如：
-
+- `internal/app`
 - `internal/library/region`
 - `internal/library/sms`
-- `internal/app/mysql_schema_comment_test.go`：静态校验 MySQL `CREATE TABLE` 是否同时声明表注释和字段注释，并检查 `manifest/sql/001_schema.sql`、`manifest/sql/005_supplier_platform.sql`、`manifest/sql/006_product_goods_channel_binding.sql`、`manifest/sql/007_product_goods_channel_config.sql` 与 `internal/app/schema.go` 不要在注释约束上漂移
+- `internal/library/supplierplatform/provider`
+- `internal/logic/admin`
+- `internal/logic/order`
 
-适用于纯逻辑或基础库的回归验证。
-
-## 推荐执行顺序
-
-### 日常改动
-
-```bash
-go test ./... -count=1 -timeout 60s
-```
-
-仓库 CI 的 `test` job 会额外启动一个本地 MySQL service，监听 `127.0.0.1:3306`，
-并预建 `admin` 库，口径与默认 DSN `root:root123456@tcp(127.0.0.1:3306)/admin` 保持一致。
-这样 `NewTestCore()` 在远端也能自动创建并重置 `admin_test`，不会因为缺少数据库服务把整套测试直接跑红。
-
-并建议在提交前执行一次 lint（与 CI 对齐）：
-
-```bash
-golangci-lint run --timeout=5m
-```
-
-CI 里会使用增量参数（`--new-from-rev=origin/main`）减少无关历史问题的干扰。
-
-### 影响 MySQL schema 或注释时
-
-先做静态校验：
+schema 和注释约束：
 
 ```bash
 go test ./internal/app -run 'Test(MySQLSchemaIncludesTableAndColumnComments|ManifestMySQLSchemaFilesIncludeTableAndColumnComments)' -count=1 -timeout 60s
 ```
 
-再做本地重建验收：
-
-```bash
-docker compose down -v
-docker compose up -d mysql redis
-go run .
-docker exec $(docker compose ps -q mysql) mysql -uroot -proot123456 -D admin -e "SELECT TABLE_NAME, TABLE_COMMENT FROM information_schema.TABLES WHERE TABLE_SCHEMA='admin' AND TABLE_COMMENT = '';"
-docker exec $(docker compose ps -q mysql) mysql -uroot -proot123456 -D admin -e "SELECT TABLE_NAME, COLUMN_NAME, COLUMN_COMMENT FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='admin' AND COLUMN_COMMENT = '';"
-```
-
-如果两个查询都没有返回记录，说明当前库的表注释和字段注释已经完整落库。
-
-### 影响接口兼容时
-
-```bash
-go test ./test/contract -count=1 -timeout 60s
-```
-
-订单相关接口变更可先跑聚焦集合：
-
-```bash
-go test ./test/contract -run 'TestOpenOrder|TestAdminOrder|TestOrderManage' -count=1 -timeout 60s
-```
-
-云发卡订单 provider 变更可先跑：
+云发卡 provider 聚焦回归：
 
 ```bash
 go test ./internal/library/supplierplatform/provider -run TestKakayunOrderProvider -count=1 -timeout 60s
 ```
 
-### 影响真实配置或启动链路时
+## CI 与 lint
+
+CI workflow 位于 `.github/workflows/ci.yml`：
+
+- `test` job 启动 MySQL 8.4 service，执行 `go test ./... -count=1 -timeout 60s` 和 `go build ./...`。
+- `lint` job 执行 `golangci-lint`，参数包含 `--timeout=5m --new-from-rev=origin/main`。
+
+`.golangci.yml` 当前启用：
+
+- `govet`
+- `staticcheck`
+- `ineffassign`
+- `unused`
+- `typecheck`
+
+本地建议在提交前执行：
 
 ```bash
-export MYJOB_RUN_INTEGRATION=1
-go test ./test/integration -count=1 -timeout 60s
+golangci-lint run --timeout=5m
 ```
 
 ## 当前认知边界
 
-目前文档只描述已经存在的测试覆盖，不把“建议补的测试”写成“已经覆盖”。
+文档只描述已经存在的测试覆盖，不把建议补充项写成已经覆盖。
 
-当前尚未形成完整外部依赖闭环测试集的内容包括但不限于：
+当前尚未形成完整外部依赖闭环测试集的内容包括：
 
-- 更细的 MySQL / Redis 行为断言
-- 短信 provider 的真实发送链路回归
-- 更完整的跨重启验证和多平台批量 live 回归
-
-这些仍属于后续可继续扩充的范围，而不是当前已有事实。
+- 真实短信发送链路回归。
+- 跨重启行为验证。
+- 多平台批量 live 回归。
+- 更细的 MySQL / Redis 行为断言。
