@@ -17,6 +17,7 @@ import (
 const (
 	openOrderGoodsTypeDirectRecharge = "direct_recharge"
 	openOrderSupplyTypeChannel       = "channel"
+	maxOpenOrderCreateAttempts       = 3
 )
 
 type openOrderGoods struct {
@@ -59,7 +60,6 @@ func (l *OrderLogic) CreateOpenOrder(ctx context.Context, req *adminapi.OpenOrde
 	if len(candidates) == 0 {
 		return nil, apiErr(consts.CodeBadRequest, "暂无可用云发卡渠道")
 	}
-	orderNo := l.generateOrderNo()
 	now := l.core.Now()
 	unitPrice, err := normalizeOrderMoney(goods.DefaultSellPrice)
 	if err != nil {
@@ -69,13 +69,25 @@ func (l *OrderLogic) CreateOpenOrder(ctx context.Context, req *adminapi.OpenOrde
 	if err != nil {
 		return nil, apiErr(consts.CodeBadRequest, "订单金额计算失败")
 	}
-	if _, err = l.core.DB().Exec(ctx, `
+	orderNo := ""
+	for attempt := 0; attempt < maxOpenOrderCreateAttempts; attempt++ {
+		orderNo = l.nextOrderNo()
+		if _, err = l.core.DB().Exec(ctx, `
 INSERT INTO external_order (
     order_no, goods_id, goods_code, goods_name, goods_type, supply_type, subject_id, subject_name,
     has_tax, account, quantity, unit_price, order_amount, cost_amount, profit_amount,
     status, attempt_count, created_at, updated_at
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '0.0000', ?, ?, 0, ?, ?)
 `, orderNo, goods.ID, goods.GoodsCode, goods.Name, goods.GoodsType, goods.SupplyType, nullableInt64Arg(goods.SubjectID), goods.SubjectName, goods.HasTax, account, req.Quantity, unitPrice, orderAmount, orderAmount, OrderStatusPendingSubmit, now, now); err != nil {
+			if isOrderNoUniqueConflict(err) {
+				continue
+			}
+			return nil, apiErr(consts.CodeInternalError, "订单创建失败")
+		}
+		err = nil
+		break
+	}
+	if err != nil {
 		return nil, apiErr(consts.CodeInternalError, "订单创建失败")
 	}
 	l.TriggerSubmit(orderNo)
@@ -85,6 +97,13 @@ INSERT INTO external_order (
 		StatusText: orderStatusText(OrderStatusPendingSubmit),
 		CreatedAt:  formatAppTime(now),
 	}, nil
+}
+
+func (l *OrderLogic) nextOrderNo() string {
+	if l.orderNoGenerator != nil {
+		return l.orderNoGenerator()
+	}
+	return l.generateOrderNo()
 }
 
 func (l *OrderLogic) loadOpenOrderGoods(ctx context.Context, goodsCode string) (openOrderGoods, error) {
@@ -133,6 +152,14 @@ func nullableInt64Arg(value sql.NullInt64) any {
 		return nil
 	}
 	return value.Int64
+}
+
+func isOrderNoUniqueConflict(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "duplicate") || strings.Contains(message, "unique")
 }
 
 func normalizeOrderMoney(value string) (string, error) {

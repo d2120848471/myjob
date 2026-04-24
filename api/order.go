@@ -15,7 +15,7 @@ type OrderListReq struct {
 	IsCard     string `json:"is_card" dc:"是否卡密"`
 	StartTime  string `json:"start_time" dc:"创建开始时间"`
 	EndTime    string `json:"end_time" dc:"创建结束时间"`
-	QuickRange string `json:"quick_range" dc:"快捷时间：yesterday/today/week/month/three_months"`
+	QuickRange string `json:"quick_range" dc:"快捷时间：yesterday/today/week/month/three_months；month 为本月，three_months 为本月及前两个月自然月"`
 }
 
 // OrderListRes 返回后台订单列表、分页和统计。

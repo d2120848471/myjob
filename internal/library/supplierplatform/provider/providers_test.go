@@ -264,9 +264,35 @@ func TestKakayunOrderProviderParseCreateAndQuery(t *testing.T) {
 func TestKakayunOrderProviderNonJSONIsUnknown(t *testing.T) {
 	provider, ok := LookupOrder("kakayun")
 	require.True(t, ok)
-	_, err := provider.ParseCreateOrderResponse(http.StatusOK, []byte(`<html>bad gateway</html>`))
+	result, err := provider.ParseCreateOrderResponse(http.StatusOK, []byte(`<html>bad gateway</html>`))
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrSupplierUnknownResponse)
+	require.Equal(t, SupplierOrderStatusUnknown, result.Status)
+}
+
+func TestKakayunOrderProviderCreateCode9999IsUnknown(t *testing.T) {
+	provider, ok := LookupOrder("kakayun")
+	require.True(t, ok)
+
+	result, err := provider.ParseCreateOrderResponse(http.StatusOK, []byte(`{"code":9999,"message":"系统繁忙","data":{"usorderno":"O20260424153000123456-T1"}}`))
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrSupplierUnknownResponse)
+	require.False(t, result.Accepted)
+	require.Equal(t, SupplierOrderStatusUnknown, result.Status)
+	require.Equal(t, "9999", result.SupplierStatus)
+	require.Equal(t, "系统繁忙", result.Message)
+	require.Equal(t, "O20260424153000123456-T1", result.SupplierUSOrderNo)
+}
+
+func TestKakayunOrderProviderCreateExplicitFailureIsFailed(t *testing.T) {
+	provider, ok := LookupOrder("kakayun")
+	require.True(t, ok)
+
+	result, err := provider.ParseCreateOrderResponse(http.StatusOK, []byte(`{"code":0,"message":"库存不足"}`))
+	require.Error(t, err)
+	require.False(t, result.Accepted)
+	require.Equal(t, SupplierOrderStatusFailed, result.Status)
+	require.Equal(t, "库存不足", result.Message)
 }
 
 func TestProvidersParseBalanceResponse(t *testing.T) {

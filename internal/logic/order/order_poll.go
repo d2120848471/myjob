@@ -28,6 +28,9 @@ type queryPollResult struct {
 
 // PollDueOnce 扫描一批到期未终态订单，并查询当前云发卡提交记录。
 func (l *OrderLogic) PollDueOnce(ctx context.Context) error {
+	if err := l.recoverStuckSubmittingOrders(ctx); err != nil {
+		return err
+	}
 	rows := make([]entity.ExternalOrder, 0)
 	if err := l.core.DB().GetCore().GetScan(ctx, &rows, `
 SELECT *
@@ -47,7 +50,10 @@ LIMIT 20
 }
 
 func (l *OrderLogic) pollOrder(ctx context.Context, order entity.ExternalOrder) error {
-	attempt, err := l.loadOrderAttempt(ctx, order.CurrentAttemptID)
+	if !order.CurrentAttemptID.Valid || order.CurrentAttemptID.Int64 <= 0 {
+		return l.recoverStuckSubmittingOrder(ctx, order)
+	}
+	attempt, err := l.loadOrderAttempt(ctx, order.CurrentAttemptID.Int64)
 	if err != nil {
 		return err
 	}
@@ -238,4 +244,96 @@ func (l *OrderLogic) loadOrderAttempt(ctx context.Context, attemptID int64) (ent
 	attempt := entity.ExternalOrderAttempt{}
 	err := l.core.DB().GetCore().GetScan(ctx, &attempt, `SELECT * FROM external_order_attempt WHERE id = ?`, attemptID)
 	return attempt, err
+}
+
+func (l *OrderLogic) recoverStuckSubmittingOrders(ctx context.Context) error {
+	rows := make([]entity.ExternalOrder, 0)
+	if err := l.core.DB().GetCore().GetScan(ctx, &rows, `
+SELECT *
+FROM external_order
+WHERE status = ?
+  AND (current_attempt_id IS NULL OR current_attempt_id = 0)
+  AND next_poll_at IS NULL
+ORDER BY updated_at ASC, id ASC
+LIMIT 20
+`, OrderStatusProcessing); err != nil {
+		return err
+	}
+	for _, row := range rows {
+		if err := l.recoverStuckSubmittingOrder(ctx, row); err != nil {
+			continue
+		}
+	}
+	return nil
+}
+
+func (l *OrderLogic) recoverStuckSubmittingOrder(ctx context.Context, order entity.ExternalOrder) error {
+	attempted, err := l.loadAttemptedBindingIDs(ctx, order.ID)
+	if err != nil {
+		return err
+	}
+	candidates, err := l.loadCandidateChannels(ctx, order.GoodsID, attempted)
+	if err != nil {
+		return err
+	}
+	if len(candidates) == 0 {
+		return l.markOrderFailed(ctx, order.ID, 0, "提交状态异常且暂无可用云发卡渠道")
+	}
+	config, err := l.loadReorderConfig(ctx, order.GoodsID)
+	if err != nil {
+		return err
+	}
+	candidate := selectCandidate(candidates, attempted, config.OrderStrategy, l.core.Now())
+	if candidate.BindingID == 0 {
+		return l.markOrderFailed(ctx, order.ID, 0, "提交状态异常且暂无可用云发卡渠道")
+	}
+	attemptNo := order.AttemptCount + 1
+	supplierUSOrderNo := order.OrderNo + "-T" + intToString(attemptNo)
+	now := l.core.Now()
+	costAmount := multiplyMoneyByQuantity(candidate.CostPrice, order.Quantity)
+	profitAmount := subtractMoney(order.OrderAmount, costAmount)
+	receipt := "提交状态异常，转入查单确认"
+
+	return l.core.DB().Transaction(ctx, func(ctx context.Context, tx gdb.TX) error {
+		result, err := tx.Exec(`
+UPDATE external_order
+SET status = ?, attempt_count = ?, last_receipt = ?, next_poll_at = ?,
+    cost_amount = ?, profit_amount = ?, updated_at = ?
+WHERE id = ?
+  AND status = ?
+  AND (current_attempt_id IS NULL OR current_attempt_id = 0)
+  AND next_poll_at IS NULL
+`, OrderStatusUnknown, attemptNo, receipt, now, costAmount, profitAmount, now, order.ID, OrderStatusProcessing)
+		if err != nil {
+			return err
+		}
+		rows, err := result.RowsAffected()
+		if err != nil || rows == 0 {
+			return err
+		}
+		insertResult, err := tx.Exec(`
+INSERT INTO external_order_attempt (
+    order_id, order_no, attempt_no, channel_binding_id, platform_account_id, platform_account_name,
+    provider_code, supplier_goods_no, supplier_goods_name, supplier_us_order_no, supplier_order_no,
+    supplier_status, refund_status, request_snapshot, response_snapshot, receipt, status,
+    submitted_at, created_at, updated_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`, order.ID, order.OrderNo, attemptNo, candidate.BindingID, candidate.PlatformAccountID, candidate.PlatformAccountName,
+			candidate.ProviderCode, candidate.SupplierGoodsNo, candidate.SupplierGoodsName, supplierUSOrderNo, "",
+			"", "", "", "", receipt, OrderAttemptStatusUnknown,
+			nil, now, now)
+		if err != nil {
+			return err
+		}
+		attemptID, err := insertResult.LastInsertId()
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(`
+UPDATE external_order
+SET current_attempt_id = ?, updated_at = ?
+WHERE id = ?
+`, attemptID, now, order.ID)
+		return err
+	})
 }

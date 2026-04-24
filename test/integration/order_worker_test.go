@@ -196,6 +196,115 @@ func TestSubmitPendingOnceClaimsOrderBeforeCallingSupplier(t *testing.T) {
 	require.EqualValues(t, 1, requestCount.Load())
 }
 
+func TestOrderWorkerCreateCode9999BecomesUnknownAndPollsLater(t *testing.T) {
+	var queryCount atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/dockapiv3/order/create":
+			var payload map[string]any
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+			_, _ = w.Write([]byte(`{"code":9999,"message":"系统繁忙","data":{"usorderno":"` + payload["usorderno"].(string) + `"}}`))
+		case "/dockapiv3/order/get":
+			queryCount.Add(1)
+			var payload map[string]any
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+			_, _ = w.Write([]byte(`{"code":1,"message":"ok","data":{"orderno":"SD202604240007","usorderno":"` + payload["usorderno"].(string) + `","status":5,"refundstatus":0,"receipt":"成功"}}`))
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	h := newOrderIntegrationHarness(t)
+	orderNo := h.createPendingOpenOrderWithKakayunServer(t, server.URL)
+	require.NoError(t, h.orderService.SubmitPendingOnce(context.Background()))
+	order := h.loadOrder(t, orderNo)
+	require.Equal(t, "unknown", order.Status)
+	require.Equal(t, 1, order.AttemptCount)
+	require.EqualValues(t, 1, h.scalarInt(t, `SELECT COUNT(*) FROM external_order WHERE order_no = ? AND current_attempt_id IS NOT NULL AND next_poll_at IS NOT NULL`, orderNo))
+	attempt := h.loadCurrentAttempt(t, order.ID)
+	require.Equal(t, "unknown", attempt.Status)
+	require.Contains(t, attempt.SupplierUSOrderNo, "-T1")
+
+	h.forceOrderDueForPoll(t, orderNo)
+	require.NoError(t, h.orderService.PollDueOnce(context.Background()))
+	order = h.loadOrder(t, orderNo)
+	require.Equal(t, "success", order.Status)
+	require.EqualValues(t, 1, queryCount.Load())
+}
+
+func TestOrderWorkerDoesNotReorderOnUnknownCreate(t *testing.T) {
+	var createCount atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "/dockapiv3/order/create", r.URL.Path)
+		var payload map[string]any
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+		createCount.Add(1)
+		_, _ = w.Write([]byte(`{"code":9999,"message":"状态未知","data":{"usorderno":"` + payload["usorderno"].(string) + `"}}`))
+	}))
+	defer server.Close()
+
+	h := newOrderIntegrationHarness(t)
+	orderNo := h.createPendingOpenOrderWithTwoChannelsAndReorderWindow(t, server.URL, 10)
+	require.NoError(t, h.orderService.SubmitPendingOnce(context.Background()))
+	order := h.loadOrder(t, orderNo)
+	require.Equal(t, "unknown", order.Status)
+	require.Equal(t, 1, order.AttemptCount)
+	require.EqualValues(t, 1, createCount.Load())
+}
+
+func TestOrderWorkerRecoversStuckSubmittingOrder(t *testing.T) {
+	var createCount atomic.Int32
+	var queryCount atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/dockapiv3/order/create":
+			createCount.Add(1)
+			_, _ = w.Write([]byte(`{"code":1,"message":"下单成功","data":{"orderno":"unexpected","usorderno":"unexpected"}}`))
+		case "/dockapiv3/order/get":
+			queryCount.Add(1)
+			_, _ = w.Write([]byte(`{"code":9999,"message":"订单仍需确认"}`))
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	h := newOrderIntegrationHarness(t)
+	orderNo := h.createPendingOpenOrderWithKakayunServer(t, server.URL)
+	_, err := h.app.Core().DB().Exec(context.Background(), `
+UPDATE external_order
+SET status = 'processing', current_attempt_id = NULL, next_poll_at = NULL, updated_at = ?
+WHERE order_no = ?
+`, h.app.Core().Now(), orderNo)
+	require.NoError(t, err)
+
+	require.NoError(t, h.orderService.PollDueOnce(context.Background()))
+	order := h.loadOrder(t, orderNo)
+	require.Equal(t, "unknown", order.Status)
+	require.Equal(t, 1, order.AttemptCount)
+	require.EqualValues(t, 1, h.scalarInt(t, `SELECT COUNT(*) FROM external_order WHERE order_no = ? AND current_attempt_id IS NOT NULL AND next_poll_at IS NOT NULL`, orderNo))
+	attempt := h.loadCurrentAttempt(t, order.ID)
+	require.Equal(t, "unknown", attempt.Status)
+	require.Equal(t, orderNo+"-T1", attempt.SupplierUSOrderNo)
+	require.EqualValues(t, 0, createCount.Load())
+	require.EqualValues(t, 1, queryCount.Load())
+}
+
+func TestExternalOrderNullableFieldsScanSafely(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"code":1,"message":"noop"}`))
+	}))
+	defer server.Close()
+
+	h := newOrderIntegrationHarness(t)
+	orderNo := h.createPendingOpenOrderWithKakayunServer(t, server.URL)
+	var order entity.ExternalOrder
+	require.NoError(t, h.app.Core().DB().GetCore().GetScan(context.Background(), &order, `SELECT * FROM external_order WHERE order_no = ?`, orderNo))
+	require.Equal(t, orderNo, order.OrderNo)
+	require.Equal(t, "pending_submit", order.Status)
+}
+
 func (h *orderIntegrationHarness) request(method, path string, body any, token string) supplierAPIEnvelope {
 	var reader *bytes.Reader
 	if body == nil {
@@ -450,4 +559,11 @@ func (h *orderIntegrationHarness) loadCurrentAttempt(t *testing.T, orderID int64
 	attempt := entity.ExternalOrderAttempt{}
 	require.NoError(t, h.app.Core().DB().GetCore().GetScan(context.Background(), &attempt, `SELECT * FROM external_order_attempt WHERE order_id = ? ORDER BY id DESC LIMIT 1`, orderID))
 	return attempt
+}
+
+func (h *orderIntegrationHarness) scalarInt(t *testing.T, query string, args ...any) int64 {
+	t.Helper()
+	value, err := h.app.Core().DB().GetCore().GetValue(context.Background(), query, args...)
+	require.NoError(t, err)
+	return value.Int64()
 }

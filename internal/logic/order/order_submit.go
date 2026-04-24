@@ -3,11 +3,13 @@ package orderlogic
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	runtimeapp "myjob/internal/app"
 	supplierprovider "myjob/internal/library/supplierplatform/provider"
@@ -42,12 +44,15 @@ LIMIT 20
 `, OrderStatusPendingSubmit); err != nil {
 		return err
 	}
+	var firstErr error
 	for _, row := range rows {
 		if err := l.submitOrder(ctx, row); err != nil {
-			continue
+			if firstErr == nil {
+				firstErr = err
+			}
 		}
 	}
-	return nil
+	return firstErr
 }
 
 func (l *OrderLogic) submitOrder(ctx context.Context, order entity.ExternalOrder) error {
@@ -80,7 +85,7 @@ func (l *OrderLogic) submitOrder(ctx context.Context, order entity.ExternalOrder
 	}
 	attemptNo := order.AttemptCount + 1
 	supplierUSOrderNo := order.OrderNo + "-T" + intToString(attemptNo)
-	claimed, err := l.claimPendingOrderForSubmit(ctx, order)
+	attempt, claimed, err := l.claimOrderWithPendingAttempt(ctx, order, candidate, attemptNo, supplierUSOrderNo)
 	if err != nil || !claimed {
 		return err
 	}
@@ -101,14 +106,13 @@ func (l *OrderLogic) submitOrder(ctx context.Context, order entity.ExternalOrder
 	if strings.TrimSpace(result.SupplierUSOrderNo) == "" {
 		result.SupplierUSOrderNo = supplierUSOrderNo
 	}
-	attempt, err := l.persistSubmitResult(ctx, order, candidate, attemptNo, result)
-	if err != nil {
+	if err := l.applySubmitResultToAttempt(ctx, order, candidate, attempt, attemptNo, result); err != nil {
 		return err
 	}
 	if result.OrderStatus == OrderStatusFailed {
 		nextOrder := order
 		nextOrder.Status = OrderStatusFailed
-		nextOrder.CurrentAttemptID = attempt.ID
+		nextOrder.CurrentAttemptID = sql.NullInt64{Int64: attempt.ID, Valid: true}
 		nextOrder.AttemptCount = attemptNo
 		return l.handleAttemptFailed(ctx, nextOrder, attempt, defaultOrderMessage(result.Receipt, result.Message))
 	}
@@ -201,14 +205,11 @@ func (l *OrderLogic) handleAttemptFailed(ctx context.Context, order entity.Exter
 	return l.submitOrder(ctx, order)
 }
 
-func (l *OrderLogic) persistSubmitResult(ctx context.Context, order entity.ExternalOrder, candidate orderChannelCandidate, attemptNo int, result createSubmitResult) (entity.ExternalOrderAttempt, error) {
+func (l *OrderLogic) claimOrderWithPendingAttempt(ctx context.Context, order entity.ExternalOrder, candidate orderChannelCandidate, attemptNo int, supplierUSOrderNo string) (entity.ExternalOrderAttempt, bool, error) {
 	now := l.core.Now()
 	costAmount := multiplyMoneyByQuantity(candidate.CostPrice, order.Quantity)
 	profitAmount := subtractMoney(order.OrderAmount, costAmount)
-	nextPollAt := any(nil)
-	if result.OrderStatus == OrderStatusProcessing || result.OrderStatus == OrderStatusUnknown {
-		nextPollAt = now.Add(pollIntervalDuration(l.core.Config().OpenOrder.PollIntervalSeconds))
-	}
+	nextPollAt := now.Add(pollIntervalDuration(l.core.Config().OpenOrder.PollIntervalSeconds))
 	attempt := entity.ExternalOrderAttempt{
 		OrderID:             order.ID,
 		OrderNo:             order.OrderNo,
@@ -219,19 +220,17 @@ func (l *OrderLogic) persistSubmitResult(ctx context.Context, order entity.Exter
 		ProviderCode:        candidate.ProviderCode,
 		SupplierGoodsNo:     candidate.SupplierGoodsNo,
 		SupplierGoodsName:   candidate.SupplierGoodsName,
-		SupplierUSOrderNo:   result.SupplierUSOrderNo,
-		SupplierOrderNo:     result.SupplierOrderNo,
-		SupplierStatus:      result.SupplierStatus,
-		RefundStatus:        result.RefundStatus,
-		RequestSnapshot:     result.RequestSnapshot,
-		ResponseSnapshot:    result.ResponseSnapshot,
-		Receipt:             result.Receipt,
-		Status:              result.AttemptStatus,
-		SubmittedAt:         now,
+		SupplierUSOrderNo:   supplierUSOrderNo,
+		Receipt:             "等待上游提交结果",
+		Status:              OrderAttemptStatusPending,
 		CreatedAt:           now,
 		UpdatedAt:           now,
 	}
 	err := l.core.DB().Transaction(ctx, func(ctx context.Context, tx gdb.TX) error {
+		claimed, err := l.markOrderSubmitting(ctx, tx, order, attemptNo, nextPollAt, costAmount, profitAmount, now)
+		if err != nil || !claimed {
+			return err
+		}
 		insertResult, err := tx.Exec(`
 INSERT INTO external_order_attempt (
     order_id, order_no, attempt_no, channel_binding_id, platform_account_id, platform_account_name,
@@ -240,13 +239,78 @@ INSERT INTO external_order_attempt (
     submitted_at, created_at, updated_at
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `, order.ID, order.OrderNo, attemptNo, candidate.BindingID, candidate.PlatformAccountID, candidate.PlatformAccountName,
-			candidate.ProviderCode, candidate.SupplierGoodsNo, candidate.SupplierGoodsName, result.SupplierUSOrderNo, result.SupplierOrderNo,
-			result.SupplierStatus, result.RefundStatus, result.RequestSnapshot, result.ResponseSnapshot, result.Receipt, result.AttemptStatus,
-			now, now, now)
+			candidate.ProviderCode, candidate.SupplierGoodsNo, candidate.SupplierGoodsName, supplierUSOrderNo, "",
+			"", "", "", "", attempt.Receipt, OrderAttemptStatusPending,
+			nil, now, now)
 		if err != nil {
 			return err
 		}
 		attempt.ID, err = insertResult.LastInsertId()
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(`
+UPDATE external_order
+SET current_attempt_id = ?, updated_at = ?
+WHERE id = ?
+`, attempt.ID, now, order.ID)
+		return err
+	})
+	if err != nil {
+		return entity.ExternalOrderAttempt{}, false, err
+	}
+	if attempt.ID == 0 {
+		return entity.ExternalOrderAttempt{}, false, nil
+	}
+	return attempt, true, nil
+}
+
+func (l *OrderLogic) markOrderSubmitting(ctx context.Context, tx gdb.TX, order entity.ExternalOrder, attemptNo int, nextPollAt time.Time, costAmount, profitAmount string, now time.Time) (bool, error) {
+	sqlText := `
+UPDATE external_order
+SET status = ?, attempt_count = ?, last_receipt = ?, next_poll_at = ?,
+    cost_amount = ?, profit_amount = ?, updated_at = ?
+WHERE id = ?
+`
+	args := []any{OrderStatusProcessing, attemptNo, "正在提交上游订单", nextPollAt, costAmount, profitAmount, now, order.ID}
+	switch {
+	case order.Status == OrderStatusPendingSubmit:
+		sqlText += ` AND status = ? AND (current_attempt_id IS NULL OR current_attempt_id = 0)`
+		args = append(args, OrderStatusPendingSubmit)
+	case order.CurrentAttemptID.Valid:
+		sqlText += ` AND status = ? AND current_attempt_id = ?`
+		args = append(args, order.Status, order.CurrentAttemptID.Int64)
+	default:
+		sqlText += ` AND status = ? AND (current_attempt_id IS NULL OR current_attempt_id = 0)`
+		args = append(args, order.Status)
+	}
+	result, err := tx.Exec(sqlText, args...)
+	if err != nil {
+		return false, err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return rows == 1, nil
+}
+
+func (l *OrderLogic) applySubmitResultToAttempt(ctx context.Context, order entity.ExternalOrder, candidate orderChannelCandidate, attempt entity.ExternalOrderAttempt, attemptNo int, result createSubmitResult) error {
+	now := l.core.Now()
+	costAmount := multiplyMoneyByQuantity(candidate.CostPrice, order.Quantity)
+	profitAmount := subtractMoney(order.OrderAmount, costAmount)
+	nextPollAt := any(nil)
+	if result.OrderStatus == OrderStatusProcessing || result.OrderStatus == OrderStatusUnknown {
+		nextPollAt = now.Add(pollIntervalDuration(l.core.Config().OpenOrder.PollIntervalSeconds))
+	}
+	return l.core.DB().Transaction(ctx, func(ctx context.Context, tx gdb.TX) error {
+		_, err := tx.Exec(`
+UPDATE external_order_attempt
+SET supplier_order_no = ?, supplier_us_order_no = ?, supplier_status = ?, refund_status = ?,
+    request_snapshot = ?, response_snapshot = ?, receipt = ?, status = ?, submitted_at = ?, updated_at = ?
+WHERE id = ?
+`, result.SupplierOrderNo, result.SupplierUSOrderNo, result.SupplierStatus, result.RefundStatus,
+			result.RequestSnapshot, result.ResponseSnapshot, result.Receipt, result.AttemptStatus, now, now, attempt.ID)
 		if err != nil {
 			return err
 		}
@@ -258,7 +322,6 @@ WHERE id = ?
 `, result.OrderStatus, attempt.ID, attemptNo, defaultOrderMessage(result.Receipt, result.Message), nextPollAt, costAmount, profitAmount, now, order.ID)
 		return err
 	})
-	return attempt, err
 }
 
 func (l *OrderLogic) loadAttemptedBindingIDs(ctx context.Context, orderID int64) (map[int64]struct{}, error) {
@@ -279,26 +342,6 @@ func (l *OrderLogic) loadPlatformAccount(ctx context.Context, id int64) (entity.
 	account := entity.SupplierPlatformAccount{}
 	err := l.core.DB().GetCore().GetScan(ctx, &account, `SELECT * FROM supplier_platform_account WHERE id = ? AND is_deleted = 0`, id)
 	return account, err
-}
-
-// claimPendingOrderForSubmit 在调用上游前先占用待提交订单，避免并发扫描重复下单。
-func (l *OrderLogic) claimPendingOrderForSubmit(ctx context.Context, order entity.ExternalOrder) (bool, error) {
-	if order.Status != OrderStatusPendingSubmit {
-		return true, nil
-	}
-	result, err := l.core.DB().Exec(ctx, `
-	UPDATE external_order
-	SET status = ?, updated_at = ?
-	WHERE id = ? AND status = ?
-	`, OrderStatusProcessing, l.core.Now(), order.ID, OrderStatusPendingSubmit)
-	if err != nil {
-		return false, err
-	}
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return false, err
-	}
-	return rows == 1, nil
 }
 
 func (l *OrderLogic) markOrderFailed(ctx context.Context, orderID, attemptID int64, receipt string) error {

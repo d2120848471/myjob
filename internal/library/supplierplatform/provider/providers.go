@@ -75,12 +75,28 @@ func (kakayunProvider) ParseCreateOrderResponse(statusCode int, body []byte) (Cr
 	if err != nil {
 		return CreateOrderResult{Status: SupplierOrderStatusUnknown, Raw: raw}, ErrSupplierUnknownResponse
 	}
-	if codeString(payload["code"]) != "1" {
+	responseCode := codeString(payload["code"])
+	if responseCode == "9999" {
+		data := nestedMap(payload, "data")
+		message := responseMessage(payload)
+		if message == "" {
+			message = "云发卡下单状态无法确认"
+		}
+		return CreateOrderResult{
+			Accepted:          false,
+			Status:            SupplierOrderStatusUnknown,
+			SupplierUSOrderNo: codeString(data["usorderno"]),
+			SupplierStatus:    responseCode,
+			Message:           message,
+			Raw:               raw,
+		}, ErrSupplierUnknownResponse
+	}
+	if responseCode != "1" {
 		message := responseMessage(payload)
 		if message == "" {
 			message = "云发卡下单失败"
 		}
-		return CreateOrderResult{Accepted: false, Status: SupplierOrderStatusFailed, Message: message, Raw: raw}, errors.New(message)
+		return CreateOrderResult{Accepted: false, Status: SupplierOrderStatusFailed, SupplierStatus: responseCode, Message: message, Raw: raw}, errors.New(message)
 	}
 	data := nestedMap(payload, "data")
 	return CreateOrderResult{

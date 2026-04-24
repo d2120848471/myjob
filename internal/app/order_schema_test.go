@@ -38,6 +38,17 @@ func TestOpenOrderDefaultConfigIsUsableForTests(t *testing.T) {
 	require.False(t, cfg.OpenOrder.WorkerEnabled)
 }
 
+func TestOpenOrderConfigFallsBackWhenIntervalsAreNonPositive(t *testing.T) {
+	cfg := modelconfig.Default()
+	cfg.OpenOrder.PollIntervalSeconds = 0
+	cfg.OpenOrder.SubmitScanIntervalSeconds = -1
+
+	modelconfig.Normalize(&cfg)
+
+	require.Equal(t, 30, cfg.OpenOrder.PollIntervalSeconds)
+	require.Equal(t, 5, cfg.OpenOrder.SubmitScanIntervalSeconds)
+}
+
 func TestExternalOrderSchemaHasNoRequestIPOrUserAgent(t *testing.T) {
 	combined := strings.ToLower(sqliteSchema + mysqlSchema)
 	require.NotContains(t, combined, "user_agent")

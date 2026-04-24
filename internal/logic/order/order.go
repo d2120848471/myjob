@@ -27,17 +27,20 @@ const (
 
 // OrderLogic 编排开放订单、上游提交、查单轮询和后台列表。
 type OrderLogic struct {
-	core       *app.Core
-	httpClient *http.Client
-	worker     *Worker
+	core             *app.Core
+	httpClient       *http.Client
+	worker           *Worker
+	orderNoGenerator func() string
 }
 
 // NewOrderLogic 创建订单业务逻辑实现。
 func NewOrderLogic(core *app.Core) *OrderLogic {
-	return &OrderLogic{
+	logic := &OrderLogic{
 		core:       core,
 		httpClient: &http.Client{Timeout: 10 * time.Second},
 	}
+	logic.orderNoGenerator = logic.generateOrderNo
+	return logic
 }
 
 var _ service.OrderService = (*OrderLogic)(nil)
