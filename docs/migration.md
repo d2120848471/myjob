@@ -29,6 +29,7 @@
 - `api/log.go`
 - `api/product_goods.go`
 - `api/product_goods_channel.go`
+- `api/product_goods_channel_config.go`
 - `api/product_template.go`
 - `api/purchase_limit.go`
 - `api/settings.go`
@@ -38,7 +39,7 @@
 - `api/supplier_platform.go`
 - `api/user.go`
 
-当前测试也明确约束不能再回到历史 历史嵌套协议包路径。
+当前测试也明确约束不能再回到历史嵌套协议包路径。
 
 ### 3. 运行时能力收口
 
@@ -49,23 +50,26 @@
 - `internal/library/sms`
 - `internal/library/audit`
 - `internal/library/region`
+- `internal/library/supplierplatform/provider`
 
 ### 4. 后台业务域完成拆分
 
 当前业务实现已经按模块拆分到 `internal/logic/admin`：
 
 - `auth.go`
-- `brand.go`
-- `industry.go`
-- `user.go`
+- `brand*.go`
+- `industry*.go`
+- `user*.go`
 - `group.go`
 - `subject.go`
 - `config.go`
 - `log.go`
-- `product_template.go`
-- `purchase_limit.go`
-- `product_goods_channel_*.go`
-- `supplier_platform.go`
+- `product_template*.go`
+- `purchase_limit*.go`
+- `product_goods*.go`
+- `product_goods_channel*.go`
+- `product_goods_channel_config*.go`
+- `supplier_platform*.go`
 - `supplier_platform_balance.go`
 
 ### 5. 商品渠道绑定最小闭环已落地
@@ -73,12 +77,15 @@
 当前商品域已经补齐一组独立的渠道绑定能力：
 
 - 协议拆到 `api/product_goods_channel.go`
+- 库存配置协议拆到 `api/product_goods_channel_config.go`
 - controller 拆到 `internal/controller/admin/product_goods_channel.go`
-- logic 按查询 / 写入 / 校验 / 价格拆到 `internal/logic/admin/product_goods_channel*.go`
+- 库存配置 controller 拆到 `internal/controller/admin/product_goods_channel_config.go`
+- logic 按查询 / 写入 / 校验 / 价格拆到 `internal/logic/admin/product_goods_channel*.go` 和 `internal/logic/admin/product_goods_channel_config*.go`
 - MySQL 初始化 SQL 新增 `manifest/sql/006_product_goods_channel_binding.sql`
+- 商品库存配置 SQL 新增 `manifest/sql/007_product_goods_channel_config.sql`
 - 应用启动自建表同步落在 `internal/app/schema.go`
 
-这一轮只覆盖商品列表渠道摘要、绑定弹窗管理和单条自动改价，不包含真实下单、价格通知和批量能力。
+这一轮只覆盖商品列表渠道摘要、绑定弹窗管理、库存配置和单条自动改价，不包含真实下单、价格通知和批量能力。
 
 ## 当前保留的兼容面
 

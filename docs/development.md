@@ -192,7 +192,9 @@ export GF_DAO_LINK='mysql:root:root123456@tcp(127.0.0.1:3306)/admin?charset=utf8
 - `internal/dao`
 - `internal/model/do`
 - `internal/model/entity`
-- `internal/model/table`
+- `internal/model/table`（脚本运行时生成；当前仓库若未跟踪该目录，提交前需要确认是否确有保留必要）
+
+当前仓库正在使用的轻量表元数据集中在 `internal/dao/tables.go`。如果重新生成 DAO，提交前要检查生成物是否与现有手写表入口重复，避免把无用生成目录带入版本库。
 
 ## 日常开发约束
 

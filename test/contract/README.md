@@ -5,7 +5,9 @@
 ## 当前覆盖范围
 
 - 扁平 `api/*.go` 协议目录约束
-- 禁止继续引用历史 历史嵌套协议包路径
+- `api/settings.go` 薄入口与 `api/settings_sms.go`、`api/settings_system.go` 的设置协议拆分约束
+- `api/product_goods_channel.go` 与 `api/product_goods_channel_config.go` 的商品渠道绑定 / 库存配置协议拆分约束
+- 禁止继续引用历史嵌套协议包路径
 - OpenAPI `/api.json` 和 Swagger `/swagger/` 暴露
 - 统一响应字段 `code / message / data`
 - 账号密码登录、短信二验、`me`、退出登录

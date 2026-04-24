@@ -138,6 +138,14 @@ golangci-lint run --timeout=5m
 │   ├── supplier_platform.go
 │   └── user.go
 ├── docs/
+│   ├── architecture.md
+│   ├── development.md
+│   ├── migration.md
+│   ├── module-map.md
+│   ├── overview.md
+│   ├── testing.md
+│   └── superpowers/
+│       └── README.md
 ├── platform_docs/
 │   ├── README.md
 │   └── *.md
@@ -167,7 +175,7 @@ golangci-lint run --timeout=5m
 ### `api/`
 
 `api/` 只放对外请求/响应协议定义，不放业务逻辑。
-当前协议目录已经拍平成仓库根下的 `api/*.go`，不再使用历史的 历史嵌套协议包路径。
+当前协议目录已经拍平成仓库根下的 `api/*.go`，不再使用历史嵌套协议包路径。
 
 说明：
 
@@ -178,6 +186,7 @@ golangci-lint run --timeout=5m
 ### `docs`
 
 项目内部手写文档目录，主要记录当前仓库自己的架构、模块边界、开发方式、测试方式和迁移背景。
+其中 `docs/superpowers/README.md` 是规格与实施计划类文档的薄入口；只有当某轮需求确实沉淀了可复用的 spec 或 plan 时，才继续在该目录下补充对应文档。
 
 ### `platform_docs`
 
@@ -288,7 +297,5 @@ golangci-lint run --timeout=5m
 - `docs/development.md`：开发依赖、配置、脚本和日常命令
 - `docs/testing.md`：测试分层、当前覆盖范围与执行命令
 - `docs/migration.md`：从历史后台迁到当前根应用结构的迁移背景
-- `docs/product_goods_channel_order_requirements.md`：商品渠道绑定、价格口径与后续下单闭环需求
+- `docs/superpowers/README.md`：规格与实施计划文档入口；当前仅保留入口说明，不声明尚未落地的历史 spec / plan
 - `platform_docs/README.md`：第三方渠道原始接口文档总览；具体平台文档按 `platform_docs/*.md` 拆分
-- `docs/superpowers/specs/`：规格与设计说明（当前已有商品管理相关 specs）
-- `docs/superpowers/plans/`：阶段计划与拆解（当前已有商品管理相关 plans）

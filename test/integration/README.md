@@ -34,9 +34,10 @@ runtime smoke test 会使用本地默认超管 `admin / abc123` 登录。
 ```bash
 export MYJOB_RUN_SUPPLIER_LIVE=1
 export SUPPLIER_LIVE_TYPE_ID=35
+export SUPPLIER_LIVE_NAME='示例平台'
 export SUPPLIER_LIVE_DOMAIN=example.com
 export SUPPLIER_LIVE_BACKUP_DOMAIN=example.com
 export SUPPLIER_LIVE_TOKEN_ID=1008612345
 export SUPPLIER_LIVE_SECRET_KEY=secret
-go test ./test/integration -count=1 -timeout 60s
+go test ./test/integration -run TestSupplierPlatformRefresh_LiveProviderBalance -count=1 -v
 ```

@@ -72,6 +72,7 @@ main.go
 - `sms`：sender 抽象、mock sender、阿里云 sender
 - `audit`：同步 / 异步写入器
 - `region`：IP 归属地解析与脱敏工具
+- `supplierplatform/provider`：第三方供货平台 provider 注册、解析与余额刷新适配
 
 ## 请求处理链路
 
@@ -173,6 +174,12 @@ POST /api/admin/auth/sms/verify
 - 写入器支持同步和异步模式
 - 是否异步由 `audit.async` 控制
 - 本地测试初始化时默认关闭异步，减少不确定性
+
+### 第三方供货平台 provider
+
+- `internal/library/supplierplatform/provider` 负责平台 provider 注册、按平台类型和域名解析 provider，以及封装余额刷新请求
+- `internal/logic/admin/supplier_platform*.go` 负责账号状态、余额日志、平台启停级联等业务编排
+- 平台关闭后会同步关停该平台下的商品渠道绑定；重新开启平台不会自动恢复历史绑定
 
 ## OpenAPI 与文档
 

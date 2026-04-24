@@ -284,6 +284,16 @@
 
 项目内部手写文档目录，负责记录当前仓库自己的架构、模块边界、开发流程、测试方式和迁移说明。
 
+当前入口文件：
+
+- `overview.md`：项目定位与功能状态
+- `architecture.md`：启动链路、请求流、认证流与运行时结构
+- `module-map.md`：业务域、权限、接口前缀与目录地图
+- `development.md`：本地依赖、配置、脚本和常用命令
+- `testing.md`：测试分层、覆盖范围和执行口径
+- `migration.md`：历史结构迁移到当前根应用的背景
+- `superpowers/README.md`：规格与实施计划文档入口
+
 ### `platform_docs`
 
 第三方渠道接口文档归档目录。
@@ -311,15 +321,17 @@ HTTP 协议适配层，不直接写业务规则。
 业务编排层，当前按业务域拆分为：
 
 - `auth.go`
-- `user.go`
+- `user*.go`
 - `group.go`
 - `subject.go`
-- `brand.go`
-- `industry.go`
+- `brand*.go`
+- `industry*.go`
 - `product_common.go`
 - `product_goods*.go`
-- `product_template.go`
-- `purchase_limit.go`
+- `product_goods_channel*.go`
+- `product_goods_channel_config*.go`
+- `product_template*.go`
+- `purchase_limit*.go`
 - `supplier_platform*.go`
 - `supplier_platform_balance.go`
 - `money.go`
@@ -341,6 +353,7 @@ HTTP 协议适配层，不直接写业务规则。
 - `sms`
 - `audit`
 - `region`
+- `supplierplatform/provider`
 
 ### `internal/model`
 
