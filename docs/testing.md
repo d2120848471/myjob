@@ -99,6 +99,12 @@ go test ./internal/logic/admin -run 'TestSyncChannelBindingsOnce|TestSaveInvento
 go test ./internal/bootstrap -run TestApplicationStartsAndClosesBackgroundWorkers -count=1 -timeout 60s
 ```
 
+订单渠道定价和主体快照聚焦回归：
+
+```bash
+go test ./internal/library/channelpricing ./internal/app ./test/integration -run 'Test(EffectiveSellPrice|OrderSnapshot|ExternalOrderSchemaContainsRequiredTablesAndIndexes|OrderWorkerUsesSelectedChannelSubjectAndAutoPriceAmounts)' -count=1 -timeout 60s
+```
+
 ## CI 与 lint
 
 CI workflow 位于 `.github/workflows/ci.yml`：

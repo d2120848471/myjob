@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"myjob/internal/library/channelpricing"
 	supplierprovider "myjob/internal/library/supplierplatform/provider"
 	"myjob/internal/model/entity"
 
@@ -292,20 +293,22 @@ func (l *OrderLogic) recoverStuckSubmittingOrder(ctx context.Context, order enti
 	now := l.core.Now()
 	// 恢复后的订单需要在本轮继续查单；MySQL DATETIME 无小数秒时可能把 now 四舍五入到下一秒。
 	immediatePollAt := now.Add(-time.Second)
-	costAmount := multiplyMoneyByQuantity(candidate.CostPrice, order.Quantity)
-	profitAmount := subtractMoney(order.OrderAmount, costAmount)
+	priceSnapshot, err := channelpricing.OrderSnapshot(candidate.pricingRule(), order.Quantity)
+	if err != nil {
+		return err
+	}
 	receipt := "提交状态异常，转入查单确认"
 
 	return l.core.DB().Transaction(ctx, func(ctx context.Context, tx gdb.TX) error {
 		result, err := tx.Exec(`
 UPDATE external_order
 SET status = ?, attempt_count = ?, last_receipt = ?, next_poll_at = ?,
-    cost_amount = ?, profit_amount = ?, updated_at = ?
+    unit_price = ?, order_amount = ?, cost_amount = ?, profit_amount = ?, updated_at = ?
 WHERE id = ?
   AND status = ?
   AND (current_attempt_id IS NULL OR current_attempt_id = 0)
   AND next_poll_at IS NULL
-`, OrderStatusUnknown, attemptNo, receipt, immediatePollAt, costAmount, profitAmount, now, order.ID, OrderStatusProcessing)
+`, OrderStatusUnknown, attemptNo, receipt, immediatePollAt, priceSnapshot.UnitPrice, priceSnapshot.OrderAmount, priceSnapshot.CostAmount, priceSnapshot.ProfitAmount, now, order.ID, OrderStatusProcessing)
 		if err != nil {
 			return err
 		}
@@ -315,13 +318,13 @@ WHERE id = ?
 		}
 		insertResult, err := tx.Exec(`
 INSERT INTO external_order_attempt (
-    order_id, order_no, attempt_no, channel_binding_id, platform_account_id, platform_account_name,
+    order_id, order_no, attempt_no, channel_binding_id, platform_account_id, platform_account_name, platform_subject_id, platform_subject_name,
     provider_code, supplier_goods_no, supplier_goods_name, supplier_us_order_no, supplier_order_no,
     supplier_status, refund_status, request_snapshot, response_snapshot, receipt, status,
     submitted_at, created_at, updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `, order.ID, order.OrderNo, attemptNo, candidate.BindingID, candidate.PlatformAccountID, candidate.PlatformAccountName,
-			candidate.ProviderCode, candidate.SupplierGoodsNo, candidate.SupplierGoodsName, supplierUSOrderNo, "",
+			candidate.PlatformSubjectID, candidate.PlatformSubjectName, candidate.ProviderCode, candidate.SupplierGoodsNo, candidate.SupplierGoodsName, supplierUSOrderNo, "",
 			"", "", "", "", receipt, OrderAttemptStatusUnknown,
 			nil, now, now)
 		if err != nil {

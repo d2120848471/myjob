@@ -65,7 +65,7 @@ WHERE `+whereClause, filter.Args...)
 	rows, err := l.core.DB().GetCore().GetAll(ctx, `
 SELECT
     o.id,
-    o.subject_name,
+    COALESCE(NULLIF(a.platform_subject_name, ''), NULLIF(ps.name, ''), o.subject_name) AS sales_subject_name,
     o.order_no,
     o.goods_code,
     o.goods_name,
@@ -84,6 +84,8 @@ SELECT
     COALESCE(a.supplier_order_no, '') AS supplier_order_no
 FROM external_order o
 LEFT JOIN external_order_attempt a ON a.id = o.current_attempt_id
+LEFT JOIN supplier_platform_account pa ON pa.id = a.platform_account_id
+LEFT JOIN admin_subject ps ON ps.id = pa.subject_id
 WHERE `+whereClause+`
 ORDER BY o.created_at DESC, o.id DESC
 LIMIT ? OFFSET ?

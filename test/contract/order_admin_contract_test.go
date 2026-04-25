@@ -46,6 +46,7 @@ func TestAdminOrderListFiltersAndStats(t *testing.T) {
 		List []struct {
 			OrderNo            string `json:"order_no"`
 			GoodsID            string `json:"goods_id"`
+			SalesSubjectName   string `json:"sales_subject_name"`
 			Account            string `json:"account"`
 			StatusCode         string `json:"status_code"`
 			CurrentChannelName string `json:"current_channel_name"`
@@ -61,6 +62,7 @@ func TestAdminOrderListFiltersAndStats(t *testing.T) {
 	require.Len(t, data.List, 1)
 	require.Equal(t, orderNo, data.List[0].OrderNo)
 	require.Equal(t, "G202604240001", data.List[0].GoodsID)
+	require.Equal(t, "测试主体", data.List[0].SalesSubjectName)
 	require.Equal(t, "13800138000", data.List[0].Account)
 	require.Equal(t, "processing", data.List[0].StatusCode)
 	require.Equal(t, "测试云发卡", data.List[0].CurrentChannelName)
