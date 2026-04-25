@@ -93,3 +93,26 @@ type OrderProvider interface {
 	BuildQueryOrderRequest(ctx context.Context, account AccountConfig, now time.Time, baseURL string, input QueryOrderInput) (*http.Request, error)
 	ParseQueryOrderResponse(statusCode int, body []byte) (QueryOrderResult, error)
 }
+
+// ProductInfoInput 是上游商品详情接口所需的商品定位参数。
+type ProductInfoInput struct {
+	SupplierGoodsNo string
+}
+
+// ProductInfoResult 表示上游商品详情响应解析后的稳定商品信息。
+type ProductInfoResult struct {
+	SupplierGoodsNo string
+	GoodsName       string
+	GoodsPrice      decimal.Decimal
+	GoodsPriceValid bool
+	Raw             string
+}
+
+// ProductInfoProvider 定义第三方平台商品详情查询适配器能力。
+type ProductInfoProvider interface {
+	Code() string
+	Name() string
+	CandidateBaseURLs(account AccountConfig) []string
+	BuildProductInfoRequest(ctx context.Context, account AccountConfig, now time.Time, baseURL string, input ProductInfoInput) (*http.Request, error)
+	ParseProductInfoResponse(statusCode int, body []byte) (ProductInfoResult, error)
+}

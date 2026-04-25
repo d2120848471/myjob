@@ -49,3 +49,7 @@ storage/uploads/
 
 # Git worktrees
 .worktrees/
+
+# Superpowers 本地计划文档
+docs/superpowers/specs/
+docs/superpowers/plans/

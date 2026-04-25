@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	adminapi "myjob/api"
 	"myjob/internal/consts"
@@ -11,6 +12,8 @@ import (
 
 	"github.com/gogf/gf/v2/database/gdb"
 )
+
+const productGoodsInventoryImmediateSyncTimeout = 5 * time.Second
 
 // SaveInventoryConfig 保存商品库存配置，并写入操作日志。
 func (l *ProductGoodsLogic) SaveInventoryConfig(ctx context.Context, req *adminapi.ProductGoodsInventoryConfigSaveReq, actor entity.AdminUser, ip string) (*adminapi.ProductGoodsInventoryConfigSaveRes, error) {
@@ -39,6 +42,15 @@ func (l *ProductGoodsLogic) SaveInventoryConfig(ctx context.Context, req *admina
 	}
 
 	l.core.WriteOperation(ctx, actor, fmt.Sprintf("修改商品库存配置：goods=%d, name=%s", goods.ID, goods.Name), ip)
+	if normalized.SyncCostPriceEnabled == 1 || normalized.SyncGoodsNameEnabled == 1 {
+		// 保存配置是主流程；卡卡云临时失败不能让用户保存开关失败。
+		syncCtx, cancel := context.WithTimeout(ctx, productGoodsInventoryImmediateSyncTimeout)
+		defer cancel()
+		_, _ = l.SyncChannelBindingsOnce(syncCtx, ProductGoodsChannelSyncOptions{
+			GoodsID: goods.ID,
+			Limit:   defaultProductGoodsChannelSyncLimit,
+		})
+	}
 	return &adminapi.ProductGoodsInventoryConfigSaveRes{}, nil
 }
 

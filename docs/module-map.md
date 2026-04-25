@@ -116,8 +116,8 @@
 - logic：`internal/logic/admin/product_goods*.go`、`internal/logic/admin/product_goods_channel*.go`、`internal/logic/admin/product_goods_channel_config*.go`
 - 路由前缀：`/api/admin/products*`、`/api/admin/products/{goodsId}/channel-bindings*`、`/api/admin/products/{goodsId}/inventory-config`
 - 权限：`product.goods`
-- 主要能力：商品列表、详情、表单选项、新增、编辑、删除、启停、渠道摘要、库存配置、渠道绑定弹窗、单条自动改价。
-- 边界：商品主档、渠道绑定和库存配置保持同 package 多文件拆分。
+- 主要能力：商品列表、详情、表单选项、新增、编辑、删除、启停、渠道摘要、库存配置、渠道绑定弹窗、单条自动改价、卡卡云商品名称和进货价同步。
+- 边界：商品主档、渠道绑定和库存配置保持同 package 多文件拆分；商品关闭后不触发上游商品信息同步。
 
 ### 第三方对接
 
@@ -128,7 +128,7 @@
 - provider：`internal/library/supplierplatform/provider/*`
 - 路由前缀：`/api/admin/supplier-platform-types`、`/api/admin/supplier-platforms*`
 - 权限：`supplier.index`
-- 主要能力：平台类型字典、平台账号分页、详情、增删改、启停、余额刷新、余额日志落库、平台关闭后级联关停商品绑定。
+- 主要能力：平台类型字典、平台账号分页、详情、增删改、启停、余额刷新、余额日志落库、平台关闭后级联关停商品绑定、卡卡云商品详情适配器。
 - 边界：`platform_docs/` 保存渠道原始协议，`docs/` 保存本仓库实现说明。
 
 ### 订单履约

@@ -183,6 +183,12 @@ func assemble(core *app.Core) (*Application, error) {
 		worker.Start()
 		core.SetOrderStop(worker.Stop)
 	}
+	productSyncWorker := adminlogic.NewProductGoodsChannelSyncWorker(services.ProductGoodsLogic, adminlogic.ProductGoodsChannelSyncWorkerOptions{
+		Interval: time.Minute,
+		Limit:    200,
+	})
+	productSyncWorker.Start()
+	core.SetProductGoodsSyncStop(productSyncWorker.Stop)
 
 	return &Application{core: core, server: s}, nil
 }

@@ -195,6 +195,91 @@ func TestKakayunCandidateBaseURLs_UsesConfiguredDomains(t *testing.T) {
 	)
 }
 
+func TestKakayunProductInfoProviderBuildRequestAndParse(t *testing.T) {
+	provider, ok := LookupProductInfo("kakayun")
+	require.True(t, ok)
+
+	account := AccountConfig{
+		ProviderCode: "kakayun",
+		Domain:       "qqlogin.yxp8.cn",
+		TokenID:      "10052",
+		SecretKey:    "9aa3034b6beba7cf5bfcf6089218a674",
+	}
+	now := time.Unix(1735002156, 0)
+	req, err := provider.BuildProductInfoRequest(context.Background(), account, now, "http://qqlogin.yxp8.cn", ProductInfoInput{
+		SupplierGoodsNo: "2478510",
+	})
+	require.NoError(t, err)
+	require.Equal(t, http.MethodPost, req.Method)
+	require.Equal(t, "http://qqlogin.yxp8.cn/dockapiv3/goods/details", req.URL.String())
+	require.Equal(t, "curl/7.81.0", req.Header.Get("User-Agent"))
+
+	body := readRequestBody(t, req)
+	payload := decodeJSONBodyAny(t, body)
+	require.Equal(t, "10052", payload["userid"])
+	require.Equal(t, float64(1735002156), payload["timestamp"])
+	require.Equal(t, "2478510", payload["goodsid"])
+	require.NotEmpty(t, payload["sign"])
+
+	result, err := provider.ParseProductInfoResponse(http.StatusOK, []byte(`{"code":1,"message":"ok","data":{"goodsid":"2478510","goodsname":"测试产品","goodsprice":"11","stock":9999,"goodsstatus":1}}`))
+	require.NoError(t, err)
+	require.Equal(t, "2478510", result.SupplierGoodsNo)
+	require.Equal(t, "测试产品", result.GoodsName)
+	require.True(t, result.GoodsPriceValid)
+	require.Equal(t, "11.0000", result.GoodsPrice.StringFixed(4))
+	require.Contains(t, result.Raw, `"goodsname":"测试产品"`)
+}
+
+func TestKakayunProductInfoProviderRejectsInvalidResponses(t *testing.T) {
+	provider, ok := LookupProductInfo("kakayun")
+	require.True(t, ok)
+
+	tests := []struct {
+		name string
+		body string
+	}{
+		{name: "非 JSON", body: `<html>bad gateway</html>`},
+		{name: "业务失败", body: `{"code":0,"message":"商品不存在"}`},
+		{name: "缺少数据", body: `{"code":1,"message":"ok"}`},
+		{name: "没有可同步字段", body: `{"code":1,"data":{"goodsid":"2478510","goodsname":"","goodsprice":"abc"}}`},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := provider.ParseProductInfoResponse(http.StatusOK, []byte(tc.body))
+			require.Error(t, err)
+		})
+	}
+}
+
+func TestKakayunProductInfoProviderRejectsHTTPErrorStatus(t *testing.T) {
+	provider, ok := LookupProductInfo("kakayun")
+	require.True(t, ok)
+
+	_, err := provider.ParseProductInfoResponse(http.StatusBadGateway, []byte(`{"code":1,"data":{"goodsid":"2478510","goodsname":"测试产品","goodsprice":"11"}}`))
+	require.Error(t, err)
+}
+
+func TestKakayunProductInfoProviderKeepsNameWhenPriceInvalid(t *testing.T) {
+	provider, ok := LookupProductInfo("kakayun")
+	require.True(t, ok)
+
+	result, err := provider.ParseProductInfoResponse(http.StatusOK, []byte(`{"code":1,"data":{"goodsid":"2478510","goodsname":"测试产品","goodsprice":"abc"}}`))
+	require.NoError(t, err)
+	require.Equal(t, "2478510", result.SupplierGoodsNo)
+	require.Equal(t, "测试产品", result.GoodsName)
+	require.False(t, result.GoodsPriceValid)
+}
+
+func TestLookupProductInfoOnlyRegistersKakayun(t *testing.T) {
+	provider, ok := LookupProductInfo("kakayun")
+	require.True(t, ok)
+	require.Equal(t, "kakayun", provider.Code())
+
+	_, ok = LookupProductInfo("kayixin")
+	require.False(t, ok)
+}
+
 func TestKayixinBuildRequest_UsesObjectBodyWhenConfigured(t *testing.T) {
 	now := time.Date(2026, 4, 14, 12, 30, 45, 678000000, time.UTC)
 	req, err := kayixinProvider{}.BuildRequest(context.Background(), AccountConfig{

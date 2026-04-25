@@ -53,6 +53,57 @@ func (kakayunProvider) ParseBalanceResponse(statusCode int, body []byte) (decima
 	return parseSuccessBalance(payload, "1", "data", "money")
 }
 
+func (kakayunProvider) BuildProductInfoRequest(ctx context.Context, account AccountConfig, now time.Time, baseURL string, input ProductInfoInput) (*http.Request, error) {
+	timestamp := now.Unix()
+	payload := map[string]any{
+		"userid":    strings.TrimSpace(account.TokenID),
+		"timestamp": timestamp,
+		"goodsid":   strings.TrimSpace(input.SupplierGoodsNo),
+	}
+	payload["sign"] = kakayunSign(payload, account.SecretKey)
+	return newJSONRequest(ctx, strings.TrimRight(baseURL, "/")+"/dockapiv3/goods/details", payload, map[string]string{
+		"User-Agent": "curl/7.81.0",
+	})
+}
+
+func (kakayunProvider) ParseProductInfoResponse(statusCode int, body []byte) (ProductInfoResult, error) {
+	raw := string(body)
+	if statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices {
+		return ProductInfoResult{Raw: raw}, errors.New("云发卡商品详情 HTTP 状态异常: " + strconv.Itoa(statusCode))
+	}
+	payload, err := decodeJSONMap(body)
+	if err != nil {
+		return ProductInfoResult{Raw: raw}, err
+	}
+	if codeString(payload["code"]) != "1" {
+		message := responseMessage(payload)
+		if message == "" {
+			message = "云发卡商品详情查询失败"
+		}
+		return ProductInfoResult{Raw: raw}, errors.New(message)
+	}
+	data := nestedMap(payload, "data")
+	if len(data) == 0 {
+		return ProductInfoResult{Raw: raw}, errors.New("云发卡商品详情为空")
+	}
+	goodsName := strings.TrimSpace(codeString(data["goodsname"]))
+	price, err := decimalFromValue(data["goodsprice"])
+	priceValid := err == nil && !price.IsNegative()
+	if !priceValid && goodsName == "" {
+		return ProductInfoResult{Raw: raw}, errors.New("云发卡商品详情缺少可同步字段")
+	}
+	if priceValid {
+		price = price.Round(4)
+	}
+	return ProductInfoResult{
+		SupplierGoodsNo: codeString(data["goodsid"]),
+		GoodsName:       goodsName,
+		GoodsPrice:      price,
+		GoodsPriceValid: priceValid,
+		Raw:             raw,
+	}, nil
+}
+
 func (kakayunProvider) BuildCreateOrderRequest(ctx context.Context, account AccountConfig, now time.Time, baseURL string, input CreateOrderInput) (*http.Request, error) {
 	timestamp := now.Unix()
 	payload := map[string]any{

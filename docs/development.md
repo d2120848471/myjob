@@ -187,6 +187,12 @@ export GF_DAO_LINK='mysql:root:root123456@tcp(127.0.0.1:3306)/admin?charset=utf8
 
 脚本会生成 DAO / DO / Entity / table 元数据。当前仓库主要使用 `internal/dao/tables.go` 作为轻量表入口，重新生成后必须检查是否带入无用生成目录。
 
+## 供应商商品详情同步能力
+
+供应商商品详情同步通过 `internal/library/supplierplatform/provider` 暴露 `ProductInfoProvider`。新增供应商适配器时先补 `BuildProductInfoRequest` 和 `ParseProductInfoResponse` 单测，再注册到 `LookupProductInfo`。业务侧只消费标准化的 `ProductInfoResult`，不得在商品逻辑层直接解析第三方原始响应。
+
+商品渠道同步入口在 `internal/logic/admin/product_goods_channel_sync.go`。同步进价时必须复用 `computeChannelCostSnapshot`，保证商品税态和渠道税态的加税、扣税规则与人工维护绑定一致；自动改价利润字段只保留用户配置，不在同步流程中重写。
+
 ## 日常开发约束
 
 - controller 不直接访问 DAO。

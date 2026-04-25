@@ -30,7 +30,7 @@ func TestMountUploadStaticPathReturnsErrorWhenDirInitFails(t *testing.T) {
 	require.Contains(t, err.Error(), "初始化上传目录失败")
 }
 
-func TestApplicationStartsAndClosesOrderWorker(t *testing.T) {
+func TestApplicationStartsAndClosesBackgroundWorkers(t *testing.T) {
 	redisServer, err := miniredis.Run()
 	require.NoError(t, err)
 	t.Cleanup(redisServer.Close)

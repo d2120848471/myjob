@@ -32,23 +32,24 @@ type Config = modelconfig.Config
 
 // Core 是后台运行时核心对象，负责持有配置与基础设施依赖（DB/Redis/SMS/审计等）。
 type Core struct {
-	cfg            modelconfig.Config
-	cfgName        string
-	cfgInstance    *gcfg.Config
-	dbGroup        string
-	redisGroup     string
-	driver         string
-	now            func() time.Time
-	sender         sms.Sender
-	mock           *sms.MockSender
-	regionResolver region.RegionResolver
-	auditWriter    *audit.Writer
-	orderStop      func()
-	testLockDB     *sql.DB
-	testLockConn   *sql.Conn
-	tempDBFile     string
-	tempUploadDir  string
-	miniRedis      *miniredis.Miniredis
+	cfg                  modelconfig.Config
+	cfgName              string
+	cfgInstance          *gcfg.Config
+	dbGroup              string
+	redisGroup           string
+	driver               string
+	now                  func() time.Time
+	sender               sms.Sender
+	mock                 *sms.MockSender
+	regionResolver       region.RegionResolver
+	auditWriter          *audit.Writer
+	orderStop            func()
+	productGoodsSyncStop func()
+	testLockDB           *sql.DB
+	testLockConn         *sql.Conn
+	tempDBFile           string
+	tempUploadDir        string
+	miniRedis            *miniredis.Miniredis
 }
 
 // AdminUser 是后台管理用户实体的类型别名。
@@ -176,6 +177,11 @@ func (c *Core) Sender() sms.Sender {
 // SetOrderStop 注册订单 worker 停止函数，Core.Close 会在关闭数据库前调用它。
 func (c *Core) SetOrderStop(stop func()) {
 	c.orderStop = stop
+}
+
+// SetProductGoodsSyncStop 注册商品渠道同步后台任务停止函数，Core.Close 会在关闭数据库前调用它。
+func (c *Core) SetProductGoodsSyncStop(stop func()) {
+	c.productGoodsSyncStop = stop
 }
 
 // UsernameRegexp 返回用户名校验正则（字母开头，长度 6-10，仅字母数字）。

@@ -91,6 +91,14 @@ go test ./internal/app -run 'Test(MySQLSchemaIncludesTableAndColumnComments|Mani
 go test ./internal/library/supplierplatform/provider -run TestKakayunOrderProvider -count=1 -timeout 60s
 ```
 
+卡卡云商品信息同步聚焦回归：
+
+```bash
+go test ./internal/library/supplierplatform/provider -run 'TestKakayunProductInfoProvider|TestLookupProductInfo' -count=1 -timeout 60s
+go test ./internal/logic/admin -run 'TestSyncChannelBindingsOnce|TestSaveInventoryConfigTriggersImmediateSyncWhenSwitchEnabled|TestProductGoodsChannelSyncWorker' -count=1 -timeout 60s
+go test ./internal/bootstrap -run TestApplicationStartsAndClosesBackgroundWorkers -count=1 -timeout 60s
+```
+
 ## CI 与 lint
 
 CI workflow 位于 `.github/workflows/ci.yml`：
