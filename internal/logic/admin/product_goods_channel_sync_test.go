@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -37,7 +38,7 @@ func TestSyncChannelBindingsOnceUpdatesNameAndTaxedCost(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	goodsID := seedProductGoodsSyncGoods(t, core, 1, 1, strings.TrimPrefix(server.URL, "http://"), 1, 0)
-	logic := NewProductGoodsLogic(core)
+	logic := newProductGoodsSyncTestLogic(t, core, server.URL)
 
 	result, err := logic.SyncChannelBindingsOnce(ctx, ProductGoodsChannelSyncOptions{GoodsID: goodsID, Limit: 200})
 	require.NoError(t, err)
@@ -69,7 +70,7 @@ func TestSyncChannelBindingsOnceHonorsSwitchesAndKeepsManualValues(t *testing.T)
 	t.Cleanup(server.Close)
 
 	goodsID := seedProductGoodsSyncGoods(t, core, 0, 1, strings.TrimPrefix(server.URL, "http://"), 1, 1)
-	logic := NewProductGoodsLogic(core)
+	logic := newProductGoodsSyncTestLogic(t, core, server.URL)
 
 	result, err := logic.SyncChannelBindingsOnce(ctx, ProductGoodsChannelSyncOptions{GoodsID: goodsID, Limit: 200})
 	require.NoError(t, err)
@@ -96,7 +97,7 @@ func TestSyncChannelBindingsOnceSkipsWhenSwitchesClosed(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	goodsID := seedProductGoodsSyncGoods(t, core, 0, 0, strings.TrimPrefix(server.URL, "http://"), 1, 1)
-	logic := NewProductGoodsLogic(core)
+	logic := newProductGoodsSyncTestLogic(t, core, server.URL)
 
 	result, err := logic.SyncChannelBindingsOnce(ctx, ProductGoodsChannelSyncOptions{GoodsID: goodsID, Limit: 200})
 	require.NoError(t, err)
@@ -123,7 +124,7 @@ func TestSyncChannelBindingsOnceSkipsDisabledGoods(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	goodsID := seedProductGoodsSyncGoods(t, core, 1, 1, strings.TrimPrefix(server.URL, "http://"), 1, 1, 0)
-	logic := NewProductGoodsLogic(core)
+	logic := newProductGoodsSyncTestLogic(t, core, server.URL)
 
 	result, err := logic.SyncChannelBindingsOnce(ctx, ProductGoodsChannelSyncOptions{GoodsID: goodsID, Limit: 200})
 	require.NoError(t, err)
@@ -155,7 +156,7 @@ WHERE goods_id = ?
 	t.Cleanup(server.Close)
 
 	goodsID = seedProductGoodsSyncGoods(t, core, 1, 1, strings.TrimPrefix(server.URL, "http://"), 1, 1)
-	logic := NewProductGoodsLogic(core)
+	logic := newProductGoodsSyncTestLogic(t, core, server.URL)
 
 	result, err := logic.SyncChannelBindingsOnce(ctx, ProductGoodsChannelSyncOptions{GoodsID: goodsID, Limit: 200})
 	require.NoError(t, err)
@@ -180,7 +181,7 @@ func TestSyncChannelBindingsOnceSkipsMismatchedSupplierGoodsNo(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	goodsID := seedProductGoodsSyncGoods(t, core, 1, 1, strings.TrimPrefix(server.URL, "http://"), 1, 1)
-	logic := NewProductGoodsLogic(core)
+	logic := newProductGoodsSyncTestLogic(t, core, server.URL)
 
 	result, err := logic.SyncChannelBindingsOnce(ctx, ProductGoodsChannelSyncOptions{GoodsID: goodsID, Limit: 200})
 	require.NoError(t, err)
@@ -212,7 +213,7 @@ func TestSyncChannelBindingsOnceScansBeyondLimit(t *testing.T) {
 	goodsID := seedProductGoodsSyncGoods(t, core, 1, 1, strings.TrimPrefix(server.URL, "http://"), 1, 1)
 	seedProductGoodsSyncExtraBinding(t, core, goodsID, "SKU-101")
 	seedProductGoodsSyncExtraBinding(t, core, goodsID, "SKU-102")
-	logic := NewProductGoodsLogic(core)
+	logic := newProductGoodsSyncTestLogic(t, core, server.URL)
 
 	result, err := logic.SyncChannelBindingsOnce(ctx, ProductGoodsChannelSyncOptions{GoodsID: goodsID, Limit: 1})
 	require.NoError(t, err)
@@ -242,7 +243,7 @@ func TestSyncChannelBindingsOnceDoesNotOverwriteWithBadUpstreamData(t *testing.T
 	t.Cleanup(server.Close)
 
 	goodsID := seedProductGoodsSyncGoods(t, core, 1, 1, strings.TrimPrefix(server.URL, "http://"), 1, 1)
-	logic := NewProductGoodsLogic(core)
+	logic := newProductGoodsSyncTestLogic(t, core, server.URL)
 
 	result, err := logic.SyncChannelBindingsOnce(ctx, ProductGoodsChannelSyncOptions{GoodsID: goodsID, Limit: 200})
 	require.NoError(t, err)
@@ -267,7 +268,7 @@ func TestSyncChannelBindingsOnceUpdatesNameWhenPriceInvalid(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	goodsID := seedProductGoodsSyncGoods(t, core, 1, 1, strings.TrimPrefix(server.URL, "http://"), 1, 0)
-	logic := NewProductGoodsLogic(core)
+	logic := newProductGoodsSyncTestLogic(t, core, server.URL)
 
 	result, err := logic.SyncChannelBindingsOnce(ctx, ProductGoodsChannelSyncOptions{GoodsID: goodsID, Limit: 200})
 	require.NoError(t, err)
@@ -292,7 +293,7 @@ func TestSaveInventoryConfigTriggersImmediateSyncWhenSwitchEnabled(t *testing.T)
 	t.Cleanup(server.Close)
 
 	goodsID := seedProductGoodsSyncGoods(t, core, 0, 0, strings.TrimPrefix(server.URL, "http://"), 1, 0)
-	logic := NewProductGoodsLogic(core)
+	logic := newProductGoodsSyncTestLogic(t, core, server.URL)
 
 	_, err = logic.SaveInventoryConfig(ctx, &adminapi.ProductGoodsInventoryConfigSaveReq{
 		GoodsId:               goodsID,
@@ -350,7 +351,7 @@ func TestProductGoodsChannelSyncWorkerStopCancelsRunningRequest(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	seedProductGoodsSyncGoods(t, core, 1, 1, strings.TrimPrefix(server.URL, "http://"), 1, 1)
-	logic := NewProductGoodsLogic(core)
+	logic := newProductGoodsSyncTestLogic(t, core, server.URL)
 	worker := NewProductGoodsChannelSyncWorker(logic, ProductGoodsChannelSyncWorkerOptions{
 		Interval: time.Millisecond,
 		Limit:    200,
@@ -375,6 +376,38 @@ func TestProductGoodsChannelSyncWorkerStopCancelsRunningRequest(t *testing.T) {
 		<-stopped
 		t.Fatal("worker Stop 没有取消正在执行的上游请求")
 	}
+}
+
+type productGoodsSyncRewriteTransport struct {
+	target *url.URL
+	base   http.RoundTripper
+}
+
+func (t productGoodsSyncRewriteTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	cloned := req.Clone(req.Context())
+	cloned.URL.Scheme = t.target.Scheme
+	cloned.URL.Host = t.target.Host
+	cloned.Host = t.target.Host
+	base := t.base
+	if base == nil {
+		base = http.DefaultTransport
+	}
+	return base.RoundTrip(cloned)
+}
+
+func newProductGoodsSyncTestLogic(t *testing.T, core *app.Core, serverURL string) *ProductGoodsLogic {
+	t.Helper()
+	target, err := url.Parse(serverURL)
+	require.NoError(t, err)
+	logic := NewProductGoodsLogic(core)
+	logic.httpClient = &http.Client{
+		Timeout: 5 * time.Second,
+		Transport: productGoodsSyncRewriteTransport{
+			target: target,
+			base:   http.DefaultTransport,
+		},
+	}
+	return logic
 }
 
 func seedProductGoodsSyncTaxConfig(t *testing.T, core *app.Core) {

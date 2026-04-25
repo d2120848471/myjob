@@ -281,6 +281,12 @@ func (l *ProductGoodsLogic) httpClientForProductInfoProvider(providerCode string
 	if providerCode != "kakayun" {
 		return baseClient
 	}
+	if baseClient.Transport != nil {
+		if _, ok := baseClient.Transport.(*http.Transport); !ok {
+			// 测试或调用方可能注入自定义 RoundTripper，此时不能强行替换 transport。
+			return baseClient
+		}
+	}
 	client := *baseClient
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	if baseTransport, ok := baseClient.Transport.(*http.Transport); ok && baseTransport != nil {

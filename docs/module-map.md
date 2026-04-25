@@ -129,7 +129,7 @@
 - 路由前缀：`/api/admin/supplier-platform-types`、`/api/admin/supplier-platforms*`
 - 权限：`supplier.index`
 - 主要能力：平台类型字典、平台账号分页、详情、增删改、启停、余额刷新、余额日志落库、平台关闭后级联关停商品绑定、卡卡云商品详情适配器。
-- 边界：`platform_docs/` 保存渠道原始协议，`docs/` 保存本仓库实现说明。
+- 边界：`platform_docs/` 保存渠道原始协议，`docs/` 保存本仓库实现说明；卡卡云商品详情因平台接口限制固定走公共域名，下单、查单和其他 provider 仍使用账号配置域名。
 
 ### 订单履约
 

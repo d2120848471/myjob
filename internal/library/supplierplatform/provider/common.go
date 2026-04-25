@@ -192,7 +192,9 @@ func newGetRequest(ctx context.Context, requestURL string, headers map[string]st
 
 func decodeJSONMap(body []byte) (map[string]any, error) {
 	payload := make(map[string]any)
-	if err := json.Unmarshal(body, &payload); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.UseNumber()
+	if err := decoder.Decode(&payload); err != nil {
 		return nil, err
 	}
 	return payload, nil

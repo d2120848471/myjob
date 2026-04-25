@@ -21,6 +21,8 @@ type julangyunProvider struct{}
 type feisuyuanProvider struct{}
 type xinghaiProvider struct{}
 
+const kakayunProductInfoBaseURL = "http://public.kky.v3.api.kakayun.vip"
+
 func (kakayunProvider) Code() string { return "kakayun" }
 func (kakayunProvider) Name() string { return "卡卡云" }
 func (kakayunProvider) CandidateBaseURLs(account AccountConfig) []string {
@@ -53,7 +55,7 @@ func (kakayunProvider) ParseBalanceResponse(statusCode int, body []byte) (decima
 	return parseSuccessBalance(payload, "1", "data", "money")
 }
 
-func (kakayunProvider) BuildProductInfoRequest(ctx context.Context, account AccountConfig, now time.Time, baseURL string, input ProductInfoInput) (*http.Request, error) {
+func (kakayunProvider) BuildProductInfoRequest(ctx context.Context, account AccountConfig, now time.Time, _ string, input ProductInfoInput) (*http.Request, error) {
 	timestamp := now.Unix()
 	payload := map[string]any{
 		"userid":    strings.TrimSpace(account.TokenID),
@@ -61,7 +63,8 @@ func (kakayunProvider) BuildProductInfoRequest(ctx context.Context, account Acco
 		"goodsid":   strings.TrimSpace(input.SupplierGoodsNo),
 	}
 	payload["sign"] = kakayunSign(payload, account.SecretKey)
-	return newJSONRequest(ctx, strings.TrimRight(baseURL, "/")+"/dockapiv3/goods/details", payload, map[string]string{
+	// 卡卡云平台问题：商品详情接口只能走公共固定域名；下单、查单和余额仍使用账号配置域名。
+	return newJSONRequest(ctx, kakayunProductInfoBaseURL+"/dockapiv3/goods/details", payload, map[string]string{
 		"User-Agent": "curl/7.81.0",
 	})
 }

@@ -211,7 +211,7 @@ func TestKakayunProductInfoProviderBuildRequestAndParse(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, http.MethodPost, req.Method)
-	require.Equal(t, "http://qqlogin.yxp8.cn/dockapiv3/goods/details", req.URL.String())
+	require.Equal(t, "http://public.kky.v3.api.kakayun.vip/dockapiv3/goods/details", req.URL.String())
 	require.Equal(t, "curl/7.81.0", req.Header.Get("User-Agent"))
 
 	body := readRequestBody(t, req)
@@ -228,6 +228,17 @@ func TestKakayunProductInfoProviderBuildRequestAndParse(t *testing.T) {
 	require.True(t, result.GoodsPriceValid)
 	require.Equal(t, "11.0000", result.GoodsPrice.StringFixed(4))
 	require.Contains(t, result.Raw, `"goodsname":"测试产品"`)
+}
+
+func TestKakayunProductInfoProviderParsesNumericGoodsID(t *testing.T) {
+	provider, ok := LookupProductInfo("kakayun")
+	require.True(t, ok)
+
+	result, err := provider.ParseProductInfoResponse(http.StatusOK, []byte(`{"code":1,"msg":"success","data":{"goodsid":2582531,"goodsname":"测试产品888","goodsprice":"0.1000","goodsstatus":1}}`))
+	require.NoError(t, err)
+	require.Equal(t, "2582531", result.SupplierGoodsNo)
+	require.Equal(t, "测试产品888", result.GoodsName)
+	require.Equal(t, "0.1000", result.GoodsPrice.StringFixed(4))
 }
 
 func TestKakayunProductInfoProviderRejectsInvalidResponses(t *testing.T) {
