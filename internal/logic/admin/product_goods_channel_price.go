@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"myjob/internal/library/channelpricing"
 	modelruntime "myjob/internal/model/runtime"
 
 	"github.com/shopspring/decimal"
@@ -14,8 +15,8 @@ const (
 	taxAdjustDirectionUntaxedToTaxed = "untaxed_to_taxed"
 	taxAdjustDirectionTaxedToUntaxed = "taxed_to_untaxed"
 
-	autoPriceAddTypeFixed   = "fixed"
-	autoPriceAddTypePercent = "percent"
+	autoPriceAddTypeFixed   = channelpricing.AddTypeFixed
+	autoPriceAddTypePercent = channelpricing.AddTypePercent
 )
 
 type productGoodsChannelCostSnapshot struct {
@@ -72,33 +73,11 @@ func computeChannelCostSnapshot(sourceCostPrice string, goodsHasTax, channelHasT
 
 // computeChannelEffectiveSellPrice 按绑定自动改价规则，计算当前绑定的可售价格。
 func computeChannelEffectiveSellPrice(defaultSellPrice, costPrice string, isAutoChange int, addType, defaultPrice string) (string, error) {
-	if isAutoChange == 0 {
-		if strings.TrimSpace(defaultSellPrice) == "" {
-			return "", nil
-		}
-		basePrice, err := decimal.NewFromString(strings.TrimSpace(defaultSellPrice))
-		if err != nil {
-			return "", fmt.Errorf("商品默认售价格式错误: %w", err)
-		}
-		return basePrice.Round(4).StringFixed(4), nil
-	}
-
-	costAmount, err := decimal.NewFromString(strings.TrimSpace(costPrice))
-	if err != nil {
-		return "", fmt.Errorf("比较成本价格式错误: %w", err)
-	}
-	profitAmount, err := decimal.NewFromString(strings.TrimSpace(defaultPrice))
-	if err != nil {
-		return "", fmt.Errorf("利润值格式错误: %w", err)
-	}
-
-	switch strings.TrimSpace(addType) {
-	case autoPriceAddTypeFixed:
-		return costAmount.Add(profitAmount).Round(4).StringFixed(4), nil
-	case autoPriceAddTypePercent:
-		multiplier := decimal.NewFromInt(1).Add(profitAmount.Div(channelPricePercentBase))
-		return costAmount.Mul(multiplier).Round(4).StringFixed(4), nil
-	default:
-		return "", fmt.Errorf("自动改价类型错误")
-	}
+	return channelpricing.EffectiveSellPrice(channelpricing.Rule{
+		DefaultSellPrice: defaultSellPrice,
+		CostPrice:        costPrice,
+		IsAutoChange:     isAutoChange,
+		AddType:          addType,
+		ProfitValue:      defaultPrice,
+	})
 }

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	runtimeapp "myjob/internal/app"
+	"myjob/internal/library/channelpricing"
 	supplierprovider "myjob/internal/library/supplierplatform/provider"
 	"myjob/internal/model/entity"
 
@@ -207,8 +208,10 @@ func (l *OrderLogic) handleAttemptFailed(ctx context.Context, order entity.Exter
 
 func (l *OrderLogic) claimOrderWithPendingAttempt(ctx context.Context, order entity.ExternalOrder, candidate orderChannelCandidate, attemptNo int, supplierUSOrderNo string) (entity.ExternalOrderAttempt, bool, error) {
 	now := l.core.Now()
-	costAmount := multiplyMoneyByQuantity(candidate.CostPrice, order.Quantity)
-	profitAmount := subtractMoney(order.OrderAmount, costAmount)
+	priceSnapshot, err := channelpricing.OrderSnapshot(candidate.pricingRule(), order.Quantity)
+	if err != nil {
+		return entity.ExternalOrderAttempt{}, false, err
+	}
 	nextPollAt := now.Add(pollIntervalDuration(l.core.Config().OpenOrder.PollIntervalSeconds))
 	attempt := entity.ExternalOrderAttempt{
 		OrderID:             order.ID,
@@ -217,6 +220,8 @@ func (l *OrderLogic) claimOrderWithPendingAttempt(ctx context.Context, order ent
 		ChannelBindingID:    candidate.BindingID,
 		PlatformAccountID:   candidate.PlatformAccountID,
 		PlatformAccountName: candidate.PlatformAccountName,
+		PlatformSubjectID:   candidate.PlatformSubjectID,
+		PlatformSubjectName: candidate.PlatformSubjectName,
 		ProviderCode:        candidate.ProviderCode,
 		SupplierGoodsNo:     candidate.SupplierGoodsNo,
 		SupplierGoodsName:   candidate.SupplierGoodsName,
@@ -226,20 +231,20 @@ func (l *OrderLogic) claimOrderWithPendingAttempt(ctx context.Context, order ent
 		CreatedAt:           now,
 		UpdatedAt:           now,
 	}
-	err := l.core.DB().Transaction(ctx, func(ctx context.Context, tx gdb.TX) error {
-		claimed, err := l.markOrderSubmitting(ctx, tx, order, attemptNo, nextPollAt, costAmount, profitAmount, now)
+	err = l.core.DB().Transaction(ctx, func(ctx context.Context, tx gdb.TX) error {
+		claimed, err := l.markOrderSubmitting(ctx, tx, order, attemptNo, nextPollAt, priceSnapshot, now)
 		if err != nil || !claimed {
 			return err
 		}
 		insertResult, err := tx.Exec(`
 INSERT INTO external_order_attempt (
-    order_id, order_no, attempt_no, channel_binding_id, platform_account_id, platform_account_name,
+    order_id, order_no, attempt_no, channel_binding_id, platform_account_id, platform_account_name, platform_subject_id, platform_subject_name,
     provider_code, supplier_goods_no, supplier_goods_name, supplier_us_order_no, supplier_order_no,
     supplier_status, refund_status, request_snapshot, response_snapshot, receipt, status,
     submitted_at, created_at, updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `, order.ID, order.OrderNo, attemptNo, candidate.BindingID, candidate.PlatformAccountID, candidate.PlatformAccountName,
-			candidate.ProviderCode, candidate.SupplierGoodsNo, candidate.SupplierGoodsName, supplierUSOrderNo, "",
+			candidate.PlatformSubjectID, candidate.PlatformSubjectName, candidate.ProviderCode, candidate.SupplierGoodsNo, candidate.SupplierGoodsName, supplierUSOrderNo, "",
 			"", "", "", "", attempt.Receipt, OrderAttemptStatusPending,
 			nil, now, now)
 		if err != nil {
@@ -265,14 +270,14 @@ WHERE id = ?
 	return attempt, true, nil
 }
 
-func (l *OrderLogic) markOrderSubmitting(ctx context.Context, tx gdb.TX, order entity.ExternalOrder, attemptNo int, nextPollAt time.Time, costAmount, profitAmount string, now time.Time) (bool, error) {
+func (l *OrderLogic) markOrderSubmitting(ctx context.Context, tx gdb.TX, order entity.ExternalOrder, attemptNo int, nextPollAt time.Time, priceSnapshot channelpricing.OrderPriceSnapshot, now time.Time) (bool, error) {
 	sqlText := `
 UPDATE external_order
 SET status = ?, attempt_count = ?, last_receipt = ?, next_poll_at = ?,
-    cost_amount = ?, profit_amount = ?, updated_at = ?
+    unit_price = ?, order_amount = ?, cost_amount = ?, profit_amount = ?, updated_at = ?
 WHERE id = ?
 `
-	args := []any{OrderStatusProcessing, attemptNo, "正在提交上游订单", nextPollAt, costAmount, profitAmount, now, order.ID}
+	args := []any{OrderStatusProcessing, attemptNo, "正在提交上游订单", nextPollAt, priceSnapshot.UnitPrice, priceSnapshot.OrderAmount, priceSnapshot.CostAmount, priceSnapshot.ProfitAmount, now, order.ID}
 	switch {
 	case order.Status == OrderStatusPendingSubmit:
 		sqlText += ` AND status = ? AND (current_attempt_id IS NULL OR current_attempt_id = 0)`
@@ -297,8 +302,10 @@ WHERE id = ?
 
 func (l *OrderLogic) applySubmitResultToAttempt(ctx context.Context, order entity.ExternalOrder, candidate orderChannelCandidate, attempt entity.ExternalOrderAttempt, attemptNo int, result createSubmitResult) error {
 	now := l.core.Now()
-	costAmount := multiplyMoneyByQuantity(candidate.CostPrice, order.Quantity)
-	profitAmount := subtractMoney(order.OrderAmount, costAmount)
+	priceSnapshot, err := channelpricing.OrderSnapshot(candidate.pricingRule(), order.Quantity)
+	if err != nil {
+		return err
+	}
 	nextPollAt := any(nil)
 	if result.OrderStatus == OrderStatusProcessing || result.OrderStatus == OrderStatusUnknown {
 		nextPollAt = now.Add(pollIntervalDuration(l.core.Config().OpenOrder.PollIntervalSeconds))
@@ -317,9 +324,9 @@ WHERE id = ?
 		_, err = tx.Exec(`
 UPDATE external_order
 SET status = ?, current_attempt_id = ?, attempt_count = ?, last_receipt = ?, next_poll_at = ?,
-    cost_amount = ?, profit_amount = ?, updated_at = ?
+    unit_price = ?, order_amount = ?, cost_amount = ?, profit_amount = ?, updated_at = ?
 WHERE id = ?
-`, result.OrderStatus, attempt.ID, attemptNo, defaultOrderMessage(result.Receipt, result.Message), nextPollAt, costAmount, profitAmount, now, order.ID)
+`, result.OrderStatus, attempt.ID, attemptNo, defaultOrderMessage(result.Receipt, result.Message), nextPollAt, priceSnapshot.UnitPrice, priceSnapshot.OrderAmount, priceSnapshot.CostAmount, priceSnapshot.ProfitAmount, now, order.ID)
 		return err
 	})
 }
@@ -453,24 +460,4 @@ func defaultOrderMessage(value, fallback string) string {
 
 func intToString(value int) string {
 	return decimal.NewFromInt(int64(value)).String()
-}
-
-func multiplyMoneyByQuantity(value string, quantity int) string {
-	amount, err := decimal.NewFromString(strings.TrimSpace(value))
-	if err != nil {
-		return "0.0000"
-	}
-	return amount.Mul(decimal.NewFromInt(int64(quantity))).Round(4).StringFixed(4)
-}
-
-func subtractMoney(left, right string) string {
-	leftAmount, err := decimal.NewFromString(strings.TrimSpace(left))
-	if err != nil {
-		return "0.0000"
-	}
-	rightAmount, err := decimal.NewFromString(strings.TrimSpace(right))
-	if err != nil {
-		return "0.0000"
-	}
-	return leftAmount.Sub(rightAmount).Round(4).StringFixed(4)
 }

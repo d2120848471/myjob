@@ -156,6 +156,91 @@ func TestOrderWorkerDoesNotSubmitWhenGoodsDisabledAfterCreate(t *testing.T) {
 	require.EqualValues(t, 0, createCount.Load())
 }
 
+func TestOrderWorkerUsesSelectedChannelSubjectAndAutoPriceAmounts(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "/dockapiv3/order/create", r.URL.Path)
+		payload := map[string]any{}
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+		_, _ = w.Write([]byte(`{"code":1,"message":"下单成功","data":{"orderno":"SD202604240008","usorderno":"` + payload["usorderno"].(string) + `"}}`))
+	}))
+	defer server.Close()
+
+	h := newOrderIntegrationHarness(t)
+	token := h.loginAdmin(t)
+	leafBrandID := h.createBrandPath(t, token, "订单利润品牌", "视频会员", "网易云")
+	subjectID := h.createSubject(t, token, "订单利润渠道主体", 0)
+	goodsID := h.createDirectRechargeGoods(t, token, leafBrandID, "订单利润商品", "2.0000")
+	platformID := h.createKakayunPlatform(t, token, "订单利润云发卡", subjectID, 0, strings.TrimPrefix(server.URL, "http://"))
+
+	createBinding := h.postJSON("/api/admin/products/"+int64ToString(goodsID)+"/channel-bindings", map[string]any{
+		"platform_account_id": platformID,
+		"supplier_goods_no":   "2478512",
+		"supplier_goods_name": "云发卡利润测试商品",
+		"source_cost_price":   "11.0000",
+		"dock_status":         1,
+		"sort":                10,
+	}, token)
+	require.Equal(t, 0, createBinding.Code)
+	var bindingData struct {
+		ID int64 `json:"id"`
+	}
+	require.NoError(t, json.Unmarshal(createBinding.Data, &bindingData))
+
+	autoPrice := h.request(http.MethodPatch, "/api/admin/products/"+int64ToString(goodsID)+"/channel-bindings/"+int64ToString(bindingData.ID)+"/auto-price", map[string]any{
+		"is_auto_change": 1,
+		"add_type":       "fixed",
+		"default_price":  "1.0000",
+	}, token)
+	require.Equal(t, 0, autoPrice.Code)
+
+	detail := h.getJSON("/api/admin/products/"+int64ToString(goodsID), token)
+	require.Equal(t, 0, detail.Code)
+	var goodsDetail struct {
+		GoodsCode string `json:"goods_code"`
+	}
+	require.NoError(t, json.Unmarshal(detail.Data, &goodsDetail))
+
+	createOrder := h.postJSON("/api/open/orders", map[string]any{
+		"token":    "test-open-order-token",
+		"goods_id": goodsDetail.GoodsCode,
+		"account":  "13800138000",
+		"quantity": 1,
+	}, "")
+	require.Equal(t, 0, createOrder.Code)
+	var createData struct {
+		OrderNo string `json:"order_no"`
+	}
+	require.NoError(t, json.Unmarshal(createOrder.Data, &createData))
+
+	require.NoError(t, h.orderService.SubmitPendingOnce(context.Background()))
+	order := h.loadOrder(t, createData.OrderNo)
+	require.Equal(t, "12.0000", order.UnitPrice)
+	require.Equal(t, "12.0000", order.OrderAmount)
+	require.Equal(t, "11.0000", order.CostAmount)
+	require.Equal(t, "1.0000", order.ProfitAmount)
+
+	attempt := h.loadCurrentAttempt(t, order.ID)
+	require.Equal(t, subjectID, attempt.PlatformSubjectID)
+	require.Equal(t, "订单利润渠道主体", attempt.PlatformSubjectName)
+
+	listRes := h.getJSON("/api/admin/orders?page=1&page_size=20&keyword="+createData.OrderNo+"&keyword_by=order_no", token)
+	require.Equal(t, 0, listRes.Code)
+	var listData struct {
+		List []struct {
+			SalesSubjectName string `json:"sales_subject_name"`
+			OrderAmount      string `json:"order_amount"`
+			CostAmount       string `json:"cost_amount"`
+			ProfitAmount     string `json:"profit_amount"`
+		} `json:"list"`
+	}
+	require.NoError(t, json.Unmarshal(listRes.Data, &listData))
+	require.Len(t, listData.List, 1)
+	require.Equal(t, "订单利润渠道主体", listData.List[0].SalesSubjectName)
+	require.Equal(t, "12.0000", listData.List[0].OrderAmount)
+	require.Equal(t, "11.0000", listData.List[0].CostAmount)
+	require.Equal(t, "1.0000", listData.List[0].ProfitAmount)
+}
+
 func TestSubmitPendingOnceClaimsOrderBeforeCallingSupplier(t *testing.T) {
 	var requestCount atomic.Int32
 	firstRequest := make(chan struct{})

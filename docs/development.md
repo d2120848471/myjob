@@ -193,6 +193,12 @@ export GF_DAO_LINK='mysql:root:root123456@tcp(127.0.0.1:3306)/admin?charset=utf8
 
 商品渠道同步入口在 `internal/logic/admin/product_goods_channel_sync.go`。同步进价时必须复用 `computeChannelCostSnapshot`，保证商品税态和渠道税态的加税、扣税规则与人工维护绑定一致；自动改价利润字段只保留用户配置，不在同步流程中重写。
 
+## 订单金额快照
+
+订单提交会按实际选中的渠道绑定规则写入 `unit_price / order_amount / cost_amount / profit_amount`，并在 `external_order_attempt` 保存渠道主体快照。历史订单如需再次修复，应先按明确订单号或历史时间窗口预览影响范围，再在维护窗口执行一次性 SQL；不要对实时处理中订单做批量回算。
+
+`external_order_attempt` 的渠道主体快照列有启动兜底补列逻辑，并设置了较短的 MySQL `lock_wait_timeout`。生产大表仍建议先在维护窗口执行显式 DDL，再启动新版本，避免启动期等待元数据锁。
+
 ## 日常开发约束
 
 - controller 不直接访问 DAO。

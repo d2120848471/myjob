@@ -38,7 +38,7 @@ func adminOrderListItemFromRecord(row gdb.Record) adminapi.OrderListItem {
 	status := row["status"].String()
 	return adminapi.OrderListItem{
 		ID:                 row["id"].Int64(),
-		SalesSubjectName:   row["subject_name"].String(),
+		SalesSubjectName:   row["sales_subject_name"].String(),
 		OrderNo:            row["order_no"].String(),
 		GoodsID:            row["goods_code"].String(),
 		GoodsName:          row["goods_name"].String(),

@@ -75,6 +75,8 @@ type ExternalOrderAttempt struct {
 	ChannelBindingID    int64        `db:"channel_binding_id" json:"channel_binding_id"`
 	PlatformAccountID   int64        `db:"platform_account_id" json:"platform_account_id"`
 	PlatformAccountName string       `db:"platform_account_name" json:"platform_account_name"`
+	PlatformSubjectID   int64        `db:"platform_subject_id" json:"platform_subject_id"`
+	PlatformSubjectName string       `db:"platform_subject_name" json:"platform_subject_name"`
 	ProviderCode        string       `db:"provider_code" json:"provider_code"`
 	SupplierGoodsNo     string       `db:"supplier_goods_no" json:"supplier_goods_no"`
 	SupplierGoodsName   string       `db:"supplier_goods_name" json:"supplier_goods_name"`

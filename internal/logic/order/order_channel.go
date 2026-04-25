@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"myjob/internal/consts"
+	"myjob/internal/library/channelpricing"
 
 	"github.com/shopspring/decimal"
 )
@@ -17,10 +18,16 @@ type orderChannelCandidate struct {
 	BindingID           int64  `db:"binding_id"`
 	PlatformAccountID   int64  `db:"platform_account_id"`
 	PlatformAccountName string `db:"platform_account_name"`
+	PlatformSubjectID   int64  `db:"platform_subject_id"`
+	PlatformSubjectName string `db:"platform_subject_name"`
 	ProviderCode        string `db:"provider_code"`
 	SupplierGoodsNo     string `db:"supplier_goods_no"`
 	SupplierGoodsName   string `db:"supplier_goods_name"`
 	CostPrice           string `db:"cost_price"`
+	DefaultSellPrice    string `db:"default_sell_price"`
+	IsAutoChange        int    `db:"is_auto_change"`
+	AddType             string `db:"add_type"`
+	DefaultPrice        string `db:"default_price"`
 	Sort                int    `db:"sort"`
 	OrderWeight         string `db:"order_weight"`
 	OrderTimeStart      string `db:"order_time_start"`
@@ -34,10 +41,16 @@ SELECT
     b.id AS binding_id,
     a.id AS platform_account_id,
     a.name AS platform_account_name,
+    a.subject_id AS platform_subject_id,
+    COALESCE(s.name, '') AS platform_subject_name,
     a.provider_code,
     b.supplier_goods_no,
     b.supplier_goods_name,
     b.cost_price,
+    COALESCE(g.default_sell_price, '0.0000') AS default_sell_price,
+    b.is_auto_change,
+    b.add_type,
+    b.default_price,
     b.sort,
     b.order_weight,
     b.order_time_start,
@@ -45,6 +58,7 @@ SELECT
 FROM product_goods_channel_binding b
 JOIN supplier_platform_account a ON a.id = b.platform_account_id
 JOIN product_goods g ON g.id = b.goods_id
+LEFT JOIN admin_subject s ON s.id = a.subject_id
 WHERE b.goods_id = ?
   AND g.status = 1
   AND g.is_deleted = 0
@@ -70,6 +84,16 @@ ORDER BY b.sort ASC, b.id ASC
 		filtered = append(filtered, row)
 	}
 	return filtered, nil
+}
+
+func (c orderChannelCandidate) pricingRule() channelpricing.Rule {
+	return channelpricing.Rule{
+		DefaultSellPrice: c.DefaultSellPrice,
+		CostPrice:        c.CostPrice,
+		IsAutoChange:     c.IsAutoChange,
+		AddType:          c.AddType,
+		ProfitValue:      c.DefaultPrice,
+	}
 }
 
 func selectCandidate(candidates []orderChannelCandidate, attempted map[int64]struct{}, strategy string, now time.Time) orderChannelCandidate {

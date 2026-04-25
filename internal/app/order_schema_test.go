@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -17,6 +18,8 @@ func TestExternalOrderSchemaContainsRequiredTablesAndIndexes(t *testing.T) {
 		require.Contains(t, schema, "idx_external_order_status_poll")
 		require.Contains(t, schema, "idx_external_order_attempt_order")
 		require.Contains(t, schema, "supplier_us_order_no")
+		require.Contains(t, schema, "platform_subject_id")
+		require.Contains(t, schema, "platform_subject_name")
 		require.Contains(t, schema, "request_snapshot")
 		require.Contains(t, schema, "response_snapshot")
 	}
@@ -28,6 +31,57 @@ func TestExternalOrderMySQLCommentsArePresent(t *testing.T) {
 	for _, column := range []string{"订单号", "充值账号", "订单状态", "上游商家单号", "上游订单号"} {
 		require.Contains(t, mysqlSchema, column)
 	}
+}
+
+func TestEnsureExternalOrderAttemptSchemaAddsSubjectSnapshotColumns(t *testing.T) {
+	core, err := NewTestCore()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = core.Close() })
+
+	ctx := context.Background()
+	_, err = core.DB().Exec(ctx, `DROP TABLE IF EXISTS external_order_attempt`)
+	require.NoError(t, err)
+	_, err = core.DB().Exec(ctx, `
+CREATE TABLE external_order_attempt (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    order_id BIGINT UNSIGNED NOT NULL,
+    order_no VARCHAR(40) NOT NULL,
+    attempt_no INT NOT NULL,
+    channel_binding_id BIGINT UNSIGNED NOT NULL,
+    platform_account_id BIGINT UNSIGNED NOT NULL,
+    platform_account_name VARCHAR(128) NOT NULL DEFAULT '',
+    provider_code VARCHAR(32) NOT NULL,
+    supplier_goods_no VARCHAR(128) NOT NULL,
+    supplier_goods_name VARCHAR(255) NOT NULL DEFAULT '',
+    supplier_us_order_no VARCHAR(64) NOT NULL,
+    supplier_order_no VARCHAR(128) NOT NULL DEFAULT '',
+    supplier_status VARCHAR(32) NOT NULL DEFAULT '',
+    refund_status VARCHAR(32) NOT NULL DEFAULT '',
+    request_snapshot TEXT NOT NULL,
+    response_snapshot TEXT NOT NULL,
+    receipt VARCHAR(512) NOT NULL DEFAULT '',
+    status VARCHAR(32) NOT NULL,
+    submitted_at DATETIME NULL,
+    last_checked_at DATETIME NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL
+)`)
+	require.NoError(t, err)
+
+	require.NoError(t, core.ensureExternalOrderAttemptSchema(ctx))
+	require.NoError(t, core.ensureExternalOrderAttemptSchema(ctx))
+
+	rows := make([]struct {
+		Field string `db:"Field"`
+	}, 0)
+	require.NoError(t, core.DB().GetCore().GetScan(ctx, &rows, `SHOW COLUMNS FROM external_order_attempt`))
+
+	columnNames := make([]string, 0, len(rows))
+	for _, row := range rows {
+		columnNames = append(columnNames, row.Field)
+	}
+	require.Contains(t, columnNames, "platform_subject_id")
+	require.Contains(t, columnNames, "platform_subject_name")
 }
 
 func TestOpenOrderDefaultConfigIsUsableForTests(t *testing.T) {
