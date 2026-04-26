@@ -52,6 +52,7 @@ type CreateOrderInput struct {
 	Quantity          int
 	Account           string
 	SupplierUSOrderNo string
+	MaxMoney          string
 }
 
 // CreateOrderResult 表示上游下单响应解析后的稳定结果。

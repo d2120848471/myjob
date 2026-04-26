@@ -316,22 +316,39 @@ func TestKakayunOrderProviderBuildCreateRequest(t *testing.T) {
 		TokenID:      "10052",
 		SecretKey:    "9aa3034b6beba7cf5bfcf6089218a674",
 	}
-	req, err := provider.BuildCreateOrderRequest(context.Background(), account, time.Unix(1735002156, 0), "http://qqlogin.yxp8.cn", CreateOrderInput{
+	now := time.Unix(1735002156, 0)
+	req, err := provider.BuildCreateOrderRequest(context.Background(), account, now, "http://qqlogin.yxp8.cn", CreateOrderInput{
 		SupplierGoodsNo:   "720938",
 		Quantity:          1,
 		Account:           "13088888888",
 		SupplierUSOrderNo: "O20260424153000123456-T1",
+		MaxMoney:          "11.0000",
 	})
 	require.NoError(t, err)
 	require.Equal(t, http.MethodPost, req.Method)
 	require.Equal(t, "http://qqlogin.yxp8.cn/dockapiv3/order/create", req.URL.String())
 	body, err := io.ReadAll(req.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(body), `"userid":"10052"`)
-	require.Contains(t, string(body), `"goodsid":"720938"`)
-	require.Contains(t, string(body), `"attach":"13088888888"`)
-	require.Contains(t, string(body), `"usorderno":"O20260424153000123456-T1"`)
-	require.Contains(t, string(body), `"sign":"`)
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal(body, &payload))
+	require.Equal(t, "10052", payload["userid"])
+	require.Equal(t, float64(1735002156), payload["timestamp"])
+	require.Equal(t, "720938", payload["goodsid"])
+	require.Equal(t, float64(1), payload["buynum"])
+	require.Equal(t, "13088888888", payload["attach"])
+	require.Equal(t, "O20260424153000123456-T1", payload["usorderno"])
+	require.Equal(t, "11.0000", payload["maxmoney"])
+
+	expectedPayload := map[string]any{
+		"userid":    "10052",
+		"timestamp": now.Unix(),
+		"goodsid":   "720938",
+		"buynum":    1,
+		"attach":    "13088888888",
+		"usorderno": "O20260424153000123456-T1",
+		"maxmoney":  "11.0000",
+	}
+	require.Equal(t, kakayunSign(expectedPayload, account.SecretKey), payload["sign"])
 }
 
 func TestKakayunOrderProviderParseCreateAndQuery(t *testing.T) {
