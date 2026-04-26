@@ -9,7 +9,10 @@
 
 ## 当前文档
 
-当前没有需要继续保留在本目录的阶段性规格或实施计划。已完成事项应沉淀到稳定文档中，例如根 `README.md`、`docs/module-map.md`、`docs/development.md` 或 `docs/testing.md`。
+- `specs/2026-04-26-kakayun-maxmoney-loss-guard-design.md`：卡卡云下单 `maxmoney` 防亏本设计。
+- `plans/2026-04-26-kakayun-maxmoney-loss-guard.md`：卡卡云下单 `maxmoney` 防亏本实施计划。
+
+已完成事项应沉淀到稳定文档中，例如根 `README.md`、`docs/module-map.md`、`docs/development.md` 或 `docs/testing.md`。
 
 ## 维护要求
 
