@@ -47,6 +47,7 @@ func TestOrderWorkerSubmitsPendingOrderToKakayun(t *testing.T) {
 		require.Equal(t, "2478510", payload["goodsid"])
 		require.Equal(t, "13800138000", payload["attach"])
 		require.Contains(t, payload["usorderno"], "-T1")
+		require.Equal(t, "10.0000", payload["maxmoney"])
 		_, _ = w.Write([]byte(`{"code":1,"message":"下单成功","data":{"orderno":"SD202604240001","usorderno":"` + payload["usorderno"].(string) + `"}}`))
 	}))
 	defer server.Close()
@@ -60,6 +61,89 @@ func TestOrderWorkerSubmitsPendingOrderToKakayun(t *testing.T) {
 	attempt := h.loadCurrentAttempt(t, order.ID)
 	require.Equal(t, "SD202604240001", attempt.SupplierOrderNo)
 	require.Equal(t, "submitted", attempt.Status)
+}
+
+func TestOrderWorkerPassesKakayunMaxMoneyWithAllowedLoss(t *testing.T) {
+	captured := make([]map[string]any, 0, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "/dockapiv3/order/create", r.URL.Path)
+		var payload map[string]any
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+		captured = append(captured, payload)
+		_, _ = w.Write([]byte(`{"code":1,"message":"下单成功","data":{"orderno":"SD202604240099","usorderno":"` + payload["usorderno"].(string) + `"}}`))
+	}))
+	defer server.Close()
+
+	h := newOrderIntegrationHarness(t)
+	token := h.loginAdmin(t)
+	leafBrandID := h.createBrandPath(t, token, "允许亏本品牌", "视频会员", "爱奇艺")
+	subjectID := h.createSubject(t, token, "允许亏本渠道主体", 0)
+	goodsID := h.createDirectRechargeGoods(t, token, leafBrandID, "允许亏本商品", "10.0000")
+	platformID := h.createKakayunPlatform(t, token, "允许亏本云发卡", subjectID, 0, strings.TrimPrefix(server.URL, "http://"))
+	require.Equal(t, 0, h.postJSON("/api/admin/products/"+int64ToString(goodsID)+"/channel-bindings", map[string]any{
+		"platform_account_id": platformID,
+		"supplier_goods_no":   "2478599",
+		"supplier_goods_name": "允许亏本测试商品",
+		"source_cost_price":   "20.0000",
+		"dock_status":         1,
+		"sort":                10,
+	}, token).Code)
+	saveConfig := h.request(http.MethodPut, "/api/admin/products/"+int64ToString(goodsID)+"/inventory-config", map[string]any{
+		"smart_reorder_enabled":   0,
+		"reorder_timeout_enabled": 0,
+		"reorder_timeout_minutes": 0,
+		"order_strategy":          "fixed_order",
+		"sync_cost_price_enabled": 0,
+		"sync_goods_name_enabled": 0,
+		"allow_loss_sale_enabled": 1,
+		"max_loss_amount":         "2.5000",
+		"combo_goods_enabled":     0,
+	}, token)
+	require.Equal(t, 0, saveConfig.Code)
+
+	detail := h.getJSON("/api/admin/products/"+int64ToString(goodsID), token)
+	require.Equal(t, 0, detail.Code)
+	var goodsDetail struct {
+		GoodsCode string `json:"goods_code"`
+	}
+	require.NoError(t, json.Unmarshal(detail.Data, &goodsDetail))
+
+	create := h.postJSON("/api/open/orders", map[string]any{
+		"token":    "test-open-order-token",
+		"goods_id": goodsDetail.GoodsCode,
+		"account":  "13800138000",
+		"quantity": 1,
+	}, "")
+	require.Equal(t, 0, create.Code)
+	require.NoError(t, h.orderService.SubmitPendingOnce(context.Background()))
+	require.Len(t, captured, 1)
+	require.Equal(t, "12.5000", captured[0]["maxmoney"])
+}
+
+func TestOrderWorkerFailsOrderWhenKakayunMaxMoneyCannotBeCalculated(t *testing.T) {
+	var createCount atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		createCount.Add(1)
+		_, _ = w.Write([]byte(`{"code":1,"message":"下单成功","data":{"orderno":"SD202604240098","usorderno":"O-T1"}}`))
+	}))
+	defer server.Close()
+
+	h := newOrderIntegrationHarness(t)
+	orderNo := h.createPendingOpenOrderWithKakayunServer(t, server.URL)
+	order := h.loadOrder(t, orderNo)
+	_, err := h.app.Core().DB().Exec(context.Background(), `
+UPDATE product_goods_channel_binding
+SET source_cost_price = ?
+WHERE goods_id = ?
+`, "-1.0000", order.GoodsID)
+	require.NoError(t, err)
+
+	require.NoError(t, h.orderService.SubmitPendingOnce(context.Background()))
+	order = h.loadOrder(t, orderNo)
+	require.Equal(t, "failed", order.Status)
+	require.Contains(t, order.LastReceipt, "原始进货价格式错误")
+	require.EqualValues(t, 0, createCount.Load())
+	require.EqualValues(t, 0, h.scalarInt(t, `SELECT COUNT(*) FROM external_order_attempt WHERE order_id = ?`, order.ID))
 }
 
 func TestOrderWorkerPollsSuccessAndStops(t *testing.T) {
@@ -94,6 +178,13 @@ func TestOrderWorkerReordersOnlyInsideConfiguredWindow(t *testing.T) {
 		switch r.URL.Path {
 		case "/dockapiv3/order/create":
 			failCount++
+			var payload map[string]any
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+			if failCount == 1 {
+				require.Equal(t, "10.0000", payload["maxmoney"])
+			} else {
+				require.Equal(t, "11.0000", payload["maxmoney"])
+			}
 			_, _ = w.Write([]byte(fmt.Sprintf(`{"code":1,"message":"下单成功","data":{"orderno":"SD20260424%04d","usorderno":"O-T%d"}}`, failCount, failCount)))
 		case "/dockapiv3/order/get":
 			_, _ = w.Write([]byte(`{"code":1,"message":"ok","data":{"orderno":"SD202604240003","usorderno":"O-T1","status":4,"refundstatus":1,"receipt":"失败"}}`))
@@ -119,9 +210,11 @@ func TestOrderWorkerReordersWhenCreateExplicitlyFails(t *testing.T) {
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
 		current := createCount.Add(1)
 		if current == 1 {
+			require.Equal(t, "10.0000", payload["maxmoney"])
 			_, _ = w.Write([]byte(`{"code":0,"message":"库存不足"}`))
 			return
 		}
+		require.Equal(t, "11.0000", payload["maxmoney"])
 		_, _ = w.Write([]byte(`{"code":1,"message":"下单成功","data":{"orderno":"SD202604240004","usorderno":"` + payload["usorderno"].(string) + `"}}`))
 	}))
 	defer server.Close()

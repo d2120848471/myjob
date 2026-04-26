@@ -201,6 +201,8 @@ export GF_DAO_LINK='mysql:root:root123456@tcp(127.0.0.1:3306)/admin?charset=utf8
 
 订单提交会按实际选中的渠道绑定规则写入 `unit_price / order_amount / cost_amount / profit_amount`，并在 `external_order_attempt` 保存渠道主体快照。历史订单如需再次修复，应先按明确订单号或历史时间窗口预览影响范围，再在维护窗口执行一次性 SQL；不要对实时处理中订单做批量回算。
 
+卡卡云下单会传 `maxmoney` 作为上游防亏本最大进货总金额。该值使用渠道绑定的 `source_cost_price` 计算原始进货总额，再与订单销售金额加允许亏本金额取较小值：`min(source_cost_price * quantity, order_amount + allowed_loss)`。商品库存配置未开启亏本销售时，`allowed_loss` 固定为 `0`；开启时使用 `max_loss_amount`，且该金额按订单总额计入。
+
 `external_order_attempt` 的渠道主体快照列有启动兜底补列逻辑，并设置了较短的 MySQL `lock_wait_timeout`。生产大表仍建议先在维护窗口执行显式 DDL，再启动新版本，避免启动期等待元数据锁。
 
 ## 日常开发约束

@@ -3,10 +3,12 @@ package orderlogic
 import "time"
 
 type reorderConfig struct {
-	SmartEnabled   int
-	TimeoutEnabled int
-	TimeoutMinutes int
-	OrderStrategy  string
+	SmartEnabled         int
+	TimeoutEnabled       int
+	TimeoutMinutes       int
+	OrderStrategy        string
+	AllowLossSaleEnabled int
+	MaxLossAmount        string
 }
 
 func canReorder(config reorderConfig, createdAt, now time.Time) bool {

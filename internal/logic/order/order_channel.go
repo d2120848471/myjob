@@ -23,6 +23,7 @@ type orderChannelCandidate struct {
 	ProviderCode        string `db:"provider_code"`
 	SupplierGoodsNo     string `db:"supplier_goods_no"`
 	SupplierGoodsName   string `db:"supplier_goods_name"`
+	SourceCostPrice     string `db:"source_cost_price"`
 	CostPrice           string `db:"cost_price"`
 	DefaultSellPrice    string `db:"default_sell_price"`
 	IsAutoChange        int    `db:"is_auto_change"`
@@ -46,6 +47,7 @@ SELECT
     a.provider_code,
     b.supplier_goods_no,
     b.supplier_goods_name,
+    b.source_cost_price,
     b.cost_price,
     COALESCE(g.default_sell_price, '0.0000') AS default_sell_price,
     b.is_auto_change,

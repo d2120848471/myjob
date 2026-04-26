@@ -117,6 +117,9 @@ func (kakayunProvider) BuildCreateOrderRequest(ctx context.Context, account Acco
 		"attach":    strings.TrimSpace(input.Account),
 		"usorderno": strings.TrimSpace(input.SupplierUSOrderNo),
 	}
+	if maxMoney := strings.TrimSpace(input.MaxMoney); maxMoney != "" {
+		payload["maxmoney"] = maxMoney
+	}
 	payload["sign"] = kakayunSign(payload, account.SecretKey)
 	return newJSONRequest(ctx, strings.TrimRight(baseURL, "/")+"/dockapiv3/order/create", payload, map[string]string{
 		"User-Agent": "curl/7.81.0",
