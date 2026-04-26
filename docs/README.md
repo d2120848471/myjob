@@ -10,7 +10,7 @@
 - 查询业务域、路由、权限和文件归属：读 `module-map.md`。
 - 跑测试、对齐 CI 或确认 lint 口径：读 `testing.md`。
 - 理解历史迁移背景：读 `migration.md`。
-- 查看需求设计和实施计划：读 `superpowers/README.md`。
+- 查看阶段性规格和实施计划目录约定：读 `superpowers/README.md`；当前已完成文档不再单独保留。
 - 查询第三方渠道原始接口资料：读 `../platform_docs/README.md`。
 
 ## 维护原则

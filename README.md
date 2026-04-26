@@ -80,5 +80,5 @@ CI 会执行 test、build 和 lint。详细测试分层、MySQL 测试库和 liv
 - `docs/development.md`：本地开发、配置、SQL/schema 和 DAO 说明。
 - `docs/testing.md`：测试分层、执行命令、CI/lint 和外部依赖边界。
 - `docs/migration.md`：历史迁移背景。
-- `docs/superpowers/README.md`：规格和实施计划文档入口。
+- `docs/superpowers/README.md`：阶段性规格和实施计划目录约定；当前无保留文档。
 - `platform_docs/README.md`：第三方渠道原始接口资料总览。
