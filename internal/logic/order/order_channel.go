@@ -23,6 +23,7 @@ type orderChannelCandidate struct {
 	ProviderCode        string `db:"provider_code"`
 	SupplierGoodsNo     string `db:"supplier_goods_no"`
 	SupplierGoodsName   string `db:"supplier_goods_name"`
+	SourceCostPrice     string `db:"source_cost_price"`
 	CostPrice           string `db:"cost_price"`
 	DefaultSellPrice    string `db:"default_sell_price"`
 	IsAutoChange        int    `db:"is_auto_change"`
