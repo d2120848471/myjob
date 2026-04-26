@@ -316,8 +316,7 @@ func TestKakayunOrderProviderBuildCreateRequest(t *testing.T) {
 		TokenID:      "10052",
 		SecretKey:    "9aa3034b6beba7cf5bfcf6089218a674",
 	}
-	now := time.Unix(1735002156, 0)
-	req, err := provider.BuildCreateOrderRequest(context.Background(), account, now, "http://qqlogin.yxp8.cn", CreateOrderInput{
+	req, err := provider.BuildCreateOrderRequest(context.Background(), account, time.Unix(1735002156, 0), "http://qqlogin.yxp8.cn", CreateOrderInput{
 		SupplierGoodsNo:   "720938",
 		Quantity:          1,
 		Account:           "13088888888",
@@ -339,16 +338,7 @@ func TestKakayunOrderProviderBuildCreateRequest(t *testing.T) {
 	require.Equal(t, "O20260424153000123456-T1", payload["usorderno"])
 	require.Equal(t, "11.0000", payload["maxmoney"])
 
-	expectedPayload := map[string]any{
-		"userid":    "10052",
-		"timestamp": now.Unix(),
-		"goodsid":   "720938",
-		"buynum":    1,
-		"attach":    "13088888888",
-		"usorderno": "O20260424153000123456-T1",
-		"maxmoney":  "11.0000",
-	}
-	require.Equal(t, kakayunSign(expectedPayload, account.SecretKey), payload["sign"])
+	require.Equal(t, "f61433b61b3d2fed6cbcd9cc9ca147dd", payload["sign"])
 }
 
 func TestKakayunOrderProviderParseCreateAndQuery(t *testing.T) {

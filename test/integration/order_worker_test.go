@@ -120,6 +120,32 @@ func TestOrderWorkerPassesKakayunMaxMoneyWithAllowedLoss(t *testing.T) {
 	require.Equal(t, "12.5000", captured[0]["maxmoney"])
 }
 
+func TestOrderWorkerFailsOrderWhenKakayunMaxMoneyCannotBeCalculated(t *testing.T) {
+	var createCount atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		createCount.Add(1)
+		_, _ = w.Write([]byte(`{"code":1,"message":"下单成功","data":{"orderno":"SD202604240098","usorderno":"O-T1"}}`))
+	}))
+	defer server.Close()
+
+	h := newOrderIntegrationHarness(t)
+	orderNo := h.createPendingOpenOrderWithKakayunServer(t, server.URL)
+	order := h.loadOrder(t, orderNo)
+	_, err := h.app.Core().DB().Exec(context.Background(), `
+UPDATE product_goods_channel_binding
+SET source_cost_price = ?
+WHERE goods_id = ?
+`, "-1.0000", order.GoodsID)
+	require.NoError(t, err)
+
+	require.NoError(t, h.orderService.SubmitPendingOnce(context.Background()))
+	order = h.loadOrder(t, orderNo)
+	require.Equal(t, "failed", order.Status)
+	require.Contains(t, order.LastReceipt, "原始进货价格式错误")
+	require.EqualValues(t, 0, createCount.Load())
+	require.EqualValues(t, 0, h.scalarInt(t, `SELECT COUNT(*) FROM external_order_attempt WHERE order_id = ?`, order.ID))
+}
+
 func TestOrderWorkerPollsSuccessAndStops(t *testing.T) {
 	state := "processing"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -184,9 +210,11 @@ func TestOrderWorkerReordersWhenCreateExplicitlyFails(t *testing.T) {
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
 		current := createCount.Add(1)
 		if current == 1 {
+			require.Equal(t, "10.0000", payload["maxmoney"])
 			_, _ = w.Write([]byte(`{"code":0,"message":"库存不足"}`))
 			return
 		}
+		require.Equal(t, "11.0000", payload["maxmoney"])
 		_, _ = w.Write([]byte(`{"code":1,"message":"下单成功","data":{"orderno":"SD202604240004","usorderno":"` + payload["usorderno"].(string) + `"}}`))
 	}))
 	defer server.Close()

@@ -92,7 +92,7 @@ func (l *OrderLogic) submitOrder(ctx context.Context, order entity.ExternalOrder
 	}
 	maxMoney, err := kakayunMaxMoney(candidate, config, priceSnapshot, order.Quantity)
 	if err != nil {
-		return err
+		return l.markOrderFailed(ctx, order.ID, 0, "卡卡云防亏本金额计算失败："+err.Error())
 	}
 	attempt, claimed, err := l.claimOrderWithPendingAttempt(ctx, order, candidate, attemptNo, supplierUSOrderNo, priceSnapshot)
 	if err != nil || !claimed {

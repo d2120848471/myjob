@@ -96,7 +96,7 @@ go test ./internal/library/supplierplatform/provider -run TestKakayunOrderProvid
 ```bash
 go test ./internal/library/supplierplatform/provider -run TestKakayunOrderProviderBuildCreateRequest -count=1 -timeout 60s
 go test ./internal/logic/order -run TestKakayunMaxMoney -count=1 -timeout 60s
-go test ./test/integration -run 'TestOrderWorker(SubmitsPendingOrderToKakayun|PassesKakayunMaxMoneyWithAllowedLoss|ReordersOnlyInsideConfiguredWindow)' -count=1 -timeout 60s
+go test ./test/integration -run 'TestOrderWorker(SubmitsPendingOrderToKakayun|PassesKakayunMaxMoneyWithAllowedLoss|FailsOrderWhenKakayunMaxMoneyCannotBeCalculated|ReordersOnlyInsideConfiguredWindow|ReordersWhenCreateExplicitlyFails)' -count=1 -timeout 60s
 ```
 
 卡卡云商品信息同步聚焦回归：

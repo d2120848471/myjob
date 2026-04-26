@@ -52,7 +52,8 @@ type CreateOrderInput struct {
 	Quantity          int
 	Account           string
 	SupplierUSOrderNo string
-	MaxMoney          string
+	// MaxMoney 是上游订单总金额口径的最大进货金额，用于卡卡云防亏本校验。
+	MaxMoney string
 }
 
 // CreateOrderResult 表示上游下单响应解析后的稳定结果。
