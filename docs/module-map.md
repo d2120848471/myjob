@@ -14,8 +14,8 @@
 | 行业管理 | 维护行业分类，并把行业和一级品牌关联起来，支持后续筛选和展示。 |
 | 商品模板管理 | 维护充值模板和账号校验类型，商品配置时复用模板字段和展示规则。 |
 | 商品购买数量限制策略 | 维护后台限购策略基础数据，当前只负责策略管理，不进入真实购买校验链。 |
-| 商品管理 | 后台维护商品主档、渠道绑定和库存配置，开放订单会按商品编码定位可用商品。 |
-| 第三方对接 | 后台维护供应商平台账号，余额刷新和订单履约通过 provider 适配器访问上游。 |
+| 商品管理 | 后台维护商品主档、渠道绑定、库存配置和自动改价记录，开放订单会按商品编码定位可用商品。 |
+| 第三方对接 | 后台维护供应商平台账号，余额刷新、商品订阅和订单履约通过 provider 适配器访问上游。 |
 | 订单履约 | 开放接口创建订单后进入待提交队列，worker 按选中渠道定价规则提交上游、轮询状态，并在窗口内按规则补单。 |
 | 短信配置 | 超管维护短信 provider 配置，运行态读取配置后用于登录二验验证码发送。 |
 | 系统参数配置 | 超管按分组维护系统参数，保存时兼容旧单组写法和新多分组写法。 |
@@ -110,25 +110,25 @@
 
 ### 商品管理
 
-- 协议：`api/product_goods.go`、`api/product_goods_channel.go`、`api/product_goods_channel_config.go`
-- controller：`internal/controller/admin/product_goods.go`、`internal/controller/admin/product_goods_channel.go`、`internal/controller/admin/product_goods_channel_config.go`
-- service：`ProductGoodsService`（`internal/service/product_goods.go`）
+- 协议：`api/product_goods.go`、`api/product_goods_channel.go`、`api/product_goods_channel_config.go`、`api/product_goods_channel_price_change.go`
+- controller：`internal/controller/admin/product_goods.go`、`internal/controller/admin/product_goods_channel.go`、`internal/controller/admin/product_goods_channel_config.go`、`internal/controller/admin/product_goods_channel_price_change.go`
+- service：`ProductGoodsService`（`internal/service/product_goods.go`）、`ProductGoodsChannelPriceChangeService`（`internal/service/supplier_product_subscription.go`）
 - logic：`internal/logic/admin/product_goods*.go`、`internal/logic/admin/product_goods_channel*.go`、`internal/logic/admin/product_goods_channel_config*.go`
-- 路由前缀：`/api/admin/products*`、`/api/admin/products/{goodsId}/channel-bindings*`、`/api/admin/products/{goodsId}/inventory-config`
+- 路由前缀：`/api/admin/products*`、`/api/admin/products/{goodsId}/channel-bindings*`、`/api/admin/products/{goodsId}/inventory-config`、`/api/admin/product-goods-channel-price-changes`
 - 权限：`product.goods`
-- 主要能力：商品列表、详情、表单选项、新增、编辑、删除、启停、渠道摘要、库存配置、渠道绑定弹窗、单条自动改价、卡卡云商品名称和进货价同步。
+- 主要能力：商品列表、详情、表单选项、新增、编辑、删除、启停、渠道摘要、库存配置、渠道绑定弹窗、单条自动改价、卡卡云商品名称和进货价同步、自动改价记录、卡卡云推送改价记录。
 - 边界：商品主档、渠道绑定和库存配置保持同 package 多文件拆分；商品关闭后不触发上游商品信息同步。
 
 ### 第三方对接
 
-- 协议：`api/supplier_platform.go`
-- controller：`internal/controller/admin/supplier_platform.go`
-- service：`SupplierPlatformService`（`internal/service/supplier_platform.go`）
-- logic：`internal/logic/admin/supplier_platform*.go`
+- 协议：`api/supplier_platform.go`、`api/supplier_product_subscription.go`、`api/supplier_product_callback.go`
+- controller：`internal/controller/admin/supplier_platform.go`、`internal/controller/admin/supplier_product_subscription.go`、`internal/controller/open/supplier_product_callback.go`
+- service：`SupplierPlatformService`（`internal/service/supplier_platform.go`）、`SupplierProductSubscriptionService` / `SupplierProductCallbackService`（`internal/service/supplier_product_subscription.go`）
+- logic：`internal/logic/admin/supplier_platform*.go`、`internal/logic/admin/product_goods_channel_subscription.go`
 - provider：`internal/library/supplierplatform/provider/*`
-- 路由前缀：`/api/admin/supplier-platform-types`、`/api/admin/supplier-platforms*`
-- 权限：`supplier.index`
-- 主要能力：平台类型字典、平台账号分页、详情、增删改、启停、余额刷新、余额日志落库、平台关闭后级联关停商品绑定、卡卡云商品详情适配器。
+- 路由前缀：`/api/admin/supplier-platform-types`、`/api/admin/supplier-platforms*`、`/api/admin/supplier-product-subscriptions*`、`/api/open/supplier-platforms/{providerCode}/{platformAccountId}/product-change-callback`
+- 权限：后台供应商接口使用 `supplier.index`；开放回调用上游签名验签。
+- 主要能力：平台类型字典、平台账号分页、详情、增删改、启停、余额刷新、余额日志落库、平台关闭后级联关停商品绑定、卡卡云商品详情适配器、卡卡云商品订阅、取消订阅、重新订阅、商品变动推送回调。
 - 边界：`platform_docs/` 保存渠道原始协议，`docs/` 保存本仓库实现说明；卡卡云商品详情因平台接口限制固定走公共域名，下单、查单和其他 provider 仍使用账号配置域名。
 
 ### 订单履约
@@ -223,7 +223,10 @@ HTTP 协议适配层。`admin` 承载后台接口，`open` 承载开放订单接
 | 商品模板管理 | `/api/admin/product-templates*` | `product.template` |
 | 商品购买数量限制策略 | `/api/admin/purchase-limit-strategies*` | `product.purchase_limit` |
 | 商品管理 | `/api/admin/products*` | `product.goods` |
+| 商品渠道改价记录 | `/api/admin/product-goods-channel-price-changes` | `product.goods` |
 | 第三方对接 | `/api/admin/supplier-platform-types`、`/api/admin/supplier-platforms*` | `supplier.index` |
+| 供应商商品订阅 | `/api/admin/supplier-product-subscriptions*` | `supplier.index` |
+| 供应商商品变动回调 | `/api/open/supplier-platforms/{providerCode}/{platformAccountId}/product-change-callback` | 上游签名 |
 | 开放订单 | `/api/open/orders*` | 固定 `open_order.token` |
 | 后台订单记录 | `/api/admin/orders` | `order.manage` |
 | 短信配置 | `/api/admin/settings/sms` | super-only |

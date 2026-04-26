@@ -44,6 +44,7 @@ INSERT INTO product_goods_channel_binding (
 	}
 
 	l.core.WriteOperation(ctx, actor, fmt.Sprintf("新增商品渠道绑定：goods=%d, binding=%d", goods.ID, createdID), ip)
+	l.triggerProductGoodsChannelAutoSubscription(ctx, createdID)
 	return &adminapi.ProductGoodsChannelBindingCreateRes{ID: createdID}, nil
 }
 
@@ -87,6 +88,7 @@ WHERE id = ? AND goods_id = ? AND is_deleted = 0
 	}
 
 	l.core.WriteOperation(ctx, actor, fmt.Sprintf("编辑商品渠道绑定：goods=%d, binding=%d", req.GoodsId, req.BindingId), ip)
+	l.triggerProductGoodsChannelAutoSubscription(ctx, req.BindingId)
 	return &adminapi.ProductGoodsChannelBindingUpdateRes{}, nil
 }
 

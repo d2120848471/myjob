@@ -34,8 +34,13 @@ type ProductGoodsChannelSyncResult struct {
 type productGoodsChannelSyncCandidate struct {
 	BindingID              int64  `db:"binding_id"`
 	GoodsID                int64  `db:"goods_id"`
+	GoodsCode              string `db:"goods_code"`
+	GoodsName              string `db:"goods_name"`
+	GoodsIcon              string `db:"goods_icon"`
 	GoodsHasTax            int    `db:"goods_has_tax"`
+	DefaultSellPrice       string `db:"default_sell_price"`
 	PlatformAccountID      int64  `db:"platform_account_id"`
+	PlatformAccountName    string `db:"platform_account_name"`
 	ChannelHasTax          int    `db:"channel_has_tax"`
 	ProviderCode           string `db:"provider_code"`
 	Domain                 string `db:"domain"`
@@ -48,6 +53,13 @@ type productGoodsChannelSyncCandidate struct {
 	SyncGoodsNameEnabled   int    `db:"sync_goods_name_enabled"`
 	CurrentSupplierName    string `db:"supplier_goods_name"`
 	CurrentSourceCostPrice string `db:"source_cost_price"`
+	CurrentCostPrice       string `db:"cost_price"`
+	TaxAdjustDirection     string `db:"tax_adjust_direction"`
+	TaxAdjustRate          string `db:"tax_adjust_rate"`
+	TaxAdjustAmount        string `db:"tax_adjust_amount"`
+	IsAutoChange           int    `db:"is_auto_change"`
+	AddType                string `db:"add_type"`
+	DefaultPrice           string `db:"default_price"`
 }
 
 // SyncChannelBindingsOnce 同步开启了商品维度开关的渠道绑定商品名和进货价。
@@ -109,8 +121,13 @@ func (l *ProductGoodsLogic) loadProductGoodsChannelSyncCandidates(ctx context.Co
 SELECT
     b.id AS binding_id,
     b.goods_id,
+    g.goods_code,
+    g.name AS goods_name,
+    COALESCE(pb.icon, '') AS goods_icon,
     g.has_tax AS goods_has_tax,
+    g.default_sell_price,
     b.platform_account_id,
+    a.name AS platform_account_name,
     a.has_tax AS channel_has_tax,
     a.provider_code,
     a.domain,
@@ -121,10 +138,18 @@ SELECT
     b.supplier_goods_no,
     b.supplier_goods_name,
     b.source_cost_price,
+    b.cost_price,
+    b.tax_adjust_direction,
+    b.tax_adjust_rate,
+    b.tax_adjust_amount,
+    b.is_auto_change,
+    b.add_type,
+    b.default_price,
     c.sync_cost_price_enabled,
     c.sync_goods_name_enabled
 FROM product_goods_channel_binding b
 JOIN product_goods g ON g.id = b.goods_id
+LEFT JOIN product_brand pb ON pb.id = g.brand_id
 JOIN product_goods_channel_config c ON c.goods_id = b.goods_id
 JOIN supplier_platform_account a ON a.id = b.platform_account_id
 WHERE b.is_deleted = 0
@@ -200,51 +225,13 @@ func (l *ProductGoodsLogic) applyProductGoodsChannelProductInfo(ctx context.Cont
 		g.Log().Warningf(ctx, "商品渠道信息同步跳过：binding=%d goods_no=%s upstream_goods_no=%s error=%s", candidate.BindingID, candidate.SupplierGoodsNo, info.SupplierGoodsNo, "上游商品编号不一致")
 		return false, nil
 	}
-	setParts := make([]string, 0, 6)
-	args := make([]any, 0, 8)
-	requiredSwitches := make([]string, 0, 2)
+	nameUpdated := false
 	if candidate.SyncGoodsNameEnabled == 1 {
 		name := strings.TrimSpace(info.GoodsName)
 		if name != "" {
-			setParts = append(setParts, "supplier_goods_name = ?")
-			args = append(args, name)
-			requiredSwitches = append(requiredSwitches, "c.sync_goods_name_enabled = 1")
-		}
-	}
-	if candidate.SyncCostPriceEnabled == 1 {
-		if !info.GoodsPriceValid {
-			g.Log().Warningf(ctx, "商品渠道进价同步跳过：binding=%d goods_no=%s error=%s", candidate.BindingID, candidate.SupplierGoodsNo, "上游价格无效")
-		} else {
-			financeTaxConfig, err := l.loadProductGoodsChannelFinanceTaxConfig(ctx, candidate.GoodsHasTax, candidate.ChannelHasTax)
-			if err != nil {
-				g.Log().Warningf(ctx, "商品渠道进价同步跳过：binding=%d goods_no=%s error=%v", candidate.BindingID, candidate.SupplierGoodsNo, err)
-			} else {
-				// 价格同步只改上游进货价和税价快照，自动改价利润字段保持用户配置不变。
-				snapshot, snapshotErr := computeChannelCostSnapshot(info.GoodsPrice.StringFixed(4), candidate.GoodsHasTax, candidate.ChannelHasTax, financeTaxConfig)
-				if snapshotErr == nil {
-					setParts = append(setParts,
-						"source_cost_price = ?",
-						"cost_price = ?",
-						"tax_adjust_direction = ?",
-						"tax_adjust_rate = ?",
-						"tax_adjust_amount = ?",
-					)
-					args = append(args, snapshot.SourceCostPrice, snapshot.CostPrice, snapshot.TaxAdjustDirection, snapshot.TaxAdjustRate, snapshot.TaxAdjustAmount)
-					requiredSwitches = append(requiredSwitches, "c.sync_cost_price_enabled = 1")
-				} else {
-					g.Log().Warningf(ctx, "商品渠道进价同步跳过：binding=%d goods_no=%s error=%v", candidate.BindingID, candidate.SupplierGoodsNo, snapshotErr)
-				}
-			}
-		}
-	}
-	if len(setParts) == 0 {
-		return false, nil
-	}
-	setParts = append(setParts, "updated_at = ?")
-	args = append(args, l.core.Now(), candidate.BindingID, candidate.PlatformAccountID, candidate.SupplierGoodsNo, candidate.PlatformAccountID)
-	result, err := l.core.DB().Exec(ctx, `
+			result, err := l.core.DB().Exec(ctx, `
 UPDATE product_goods_channel_binding
-SET `+strings.Join(setParts, ", ")+`
+SET supplier_goods_name = ?, updated_at = ?
 WHERE id = ?
   AND is_deleted = 0
   AND platform_account_id = ?
@@ -260,17 +247,25 @@ WHERE id = ?
         AND g.supply_type = 'channel'
         AND a.is_deleted = 0
         AND a.status = 1
-        AND `+strings.Join(requiredSwitches, " AND ")+`
+        AND c.sync_goods_name_enabled = 1
   )
-`, args...)
+`, name, l.core.Now(), candidate.BindingID, candidate.PlatformAccountID, candidate.SupplierGoodsNo, candidate.PlatformAccountID)
+			if err != nil {
+				return false, err
+			}
+			affected, err := result.RowsAffected()
+			if err != nil {
+				return false, err
+			}
+			nameUpdated = affected > 0
+		}
+	}
+
+	priceResult, err := l.applyProductGoodsChannelPriceChange(ctx, candidate, info, productGoodsChannelPriceChangeSourceMonitor)
 	if err != nil {
 		return false, err
 	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return false, err
-	}
-	return affected > 0, nil
+	return nameUpdated || priceResult.Updated, nil
 }
 
 func (l *ProductGoodsLogic) httpClientForProductInfoProvider(providerCode string) *http.Client {

@@ -18,9 +18,10 @@ func TestAPIProtocolLayout_IsFlatUnderAPIDirectory(t *testing.T) {
 	for _, name := range []string{
 		"auth.go", "brand.go", "common.go", "group.go", "industry.go", "log.go",
 		"open_order.go", "order.go",
-		"product_goods.go", "product_goods_channel.go", "product_goods_channel_config.go",
+		"product_goods.go", "product_goods_channel.go", "product_goods_channel_config.go", "product_goods_channel_price_change.go",
 		"product_template.go", "purchase_limit.go", "settings.go", "settings_sms.go",
-		"settings_system.go", "subject.go", "supplier_platform.go", "user.go",
+		"settings_system.go", "subject.go", "supplier_platform.go", "supplier_product_callback.go",
+		"supplier_product_subscription.go", "user.go",
 	} {
 		require.FileExists(t, filepath.Join(root, "api", name))
 	}

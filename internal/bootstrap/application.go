@@ -92,6 +92,8 @@ func assemble(core *app.Core) (*Application, error) {
 	productTemplateCtrl := admincontroller.NewProductTemplate(services.ProductTemplate)
 	purchaseLimitCtrl := admincontroller.NewPurchaseLimit(services.PurchaseLimit)
 	productGoodsCtrl := admincontroller.NewProductGoods(services.ProductGoods)
+	subscriptionCtrl := admincontroller.NewSupplierProductSubscription(services.SupplierProductSubscription)
+	priceChangeCtrl := admincontroller.NewProductGoodsChannelPriceChange(services.ProductGoodsChannelPriceChange)
 	supplierPlatformCtrl := admincontroller.NewSupplierPlatform(services.SupplierPlatform)
 	settingsCtrl := admincontroller.NewSettings(services.SMSConfig, services.System)
 	operationLogCtrl := admincontroller.NewOperationLog(services.AuditLog)
@@ -99,6 +101,7 @@ func assemble(core *app.Core) (*Application, error) {
 	orderLogic := orderlogic.NewOrderLogic(core)
 	orderSvc := orderLogic
 	openOrderCtrl := opencontroller.NewOrder(orderSvc)
+	supplierProductCallbackCtrl := opencontroller.NewSupplierProductCallback(services.ProductGoodsLogic)
 	adminOrderCtrl := admincontroller.NewOrder(orderSvc)
 	guard := middleware.NewAuthGuard(core)
 
@@ -114,6 +117,7 @@ func assemble(core *app.Core) (*Application, error) {
 	s.Group("/api/open", func(group *ghttp.RouterGroup) {
 		group.Middleware(middleware.Response)
 		group.Bind(openOrderCtrl)
+		group.Bind(supplierProductCallbackCtrl)
 	})
 
 	s.Group("/api/admin", func(group *ghttp.RouterGroup) {
@@ -155,10 +159,12 @@ func assemble(core *app.Core) (*Application, error) {
 		group.Group("", func(group *ghttp.RouterGroup) {
 			group.Middleware(guard.Require("product.goods", false))
 			group.Bind(productGoodsCtrl)
+			group.Bind(priceChangeCtrl)
 		})
 		group.Group("", func(group *ghttp.RouterGroup) {
 			group.Middleware(guard.Require("supplier.index", false))
 			group.Bind(supplierPlatformCtrl)
+			group.Bind(subscriptionCtrl)
 		})
 		group.Group("", func(group *ghttp.RouterGroup) {
 			group.Middleware(guard.Require("order.manage", false))

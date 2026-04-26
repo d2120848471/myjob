@@ -20,8 +20,9 @@ var productGoodsTypeLabels = map[string]string{
 
 // ProductGoodsLogic 提供商品管理相关业务能力。
 type ProductGoodsLogic struct {
-	core       *app.Core
-	httpClient *http.Client
+	core               *app.Core
+	httpClient         *http.Client
+	productPushBaseURL string
 }
 
 // NewProductGoodsLogic 创建商品管理业务逻辑，并初始化供应商同步使用的 HTTP 客户端。

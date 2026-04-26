@@ -99,6 +99,14 @@ go test ./internal/logic/admin -run 'TestSyncChannelBindingsOnce|TestSaveInvento
 go test ./internal/bootstrap -run TestApplicationStartsAndClosesBackgroundWorkers -count=1 -timeout 60s
 ```
 
+卡卡云商品推送订阅和改价记录聚焦回归：
+
+```bash
+go test ./internal/library/supplierplatform/provider -run 'TestKakayunProductSubscriptionProvider|TestKakayunProductChangePushProvider|TestLookupProductPush' -count=1 -timeout 60s
+go test ./internal/logic/admin -run 'TestAutoSubscribeKakayunBinding|TestApplyProductGoodsChannelPriceChange' -count=1 -timeout 60s
+go test ./test/contract -run 'TestOpenSupplierProductChangeCallbackReturnsPlainOK|TestSupplierProductSubscriptionListCancelAndResubscribe|TestProductGoodsChannelPriceChangeList' -count=1 -timeout 60s
+```
+
 订单渠道定价和主体快照聚焦回归：
 
 ```bash
