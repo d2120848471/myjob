@@ -13,6 +13,7 @@
 - `specs/2026-04-25-kakayun-product-sync-design.md`：卡卡云商品信息定时同步设计。
 - `specs/2026-04-26-kakayun-product-push-design.md`：卡卡云商品价格推送、订阅记录和改价记录设计。
 - `plans/2026-04-24-docs-redesign.md`：文档体系重构实施计划。
+- `plans/2026-04-26-kakayun-product-push.md`：卡卡云商品价格推送、订阅记录和改价记录实施计划。
 
 ## 维护要求
 
