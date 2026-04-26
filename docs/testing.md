@@ -91,6 +91,14 @@ go test ./internal/app -run 'Test(MySQLSchemaIncludesTableAndColumnComments|Mani
 go test ./internal/library/supplierplatform/provider -run TestKakayunOrderProvider -count=1 -timeout 60s
 ```
 
+卡卡云下单防亏本聚焦回归：
+
+```bash
+go test ./internal/library/supplierplatform/provider -run TestKakayunOrderProviderBuildCreateRequest -count=1 -timeout 60s
+go test ./internal/logic/order -run TestKakayunMaxMoney -count=1 -timeout 60s
+go test ./test/integration -run 'TestOrderWorker(SubmitsPendingOrderToKakayun|PassesKakayunMaxMoneyWithAllowedLoss|ReordersOnlyInsideConfiguredWindow)' -count=1 -timeout 60s
+```
+
 卡卡云商品信息同步聚焦回归：
 
 ```bash
