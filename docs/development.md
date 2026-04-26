@@ -195,7 +195,7 @@ export GF_DAO_LINK='mysql:root:root123456@tcp(127.0.0.1:3306)/admin?charset=utf8
 
 ### 供应商商品推送订阅
 
-商品变动推送 provider 需要实现 `ProductSubscriptionProvider` 和 `ProductChangePushProvider`。回调 URL 统一使用 `/api/open/supplier-platforms/{providerCode}/{platformAccountId}/product-change-callback`，通过平台账号 ID 找密钥验签。新增渠道绑定后的订阅失败只能写入 `supplier_product_subscription`，不得阻断本地绑定保存。
+商品变动推送 provider 需要实现 `ProductSubscriptionProvider` 和 `ProductChangePushProvider`。回调 URL 统一使用 `/api/open/supplier-platforms/{providerCode}/{platformAccountId}/product-change-callback`，通过平台账号 ID 找密钥验签。新增渠道绑定后的自动订阅失败只能写入 `supplier_product_subscription`，不得阻断本地绑定保存；后台手动重新订阅失败必须让接口调用方感知，并保留最近请求、响应和失败原因。
 
 ## 订单金额快照
 

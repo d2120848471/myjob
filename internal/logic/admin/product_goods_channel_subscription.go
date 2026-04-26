@@ -237,7 +237,7 @@ func (l *ProductGoodsLogic) CancelSupplierProductSubscription(ctx context.Contex
 	if err != nil {
 		_ = l.updateSupplierProductSubscriptionStatus(ctx, supplierProductSubscriptionStatusUpdate{
 			ID:               subscription.ID,
-			Status:           supplierProductSubscriptionStatusFailed,
+			Status:           subscription.Status,
 			Action:           supplierProductSubscriptionActionCancel,
 			LastError:        err.Error(),
 			RequestSnapshot:  httpResult.RequestSnapshot,
@@ -250,7 +250,7 @@ func (l *ProductGoodsLogic) CancelSupplierProductSubscription(ctx context.Contex
 		failure := subscriptionProviderError(message, err)
 		_ = l.updateSupplierProductSubscriptionStatus(ctx, supplierProductSubscriptionStatusUpdate{
 			ID:               subscription.ID,
-			Status:           supplierProductSubscriptionStatusFailed,
+			Status:           subscription.Status,
 			Action:           supplierProductSubscriptionActionCancel,
 			LastError:        failure.Error(),
 			RequestSnapshot:  httpResult.RequestSnapshot,
@@ -291,8 +291,6 @@ func (l *ProductGoodsLogic) ResubscribeSupplierProductSubscription(ctx context.C
 			ResponseSnapshot:   "{}",
 			SubscribedAt:       l.core.Now(),
 			UpdateSubscribedAt: true,
-			CanceledAt:         nil,
-			UpdateCanceledAt:   true,
 		}); err != nil {
 			return nil, apiErr(consts.CodeInternalError, "订阅记录更新失败")
 		}
@@ -308,7 +306,11 @@ func (l *ProductGoodsLogic) ResubscribeSupplierProductSubscription(ctx context.C
 	if callbackURL == "" {
 		callbackURL, _ = supplierProductCallbackURLFromContext(ctx, subscription.ProviderCode, subscription.PlatformAccountID)
 	}
-	if err := l.autoSubscribeProductGoodsChannelBinding(ctx, target, callbackURL, supplierProductSubscriptionActionResubscribe); err != nil {
+	if err := l.subscribeProductGoodsChannelBinding(ctx, target, callbackURL, supplierProductSubscriptionActionResubscribe, true); err != nil {
+		var actionErr supplierProductSubscriptionActionError
+		if errors.As(err, &actionErr) {
+			return nil, apiErr(consts.CodeBadRequest, actionErr.Error())
+		}
 		return nil, apiErr(consts.CodeInternalError, "重新订阅商品失败")
 	}
 	l.core.WriteOperation(ctx, actor, fmt.Sprintf("重新订阅商品：subscription=%d", subscription.ID), ip)
@@ -316,20 +318,45 @@ func (l *ProductGoodsLogic) ResubscribeSupplierProductSubscription(ctx context.C
 }
 
 func (l *ProductGoodsLogic) autoSubscribeProductGoodsChannelBinding(ctx context.Context, target productGoodsChannelSubscriptionTarget, callbackURL, action string) error {
+	return l.subscribeProductGoodsChannelBinding(ctx, target, callbackURL, action, false)
+}
+
+type supplierProductSubscriptionActionError struct {
+	err error
+}
+
+func (e supplierProductSubscriptionActionError) Error() string {
+	return e.err.Error()
+}
+
+func (e supplierProductSubscriptionActionError) Unwrap() error {
+	return e.err
+}
+
+func (l *ProductGoodsLogic) subscribeProductGoodsChannelBinding(ctx context.Context, target productGoodsChannelSubscriptionTarget, callbackURL, action string, returnActionError bool) error {
 	action = normalizedSupplierProductSubscriptionAction(action)
 	if !isKakayunProvider(target.ProviderCode) {
 		return nil
 	}
+	recordFailure := func(failure error, failureCallbackURL, requestSnapshot, responseSnapshot string) error {
+		if err := l.upsertSupplierProductSubscription(ctx, target, supplierProductSubscriptionStatusFailed, action, failureCallbackURL, failure.Error(), requestSnapshot, responseSnapshot, nil, nil); err != nil {
+			return err
+		}
+		if returnActionError {
+			return supplierProductSubscriptionActionError{err: failure}
+		}
+		return nil
+	}
 	if strings.TrimSpace(callbackURL) == "" {
-		return l.upsertSupplierProductSubscription(ctx, target, supplierProductSubscriptionStatusFailed, action, "", "无法构造回调 URL", "", "", nil, nil)
+		return recordFailure(errors.New("无法构造回调 URL"), "", "", "")
 	}
 	provider, ok := supplierprovider.LookupProductSubscription(target.ProviderCode)
 	if !ok {
-		return l.upsertSupplierProductSubscription(ctx, target, supplierProductSubscriptionStatusFailed, action, callbackURL, "供应商不支持商品订阅", "", "", nil, nil)
+		return recordFailure(errors.New("供应商不支持商品订阅"), callbackURL, "", "")
 	}
 	extraConfig, err := parseExtraConfig(target.ExtraConfig)
 	if err != nil {
-		return l.upsertSupplierProductSubscription(ctx, target, supplierProductSubscriptionStatusFailed, action, callbackURL, err.Error(), "", "", nil, nil)
+		return recordFailure(err, callbackURL, "", "")
 	}
 	account := supplierprovider.AccountConfig{
 		ProviderCode: target.ProviderCode,
@@ -343,7 +370,7 @@ func (l *ProductGoodsLogic) autoSubscribeProductGoodsChannelBinding(ctx context.
 	requestSnapshot := ""
 	responseSnapshot := ""
 	fail := func(actionErr error) error {
-		return l.upsertSupplierProductSubscription(ctx, target, supplierProductSubscriptionStatusFailed, action, callbackURL, actionErr.Error(), requestSnapshot, responseSnapshot, nil, nil)
+		return recordFailure(actionErr, callbackURL, requestSnapshot, responseSnapshot)
 	}
 
 	now := l.core.Now()
@@ -362,10 +389,8 @@ func (l *ProductGoodsLogic) autoSubscribeProductGoodsChannelBinding(ctx context.
 	}
 
 	if !productSubscriptionURLExists(urls, callbackURL) {
-		oldURL := firstProductSubscriptionURL(urls)
 		request, err = provider.BuildSetReceiveURLRequest(opCtx, account, l.core.Now(), supplierprovider.ProductReceiveURLInput{
-			ReceiveURL:    callbackURL,
-			OldReceiveURL: oldURL,
+			ReceiveURL: callbackURL,
 		})
 		if err != nil {
 			return fail(err)
@@ -529,8 +554,8 @@ ON CONFLICT(provider_code, platform_account_id, supplier_goods_no) DO UPDATE SET
     last_error = excluded.last_error,
     request_snapshot = excluded.request_snapshot,
     response_snapshot = excluded.response_snapshot,
-    subscribed_at = excluded.subscribed_at,
-    canceled_at = excluded.canceled_at,
+    subscribed_at = CASE WHEN excluded.status = 'subscribed' THEN excluded.subscribed_at ELSE supplier_product_subscription.subscribed_at END,
+    canceled_at = CASE WHEN excluded.status = 'canceled' THEN excluded.canceled_at ELSE supplier_product_subscription.canceled_at END,
     updated_at = excluded.updated_at
 `, args...)
 		return err
@@ -552,8 +577,8 @@ ON DUPLICATE KEY UPDATE
     last_error = VALUES(last_error),
     request_snapshot = VALUES(request_snapshot),
     response_snapshot = VALUES(response_snapshot),
-    subscribed_at = VALUES(subscribed_at),
-    canceled_at = VALUES(canceled_at),
+    subscribed_at = CASE WHEN VALUES(status) = 'subscribed' THEN VALUES(subscribed_at) ELSE supplier_product_subscription.subscribed_at END,
+    canceled_at = CASE WHEN VALUES(status) = 'canceled' THEN VALUES(canceled_at) ELSE supplier_product_subscription.canceled_at END,
     updated_at = VALUES(updated_at)
 `, args...)
 	return err
@@ -655,15 +680,6 @@ func productSubscriptionURLExists(items []supplierprovider.ProductReceiveURLItem
 		}
 	}
 	return false
-}
-
-func firstProductSubscriptionURL(items []supplierprovider.ProductReceiveURLItem) string {
-	for _, item := range items {
-		if urlText := strings.TrimSpace(item.URL); urlText != "" {
-			return urlText
-		}
-	}
-	return ""
 }
 
 func subscriptionProviderError(message string, err error) error {

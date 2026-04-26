@@ -68,8 +68,8 @@ func (l *ProductGoodsLogic) applyProductGoodsChannelPriceChange(ctx context.Cont
 	}
 
 	result := productGoodsChannelPriceChangeApplyResult{PriceChanged: true}
+	now := l.core.Now()
 	err = l.core.DB().Transaction(ctx, func(ctx context.Context, tx gdb.TX) error {
-		now := l.core.Now()
 		updateResult, updateErr := tx.Exec(`
 UPDATE product_goods_channel_binding
 SET source_cost_price = ?,
@@ -108,7 +108,17 @@ WHERE id = ?
 			return nil
 		}
 		result.Updated = true
-		_, insertErr := tx.Exec(`
+		return nil
+	})
+	if err != nil {
+		return productGoodsChannelPriceChangeApplyResult{}, err
+	}
+	if !result.Updated {
+		return result, nil
+	}
+
+	// 改价记录是审计辅助信息，插入失败不能回滚已经完成的渠道进价更新。
+	if _, insertErr := l.core.DB().Exec(ctx, `
 INSERT INTO product_goods_channel_price_change_log (
     source, provider_code, platform_account_id, platform_account_name, binding_id,
     goods_id, goods_code, goods_name, goods_icon, supplier_goods_no, supplier_goods_name,
@@ -117,14 +127,11 @@ INSERT INTO product_goods_channel_price_change_log (
     description, raw_payload, changed_at, created_at
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `, source, candidate.ProviderCode, candidate.PlatformAccountID, candidate.PlatformAccountName, candidate.BindingID,
-			candidate.GoodsID, candidate.GoodsCode, candidate.GoodsName, candidate.GoodsIcon, candidate.SupplierGoodsNo, supplierGoodsName,
-			oldSourceCostPrice, newSourceCostPrice, oldCostPrice, newCostPrice,
-			oldEffectiveSellPrice, newEffectiveSellPrice, changeAmount,
-			description, info.Raw, now, now)
-		return insertErr
-	})
-	if err != nil {
-		return productGoodsChannelPriceChangeApplyResult{}, err
+		candidate.GoodsID, candidate.GoodsCode, candidate.GoodsName, candidate.GoodsIcon, candidate.SupplierGoodsNo, supplierGoodsName,
+		oldSourceCostPrice, newSourceCostPrice, oldCostPrice, newCostPrice,
+		oldEffectiveSellPrice, newEffectiveSellPrice, changeAmount,
+		description, info.Raw, now, now); insertErr != nil {
+		g.Log().Warningf(ctx, "商品渠道改价记录写入失败：binding=%d provider=%s goods_no=%s error=%v", candidate.BindingID, candidate.ProviderCode, candidate.SupplierGoodsNo, insertErr)
 	}
 	return result, nil
 }
