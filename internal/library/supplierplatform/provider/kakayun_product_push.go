@@ -15,61 +15,6 @@ import (
 const kakayunProductPushBaseURL = "http://public.kky.v3.api.kakayun.vip"
 const kakayunPushTimestampSkew = 5 * time.Minute
 
-func (kakayunProvider) BuildGetReceiveURLsRequest(ctx context.Context, account AccountConfig, now time.Time) (*http.Request, error) {
-	payload := map[string]any{
-		"userid":    strings.TrimSpace(account.TokenID),
-		"timestamp": now.Unix(),
-	}
-	payload["sign"] = kakayunSign(payload, account.SecretKey)
-	return newJSONRequest(ctx, kakayunProductPushBaseURL+"/dockapiv3/user/geturl", payload, map[string]string{"User-Agent": "curl/7.81.0"})
-}
-
-func (kakayunProvider) ParseGetReceiveURLsResponse(statusCode int, body []byte) ([]ProductReceiveURLItem, string, error) {
-	if statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices {
-		return nil, "", errors.New("卡卡云接收URL列表 HTTP 状态异常: " + strconv.Itoa(statusCode))
-	}
-	payload, err := decodeJSONMap(body)
-	if err != nil {
-		return nil, "", err
-	}
-	if codeString(payload["code"]) != "1" {
-		message := responseMessage(payload)
-		if message == "" {
-			message = "卡卡云接收URL列表查询失败"
-		}
-		return nil, message, errors.New(message)
-	}
-	items := make([]ProductReceiveURLItem, 0)
-	if data, ok := payload["data"].([]any); ok {
-		for _, raw := range data {
-			itemMap, ok := raw.(map[string]any)
-			if !ok {
-				continue
-			}
-			items = append(items, ProductReceiveURLItem{
-				URL:           strings.TrimSpace(codeString(itemMap["url"])),
-				CreatedAtUnix: int64FromValue(itemMap["createtime"]),
-			})
-		}
-	}
-	return items, responseMessage(payload), nil
-}
-
-func (kakayunProvider) BuildSetReceiveURLRequest(ctx context.Context, account AccountConfig, now time.Time, input ProductReceiveURLInput) (*http.Request, error) {
-	payload := map[string]any{
-		"userid":    strings.TrimSpace(account.TokenID),
-		"timestamp": now.Unix(),
-	}
-	if strings.TrimSpace(input.ReceiveURL) != "" {
-		payload["receiveurl"] = strings.TrimSpace(input.ReceiveURL)
-	}
-	if strings.TrimSpace(input.OldReceiveURL) != "" {
-		payload["oldreceiveurl"] = strings.TrimSpace(input.OldReceiveURL)
-	}
-	payload["sign"] = kakayunSign(payload, account.SecretKey)
-	return newJSONRequest(ctx, kakayunProductPushBaseURL+"/dockapiv3/user/seturl", payload, map[string]string{"User-Agent": "curl/7.81.0"})
-}
-
 func (kakayunProvider) BuildSubscribeRequest(ctx context.Context, account AccountConfig, now time.Time, input ProductSubscribeInput) (*http.Request, error) {
 	return kakayunProductSubscribeRequest(ctx, account, now, input, "/dockapiv3/goods/subscribe")
 }
@@ -153,11 +98,6 @@ func kakayunSignEqual(expected, actual string) bool {
 		return false
 	}
 	return subtle.ConstantTimeCompare([]byte(expected), []byte(actual)) == 1
-}
-
-func int64FromValue(value any) int64 {
-	result, _ := int64FromRequired(value)
-	return result
 }
 
 func int64FromRequired(value any) (int64, error) {

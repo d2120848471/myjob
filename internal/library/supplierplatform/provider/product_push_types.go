@@ -8,18 +8,6 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// ProductReceiveURLInput 描述设置供应商商品变动接收 URL 的请求参数。
-type ProductReceiveURLInput struct {
-	ReceiveURL    string
-	OldReceiveURL string
-}
-
-// ProductReceiveURLItem 表示供应商已配置的商品变动接收 URL。
-type ProductReceiveURLItem struct {
-	URL           string
-	CreatedAtUnix int64
-}
-
 // ProductSubscribeInput 描述订阅或取消订阅单个上游商品所需参数。
 type ProductSubscribeInput struct {
 	SupplierGoodsNo string
@@ -39,9 +27,6 @@ type ProductChangePushResult struct {
 type ProductSubscriptionProvider interface {
 	Code() string
 	Name() string
-	BuildGetReceiveURLsRequest(ctx context.Context, account AccountConfig, now time.Time) (*http.Request, error)
-	ParseGetReceiveURLsResponse(statusCode int, body []byte) ([]ProductReceiveURLItem, string, error)
-	BuildSetReceiveURLRequest(ctx context.Context, account AccountConfig, now time.Time, input ProductReceiveURLInput) (*http.Request, error)
 	BuildSubscribeRequest(ctx context.Context, account AccountConfig, now time.Time, input ProductSubscribeInput) (*http.Request, error)
 	BuildCancelSubscribeRequest(ctx context.Context, account AccountConfig, now time.Time, input ProductSubscribeInput) (*http.Request, error)
 	ParseMutationResponse(statusCode int, body []byte) (string, error)

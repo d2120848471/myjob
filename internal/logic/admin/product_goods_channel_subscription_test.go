@@ -23,12 +23,12 @@ func TestAutoSubscribeKakayunBindingRecordsSuccess(t *testing.T) {
 	t.Cleanup(func() { _ = core.Close() })
 
 	requests := make([]string, 0)
+	var subscribeBody map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests = append(requests, r.URL.Path)
 		switch r.URL.Path {
-		case "/dockapiv3/user/geturl":
-			_, _ = w.Write([]byte(`{"code":1,"msg":"success","data":[]}`))
-		case "/dockapiv3/user/seturl", "/dockapiv3/goods/subscribe":
+		case "/dockapiv3/goods/subscribe":
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&subscribeBody))
 			_, _ = w.Write([]byte(`{"code":1,"msg":"成功"}`))
 		default:
 			http.NotFound(w, r)
@@ -45,92 +45,19 @@ func TestAutoSubscribeKakayunBindingRecordsSuccess(t *testing.T) {
 	err = logic.autoSubscribeProductGoodsChannelBinding(context.Background(), binding, callbackURL, supplierProductSubscriptionActionSubscribe)
 	require.NoError(t, err)
 
-	require.Contains(t, requests, "/dockapiv3/user/geturl")
-	require.Contains(t, requests, "/dockapiv3/user/seturl")
-	require.Contains(t, requests, "/dockapiv3/goods/subscribe")
+	require.Equal(t, []string{"/dockapiv3/goods/subscribe"}, requests)
+	require.Equal(t, binding.SupplierGoodsNo, subscribeBody["goodsid"])
+	require.NotContains(t, subscribeBody, "receiveurl")
+	require.NotContains(t, subscribeBody, "oldreceiveurl")
 
-	status, err := core.DB().GetCore().GetValue(context.Background(), `SELECT status FROM supplier_product_subscription WHERE binding_id = ?`, binding.BindingID)
-	require.NoError(t, err)
-	require.Equal(t, supplierProductSubscriptionStatusSubscribed, status.String())
-}
-
-func TestAutoSubscribeKakayunBindingParsesRawResponseWhenSnapshotIsTruncated(t *testing.T) {
-	core, err := app.NewTestCore()
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = core.Close() })
-
-	logic := NewProductGoodsLogic(core)
-	binding := seedKakayunSubscriptionBinding(t, logic, core)
-	callbackURL := "https://public.example.com/api/open/supplier-platforms/kakayun/" + int64ToStringForAdminTest(binding.PlatformAccountID) + "/product-change-callback"
-	items := []map[string]any{{"url": callbackURL, "createtime": 1735002160}}
-	for i := 0; i < 160; i++ {
-		items = append(items, map[string]any{
-			"url":        "https://public.example.com/very-long-callback-path/" + strconv.Itoa(i) + "/abcdefghijklmnopqrstuvwxyz",
-			"createtime": 1735002160 + i,
-		})
+	var row struct {
+		Status      string `db:"status"`
+		CallbackURL string `db:"callback_url"`
 	}
-	rawGetURLsResponse, err := json.Marshal(map[string]any{"code": 1, "msg": "success", "data": items})
+	err = core.DB().GetCore().GetScan(context.Background(), &row, `SELECT status, callback_url FROM supplier_product_subscription WHERE binding_id = ?`, binding.BindingID)
 	require.NoError(t, err)
-	require.Greater(t, len(rawGetURLsResponse), 4096)
-
-	requests := make([]string, 0)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requests = append(requests, r.URL.Path)
-		switch r.URL.Path {
-		case "/dockapiv3/user/geturl":
-			_, _ = w.Write(rawGetURLsResponse)
-		case "/dockapiv3/goods/subscribe":
-			_, _ = w.Write([]byte(`{"code":1,"msg":"成功"}`))
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	t.Cleanup(server.Close)
-	logic.httpClient = server.Client()
-	logic.productPushBaseURL = server.URL
-
-	err = logic.autoSubscribeProductGoodsChannelBinding(context.Background(), binding, callbackURL, supplierProductSubscriptionActionSubscribe)
-	require.NoError(t, err)
-
-	require.Contains(t, requests, "/dockapiv3/user/geturl")
-	require.NotContains(t, requests, "/dockapiv3/user/seturl")
-	require.Contains(t, requests, "/dockapiv3/goods/subscribe")
-	status, err := core.DB().GetCore().GetValue(context.Background(), `SELECT status FROM supplier_product_subscription WHERE binding_id = ?`, binding.BindingID)
-	require.NoError(t, err)
-	require.Equal(t, supplierProductSubscriptionStatusSubscribed, status.String())
-}
-
-func TestAutoSubscribeKakayunBindingAddsReceiveURLWithoutOldReceiveURL(t *testing.T) {
-	core, err := app.NewTestCore()
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = core.Close() })
-
-	var setURLBody map[string]any
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/dockapiv3/user/geturl":
-			_, _ = w.Write([]byte(`{"code":1,"msg":"success","data":[{"url":"https://other.example.com/callback","createtime":1735002160}]}`))
-		case "/dockapiv3/user/seturl":
-			require.NoError(t, json.NewDecoder(r.Body).Decode(&setURLBody))
-			_, _ = w.Write([]byte(`{"code":1,"msg":"成功"}`))
-		case "/dockapiv3/goods/subscribe":
-			_, _ = w.Write([]byte(`{"code":1,"msg":"成功"}`))
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	t.Cleanup(server.Close)
-
-	logic := NewProductGoodsLogic(core)
-	logic.httpClient = server.Client()
-	logic.productPushBaseURL = server.URL
-	binding := seedKakayunSubscriptionBinding(t, logic, core)
-	callbackURL := "https://public.example.com/api/open/supplier-platforms/kakayun/" + int64ToStringForAdminTest(binding.PlatformAccountID) + "/product-change-callback"
-
-	err = logic.autoSubscribeProductGoodsChannelBinding(context.Background(), binding, callbackURL, supplierProductSubscriptionActionSubscribe)
-	require.NoError(t, err)
-	require.Equal(t, callbackURL, setURLBody["receiveurl"])
-	require.NotContains(t, setURLBody, "oldreceiveurl")
+	require.Equal(t, supplierProductSubscriptionStatusSubscribed, row.Status)
+	require.Equal(t, callbackURL, row.CallbackURL)
 }
 
 func TestAutoSubscribeKakayunBindingRecordsFailureWithoutReturningError(t *testing.T) {
@@ -138,8 +65,15 @@ func TestAutoSubscribeKakayunBindingRecordsFailureWithoutReturningError(t *testi
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = core.Close() })
 
+	requests := make([]string, 0)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{"code":0,"msg":"签名错误"}`))
+		requests = append(requests, r.URL.Path)
+		switch r.URL.Path {
+		case "/dockapiv3/goods/subscribe":
+			_, _ = w.Write([]byte(`{"code":0,"msg":"订阅失败"}`))
+		default:
+			http.NotFound(w, r)
+		}
 	}))
 	t.Cleanup(server.Close)
 
@@ -151,15 +85,18 @@ func TestAutoSubscribeKakayunBindingRecordsFailureWithoutReturningError(t *testi
 
 	err = logic.autoSubscribeProductGoodsChannelBinding(context.Background(), binding, callbackURL, supplierProductSubscriptionActionSubscribe)
 	require.NoError(t, err)
+	require.Equal(t, []string{"/dockapiv3/goods/subscribe"}, requests)
 
 	var row struct {
-		Status    string `db:"status"`
-		LastError string `db:"last_error"`
+		Status      string `db:"status"`
+		LastError   string `db:"last_error"`
+		CallbackURL string `db:"callback_url"`
 	}
-	err = core.DB().GetCore().GetScan(context.Background(), &row, `SELECT status, last_error FROM supplier_product_subscription WHERE binding_id = ?`, binding.BindingID)
+	err = core.DB().GetCore().GetScan(context.Background(), &row, `SELECT status, last_error, callback_url FROM supplier_product_subscription WHERE binding_id = ?`, binding.BindingID)
 	require.NoError(t, err)
 	require.Equal(t, supplierProductSubscriptionStatusFailed, row.Status)
-	require.Contains(t, row.LastError, "签名错误")
+	require.Contains(t, row.LastError, "订阅失败")
+	require.Equal(t, callbackURL, row.CallbackURL)
 }
 
 func TestAutoSubscribeKakayunBindingFailurePreservesHistoricalTimes(t *testing.T) {
@@ -167,8 +104,15 @@ func TestAutoSubscribeKakayunBindingFailurePreservesHistoricalTimes(t *testing.T
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = core.Close() })
 
+	requests := make([]string, 0)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{"code":0,"msg":"签名错误"}`))
+		requests = append(requests, r.URL.Path)
+		switch r.URL.Path {
+		case "/dockapiv3/goods/subscribe":
+			_, _ = w.Write([]byte(`{"code":0,"msg":"订阅失败"}`))
+		default:
+			http.NotFound(w, r)
+		}
 	}))
 	t.Cleanup(server.Close)
 
@@ -184,10 +128,11 @@ func TestAutoSubscribeKakayunBindingFailurePreservesHistoricalTimes(t *testing.T
 
 	err = logic.autoSubscribeProductGoodsChannelBinding(context.Background(), binding, callbackURL, supplierProductSubscriptionActionSubscribe)
 	require.NoError(t, err)
+	require.Equal(t, []string{"/dockapiv3/goods/subscribe"}, requests)
 
 	row := loadSubscriptionStatusForTest(t, core, binding.BindingID)
 	require.Equal(t, supplierProductSubscriptionStatusFailed, row.Status)
-	require.Contains(t, row.LastError, "签名错误")
+	require.Contains(t, row.LastError, "订阅失败")
 	requireSubscriptionTimeEqual(t, subscribedAt, row.SubscribedAt)
 	requireSubscriptionTimeEqual(t, canceledAt, row.CanceledAt)
 }
@@ -197,7 +142,21 @@ func TestCancelSubscriptionPreservesSubscribedAt(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = core.Close() })
 
+	requests := make([]string, 0)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests = append(requests, r.URL.Path)
+		switch r.URL.Path {
+		case "/dockapiv3/goods/cancelsubscribe":
+			_, _ = w.Write([]byte(`{"code":1,"msg":"成功"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+
 	logic := NewProductGoodsLogic(core)
+	logic.httpClient = server.Client()
+	logic.productPushBaseURL = server.URL
 	binding := seedKakayunSubscriptionBinding(t, logic, core)
 	now := core.Now()
 	err = logic.upsertSupplierProductSubscription(context.Background(), binding, supplierProductSubscriptionStatusSubscribed, supplierProductSubscriptionActionSubscribe, "https://public.example.com/callback", "", "{}", "{}", now, nil)
@@ -209,6 +168,7 @@ func TestCancelSubscriptionPreservesSubscribedAt(t *testing.T) {
 
 	_, err = logic.CancelSupplierProductSubscription(context.Background(), &adminapi.SupplierProductSubscriptionCancelReq{ID: id}, entity.AdminUser{}, "127.0.0.1")
 	require.NoError(t, err)
+	require.Equal(t, []string{"/dockapiv3/goods/cancelsubscribe"}, requests)
 
 	count, err := core.DB().GetCore().GetValue(context.Background(), `SELECT COUNT(*) FROM supplier_product_subscription WHERE id = ? AND status = ? AND subscribed_at IS NOT NULL AND canceled_at IS NOT NULL`, id, supplierProductSubscriptionStatusCanceled)
 	require.NoError(t, err)
@@ -220,9 +180,15 @@ func TestCancelSubscriptionFailureKeepsOriginalStatusAndCanceledAt(t *testing.T)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = core.Close() })
 
+	requests := make([]string, 0)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, "/dockapiv3/goods/cancelsubscribe", r.URL.Path)
-		_, _ = w.Write([]byte(`{"code":0,"msg":"签名错误"}`))
+		requests = append(requests, r.URL.Path)
+		switch r.URL.Path {
+		case "/dockapiv3/goods/cancelsubscribe":
+			_, _ = w.Write([]byte(`{"code":0,"msg":"签名错误"}`))
+		default:
+			http.NotFound(w, r)
+		}
 	}))
 	t.Cleanup(server.Close)
 
@@ -240,6 +206,7 @@ func TestCancelSubscriptionFailureKeepsOriginalStatusAndCanceledAt(t *testing.T)
 
 	_, err = logic.CancelSupplierProductSubscription(context.Background(), &adminapi.SupplierProductSubscriptionCancelReq{ID: id}, entity.AdminUser{}, "127.0.0.1")
 	require.Error(t, err)
+	require.Equal(t, []string{"/dockapiv3/goods/cancelsubscribe"}, requests)
 
 	row := loadSubscriptionStatusForTest(t, core, binding.BindingID)
 	require.Equal(t, supplierProductSubscriptionStatusSubscribed, row.Status)
@@ -254,11 +221,11 @@ func TestResubscribeSubscriptionRecordsResubscribeAction(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = core.Close() })
 
+	requests := make([]string, 0)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests = append(requests, r.URL.Path)
 		switch r.URL.Path {
-		case "/dockapiv3/user/geturl":
-			_, _ = w.Write([]byte(`{"code":1,"msg":"success","data":[]}`))
-		case "/dockapiv3/user/seturl", "/dockapiv3/goods/subscribe":
+		case "/dockapiv3/goods/subscribe":
 			_, _ = w.Write([]byte(`{"code":1,"msg":"成功"}`))
 		default:
 			http.NotFound(w, r)
@@ -279,6 +246,7 @@ func TestResubscribeSubscriptionRecordsResubscribeAction(t *testing.T) {
 
 	_, err = logic.ResubscribeSupplierProductSubscription(context.Background(), &adminapi.SupplierProductSubscriptionResubscribeReq{ID: id}, entity.AdminUser{}, "127.0.0.1")
 	require.NoError(t, err)
+	require.Equal(t, []string{"/dockapiv3/goods/subscribe"}, requests)
 
 	var row struct {
 		LastAction string `db:"last_action"`
@@ -293,14 +261,14 @@ func TestResubscribeSubscriptionFailureReturnsErrorAndPreservesHistoricalTimes(t
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = core.Close() })
 
+	requests := make([]string, 0)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests = append(requests, r.URL.Path)
 		switch r.URL.Path {
-		case "/dockapiv3/user/geturl":
-			_, _ = w.Write([]byte(`{"code":1,"msg":"success","data":[{"url":"https://public.example.com/old-callback","createtime":1735002160}]}`))
 		case "/dockapiv3/goods/subscribe":
 			_, _ = w.Write([]byte(`{"code":0,"msg":"签名错误"}`))
 		default:
-			_, _ = w.Write([]byte(`{"code":1,"msg":"成功"}`))
+			http.NotFound(w, r)
 		}
 	}))
 	t.Cleanup(server.Close)
@@ -320,6 +288,7 @@ func TestResubscribeSubscriptionFailureReturnsErrorAndPreservesHistoricalTimes(t
 
 	_, err = logic.ResubscribeSupplierProductSubscription(context.Background(), &adminapi.SupplierProductSubscriptionResubscribeReq{ID: id}, entity.AdminUser{}, "127.0.0.1")
 	require.Error(t, err)
+	require.Equal(t, []string{"/dockapiv3/goods/subscribe"}, requests)
 
 	row := loadSubscriptionStatusForTest(t, core, binding.BindingID)
 	require.Equal(t, supplierProductSubscriptionStatusFailed, row.Status)
@@ -334,10 +303,10 @@ func TestResubscribeSubscriptionSuccessSetsSubscribedStatus(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = core.Close() })
 
+	requests := make([]string, 0)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests = append(requests, r.URL.Path)
 		switch r.URL.Path {
-		case "/dockapiv3/user/geturl":
-			_, _ = w.Write([]byte(`{"code":1,"msg":"success","data":[{"url":"https://public.example.com/old-callback","createtime":1735002160}]}`))
 		case "/dockapiv3/goods/subscribe":
 			_, _ = w.Write([]byte(`{"code":1,"msg":"成功"}`))
 		default:
@@ -359,6 +328,7 @@ func TestResubscribeSubscriptionSuccessSetsSubscribedStatus(t *testing.T) {
 
 	_, err = logic.ResubscribeSupplierProductSubscription(context.Background(), &adminapi.SupplierProductSubscriptionResubscribeReq{ID: id}, entity.AdminUser{}, "127.0.0.1")
 	require.NoError(t, err)
+	require.Equal(t, []string{"/dockapiv3/goods/subscribe"}, requests)
 
 	row := loadSubscriptionStatusForTest(t, core, binding.BindingID)
 	require.Equal(t, supplierProductSubscriptionStatusSubscribed, row.Status)

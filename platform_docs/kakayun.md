@@ -96,10 +96,12 @@ http://qqlogin.yxp8.cn
 
 ### 商品推送模式：订阅与取消
 
+> 当前系统集成口径：商品变动接收 URL 由运营人员在卡卡云后台配置。本系统只调用 `/dockapiv3/goods/subscribe` 和 `/dockapiv3/goods/cancelsubscribe`，不会调用 `/dockapiv3/user/geturl`、`/dockapiv3/user/seturl`，也不会传 `receiveurl` / `oldreceiveurl`。
+
 #### 订阅推送
-1. **绑定推送地址**  
-   调用 `/dockapiv3/user/seturl`，传入需要接收推送的 URL。  
-   > 首次调用一次即可；若需修改推送地址再调用。
+1. **配置推送地址**
+   运营人员在卡卡云后台配置商品变动接收 URL。
+   > 下方原始接口文档仍保留 `seturl/geturl` 的平台能力说明，但当前系统不自动维护这些地址。
 
 2. **选择订阅商品**  
    调用 `/dockapiv3/goods/subscribe`，每个需要推送的商品调用一次订阅。
@@ -110,8 +112,7 @@ http://qqlogin.yxp8.cn
 
 #### 取消推送（任选其一）
 - **方案 A（推荐）**：继续使用「商品信息变动推送接口」接收推送，再在自己系统中过滤无用数据，实现“不处理但保留订阅”。
-- **方案 B**：调用 `/dockapiv3/user/seturl`，将推送 URL 置空；订阅数据保留，将来只需重新设置 URL 即可恢复。
-- **方案 C**：调用「取消商品订阅」接口（字段 `delall` 设为 1），一次性清除所有商品的订阅。
+- **方案 B（当前系统采用）**：调用「取消商品订阅」接口取消本系统维护的本地订阅记录对应商品。
 
 ### 签名计算规则
 

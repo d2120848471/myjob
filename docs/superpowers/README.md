@@ -11,9 +11,9 @@
 
 - `specs/2026-04-24-docs-redesign-design.md`：文档体系重构设计。
 - `specs/2026-04-25-kakayun-product-sync-design.md`：卡卡云商品信息定时同步设计。
-- `specs/2026-04-26-kakayun-product-push-design.md`：卡卡云商品价格推送、订阅记录和改价记录设计。
+- `specs/2026-04-26-kakayun-product-push-design.md`：卡卡云商品价格推送、订阅记录和改价记录设计；2026-04-26 产品口径调整后，接收 URL 由运营在卡卡云后台配置，系统不再自动维护 `geturl/seturl`。
 - `plans/2026-04-24-docs-redesign.md`：文档体系重构实施计划。
-- `plans/2026-04-26-kakayun-product-push.md`：卡卡云商品价格推送、订阅记录和改价记录实施计划。
+- `plans/2026-04-26-kakayun-product-push.md`：卡卡云商品价格推送、订阅记录和改价记录实施计划；其中接收 URL 自动维护步骤已被后续产品口径废弃，当前实现以 `docs/development.md` 和 `docs/module-map.md` 为准。
 
 ## 维护要求
 

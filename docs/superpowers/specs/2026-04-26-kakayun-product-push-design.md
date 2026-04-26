@@ -27,6 +27,7 @@
 8. 后续新增或编辑卡卡云渠道绑定时自动订阅；历史已有绑定不主动批量补订阅。
 9. 自动订阅失败不阻断渠道绑定保存，只记录订阅失败状态和失败原因。
 10. 取消订阅成功后，本地订阅记录保留，状态改为已取消，不物理删除。
+11. 2026-04-26 产品口径调整：卡卡云商品变动接收 URL 由运营在卡卡云后台自行配置；系统不调用 `user/geturl`、`user/seturl`，不传 `receiveurl` / `oldreceiveurl`，`callback_url` 仅作为本地展示、复制和排查字段。
 
 ## 目标
 
@@ -90,17 +91,11 @@ ProductChangePushProvider
 
 卡卡云一期实现：
 
-- 获取接收 URL 列表：`/dockapiv3/user/geturl`
-- 设置接收 URL：`/dockapiv3/user/seturl`
 - 订阅商品：`/dockapiv3/goods/subscribe`
 - 取消订阅商品：`/dockapiv3/goods/cancelsubscribe`
 - 推送验签和解析：商品信息变动推送 payload
 
-订阅前先读取卡卡云接收 URL 列表：
-
-- 目标 URL 已存在：不重复设置 URL，直接订阅商品。
-- 目标 URL 不存在：调用 `seturl` 新增。
-- 卡卡云接收 URL 已满或设置失败：订阅状态记为失败，不阻断本地绑定保存。
+接收 URL 不再由 provider 维护。运营在卡卡云后台配置通用回调地址后，系统只负责订阅、取消订阅、接收回调、验签、更新本地渠道进价、写订阅记录和改价记录。
 
 ### 回调 URL 组装
 
@@ -257,14 +252,12 @@ push
 ```text
 保存渠道绑定成功
   -> 判断平台账号 provider_code 是否为 kakayun
-  -> 从当前请求组装通用回调 URL
-  -> 调用卡卡云 geturl 检查 URL 是否已设置
-  -> 必要时调用 seturl 新增接收 URL
+  -> 从当前请求组装通用回调 URL，仅用于本地 callback_url 展示/排查
   -> 调用 goods/subscribe 订阅 supplier_goods_no
   -> 写入或更新 supplier_product_subscription
 ```
 
-订阅失败不回滚渠道绑定事务。因为渠道绑定是本地业务主流程，订阅只是上游推送增强能力；网络失败、卡卡云限流或接收 URL 数量限制不能阻止本地商品维护。
+订阅失败不回滚渠道绑定事务。因为渠道绑定是本地业务主流程，订阅只是上游推送增强能力；网络失败、卡卡云限流或订阅接口失败不能阻止本地商品维护。
 
 ### 取消订阅
 
@@ -284,8 +277,7 @@ push
 ```text
 后台调用重新订阅接口
   -> 查询本地订阅记录和平台账号
-  -> 重新组装当前公网回调 URL
-  -> 确保卡卡云接收 URL 存在
+  -> 组装或复用 callback_url，仅用于本地记录
   -> 调用 goods/subscribe
   -> 成功后状态改为 subscribed
 ```
@@ -409,7 +401,7 @@ GET /api/admin/product-goods-channel-price-changes
 - 卡卡云推送时间戳超过有效期不处理业务，不返回 `ok`。
 - 推送商品不存在绑定时只记录日志并返回 `ok`。
 - 同一推送被重复投递时，若本地价格已更新到相同值，不再写重复改价记录。
-- 订阅 URL 已存在时不重复调用 `seturl`。
+- 卡卡云接收 URL 由运营在上游后台配置，系统不维护上游接收 URL 列表。
 - 订阅或取消订阅失败时，保留上游请求和响应快照，便于排查。
 - 改价记录写入失败时，不应阻断价格更新；但需要写应用日志。价格更新是主业务结果，日志失败属于可追踪但不回滚的辅助失败。
 
@@ -420,16 +412,14 @@ GET /api/admin/product-goods-channel-price-changes
 - 不允许通过请求体中的任意字段决定使用哪个平台账号。
 - 推送 payload 的 `sign` 不落入签名原文。
 - 空值字段不参与卡卡云签名，沿用卡卡云文档规则。
-- 接收 URL 组装只使用请求 host 和代理头，不读取用户提交的任意 URL 参数。
+- `callback_url` 组装只使用请求 host 和代理头，不读取用户提交的任意 URL 参数；该值只用于本地展示、复制和排查。
 
 ## 测试设计
 
 ### Provider 单测
 
-- 卡卡云 `geturl` 请求、签名和响应解析。
-- 卡卡云 `seturl` 请求、签名和响应解析。
-- 卡卡云 `goods/subscribe` 请求支持单个商品。
-- 卡卡云 `goods/cancelsubscribe` 请求支持单个商品。
+- 卡卡云 `goods/subscribe` 请求支持单个商品，且不包含 `receiveurl` / `oldreceiveurl`。
+- 卡卡云 `goods/cancelsubscribe` 请求支持单个商品，且不包含 `receiveurl` / `oldreceiveurl`。
 - 卡卡云商品推送验签成功。
 - 卡卡云商品推送验签失败。
 - 商品推送价格解析为 4 位小数。
@@ -508,7 +498,7 @@ go test ./test/contract -run 'TestProductGoodsChannelPriceChange|TestSupplierPro
 ## 风险与约束
 
 - 回调 URL 从当前请求 host 组装，部署时反向代理必须正确传递 `Host` 或 `X-Forwarded-Host`、`X-Forwarded-Proto`。
-- 卡卡云最多可设置 3 条接收 URL；如果同一账号已配置满，自动订阅会失败但不影响本地绑定。
+- 卡卡云接收 URL 配置不在系统内自动维护；运营未在卡卡云后台配置正确 URL 时，上游不会推送商品变动，系统只能从本地 `callback_url` 帮助排查。
 - 历史已有绑定不自动补订阅，只有后续新增或编辑的卡卡云绑定会触发订阅。
 - 推送和定时监控可能先后处理同一价格变化，必须用价格差异判断避免重复改价记录。
 - 改价会影响后续订单的渠道成本和利润后价格，不回写历史订单金额快照。

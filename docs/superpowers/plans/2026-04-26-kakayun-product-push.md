@@ -4,6 +4,8 @@
 
 **Goal:** Add Kakayun product price push callbacks, automatic product subscription, subscription management, and unified price change logs.
 
+**Product adjustment on 2026-04-26:** Kakayun receive URL maintenance in this historical plan has been superseded. Current implementation does not call `user/geturl` or `user/seturl`, and does not send `receiveurl` or `oldreceiveurl`; operations configure the receive URL in Kakayun's backend, while this system only stores `callback_url` locally for display and troubleshooting.
+
 **Architecture:** Keep the callback URL generic with `{providerCode}/{platformAccountId}` so multiple supplier accounts can coexist safely. Kakayun provider owns signing, subscription requests, and push parsing; admin logic owns local subscription records, price updates, and price-change logs. Existing channel cost and effective sell price calculations remain the single source of truth.
 
 **Tech Stack:** Go, GoFrame HTTP/router/middleware, MySQL/SQLite schema bootstrap, `shopspring/decimal`, existing `supplierplatform/provider` adapters, contract tests under `test/contract`.
@@ -495,46 +497,31 @@ func TestKakayunProductSubscriptionProviderBuildRequests(t *testing.T) {
 	account := AccountConfig{ProviderCode: "kakayun", TokenID: "10052", SecretKey: "secretXYZ"}
 	now := time.Unix(1735002156, 0)
 
-	getURLReq, err := provider.BuildGetReceiveURLsRequest(context.Background(), account, now)
-	require.NoError(t, err)
-	require.Equal(t, http.MethodPost, getURLReq.Method)
-	require.Equal(t, "http://public.kky.v3.api.kakayun.vip/dockapiv3/user/geturl", getURLReq.URL.String())
-	getURLBody := decodeJSONBodyAny(t, readRequestBody(t, getURLReq))
-	require.Equal(t, "10052", getURLBody["userid"])
-	require.Equal(t, float64(1735002156), getURLBody["timestamp"])
-	require.NotEmpty(t, getURLBody["sign"])
-
-	setURLReq, err := provider.BuildSetReceiveURLRequest(context.Background(), account, now, ProductReceiveURLInput{ReceiveURL: "https://example.com/callback"})
-	require.NoError(t, err)
-	require.Equal(t, "http://public.kky.v3.api.kakayun.vip/dockapiv3/user/seturl", setURLReq.URL.String())
-	setURLBody := decodeJSONBodyAny(t, readRequestBody(t, setURLReq))
-	require.Equal(t, "https://example.com/callback", setURLBody["receiveurl"])
-
 	subscribeReq, err := provider.BuildSubscribeRequest(context.Background(), account, now, ProductSubscribeInput{SupplierGoodsNo: "2582531"})
 	require.NoError(t, err)
+	require.Equal(t, http.MethodPost, subscribeReq.Method)
 	require.Equal(t, "http://public.kky.v3.api.kakayun.vip/dockapiv3/goods/subscribe", subscribeReq.URL.String())
 	subscribeBody := decodeJSONBodyAny(t, readRequestBody(t, subscribeReq))
+	require.Equal(t, "10052", subscribeBody["userid"])
+	require.Equal(t, float64(1735002156), subscribeBody["timestamp"])
 	require.Equal(t, "2582531", subscribeBody["goodsid"])
+	require.NotEmpty(t, subscribeBody["sign"])
 
 	cancelReq, err := provider.BuildCancelSubscribeRequest(context.Background(), account, now, ProductSubscribeInput{SupplierGoodsNo: "2582531"})
 	require.NoError(t, err)
 	require.Equal(t, "http://public.kky.v3.api.kakayun.vip/dockapiv3/goods/cancelsubscribe", cancelReq.URL.String())
 	cancelBody := decodeJSONBodyAny(t, readRequestBody(t, cancelReq))
+	require.Equal(t, "10052", cancelBody["userid"])
+	require.Equal(t, float64(1735002156), cancelBody["timestamp"])
 	require.Equal(t, "2582531", cancelBody["goodsid"])
+	require.NotEmpty(t, cancelBody["sign"])
 }
 
 func TestKakayunProductSubscriptionProviderParsesResponses(t *testing.T) {
 	provider, ok := LookupProductSubscription("kakayun")
 	require.True(t, ok)
 
-	urls, message, err := provider.ParseGetReceiveURLsResponse(http.StatusOK, []byte(`{"code":1,"msg":"success","data":[{"url":"https://a.example.com/cb","createtime":1740139648}]}`))
-	require.NoError(t, err)
-	require.Equal(t, "success", message)
-	require.Len(t, urls, 1)
-	require.Equal(t, "https://a.example.com/cb", urls[0].URL)
-	require.Equal(t, int64(1740139648), urls[0].CreatedAtUnix)
-
-	message, err = provider.ParseMutationResponse(http.StatusOK, []byte(`{"code":1,"msg":"成功"}`))
+	message, err := provider.ParseMutationResponse(http.StatusOK, []byte(`{"code":1,"msg":"成功"}`))
 	require.NoError(t, err)
 	require.Equal(t, "成功", message)
 
@@ -644,18 +631,6 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// ProductReceiveURLInput 描述设置供应商商品变动接收 URL 的请求参数。
-type ProductReceiveURLInput struct {
-	ReceiveURL    string
-	OldReceiveURL string
-}
-
-// ProductReceiveURLItem 表示供应商已配置的商品变动接收 URL。
-type ProductReceiveURLItem struct {
-	URL           string
-	CreatedAtUnix int64
-}
-
 // ProductSubscribeInput 描述订阅或取消订阅单个上游商品所需参数。
 type ProductSubscribeInput struct {
 	SupplierGoodsNo string
@@ -675,9 +650,6 @@ type ProductChangePushResult struct {
 type ProductSubscriptionProvider interface {
 	Code() string
 	Name() string
-	BuildGetReceiveURLsRequest(ctx context.Context, account AccountConfig, now time.Time) (*http.Request, error)
-	ParseGetReceiveURLsResponse(statusCode int, body []byte) ([]ProductReceiveURLItem, string, error)
-	BuildSetReceiveURLRequest(ctx context.Context, account AccountConfig, now time.Time, input ProductReceiveURLInput) (*http.Request, error)
 	BuildSubscribeRequest(ctx context.Context, account AccountConfig, now time.Time, input ProductSubscribeInput) (*http.Request, error)
 	BuildCancelSubscribeRequest(ctx context.Context, account AccountConfig, now time.Time, input ProductSubscribeInput) (*http.Request, error)
 	ParseMutationResponse(statusCode int, body []byte) (string, error)
@@ -710,61 +682,6 @@ import (
 
 const kakayunProductPushBaseURL = "http://public.kky.v3.api.kakayun.vip"
 const kakayunPushTimestampSkew = 5 * time.Minute
-
-func (kakayunProvider) BuildGetReceiveURLsRequest(ctx context.Context, account AccountConfig, now time.Time) (*http.Request, error) {
-	payload := map[string]any{
-		"userid":    strings.TrimSpace(account.TokenID),
-		"timestamp": now.Unix(),
-	}
-	payload["sign"] = kakayunSign(payload, account.SecretKey)
-	return newJSONRequest(ctx, kakayunProductPushBaseURL+"/dockapiv3/user/geturl", payload, map[string]string{"User-Agent": "curl/7.81.0"})
-}
-
-func (kakayunProvider) ParseGetReceiveURLsResponse(statusCode int, body []byte) ([]ProductReceiveURLItem, string, error) {
-	if statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices {
-		return nil, "", errors.New("卡卡云接收URL列表 HTTP 状态异常: " + strconv.Itoa(statusCode))
-	}
-	payload, err := decodeJSONMap(body)
-	if err != nil {
-		return nil, "", err
-	}
-	if codeString(payload["code"]) != "1" {
-		message := responseMessage(payload)
-		if message == "" {
-			message = "卡卡云接收URL列表查询失败"
-		}
-		return nil, message, errors.New(message)
-	}
-	items := make([]ProductReceiveURLItem, 0)
-	if data, ok := payload["data"].([]any); ok {
-		for _, raw := range data {
-			itemMap, ok := raw.(map[string]any)
-			if !ok {
-				continue
-			}
-			items = append(items, ProductReceiveURLItem{
-				URL:           strings.TrimSpace(codeString(itemMap["url"])),
-				CreatedAtUnix: int64FromValue(itemMap["createtime"]),
-			})
-		}
-	}
-	return items, responseMessage(payload), nil
-}
-
-func (kakayunProvider) BuildSetReceiveURLRequest(ctx context.Context, account AccountConfig, now time.Time, input ProductReceiveURLInput) (*http.Request, error) {
-	payload := map[string]any{
-		"userid":    strings.TrimSpace(account.TokenID),
-		"timestamp": now.Unix(),
-	}
-	if strings.TrimSpace(input.ReceiveURL) != "" {
-		payload["receiveurl"] = strings.TrimSpace(input.ReceiveURL)
-	}
-	if strings.TrimSpace(input.OldReceiveURL) != "" {
-		payload["oldreceiveurl"] = strings.TrimSpace(input.OldReceiveURL)
-	}
-	payload["sign"] = kakayunSign(payload, account.SecretKey)
-	return newJSONRequest(ctx, kakayunProductPushBaseURL+"/dockapiv3/user/seturl", payload, map[string]string{"User-Agent": "curl/7.81.0"})
-}
 
 func (kakayunProvider) BuildSubscribeRequest(ctx context.Context, account AccountConfig, now time.Time, input ProductSubscribeInput) (*http.Request, error) {
 	return kakayunProductSubscribeRequest(ctx, account, now, input, "/dockapiv3/goods/subscribe")
@@ -835,11 +752,6 @@ func (kakayunProvider) ParseProductChangePush(account AccountConfig, now time.Ti
 		GoodsStatus:     codeString(payload["goodsstatus"]),
 		Raw:             raw,
 	}, nil
-}
-
-func int64FromValue(value any) int64 {
-	result, _ := int64FromRequired(value)
-	return result
 }
 
 func int64FromRequired(value any) (int64, error) {
@@ -1131,9 +1043,7 @@ func TestAutoSubscribeKakayunBindingRecordsSuccess(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests = append(requests, r.URL.Path)
 		switch r.URL.Path {
-		case "/dockapiv3/user/geturl":
-			_, _ = w.Write([]byte(`{"code":1,"msg":"success","data":[]}`))
-		case "/dockapiv3/user/seturl", "/dockapiv3/goods/subscribe":
+		case "/dockapiv3/goods/subscribe":
 			_, _ = w.Write([]byte(`{"code":1,"msg":"成功"}`))
 		default:
 			http.NotFound(w, r)
@@ -1150,9 +1060,7 @@ func TestAutoSubscribeKakayunBindingRecordsSuccess(t *testing.T) {
 	err = logic.autoSubscribeProductGoodsChannelBinding(ctx, binding, "https://public.example.com/api/open/supplier-platforms/kakayun/1/product-change-callback")
 	require.NoError(t, err)
 
-	require.Contains(t, requests, "/dockapiv3/user/geturl")
-	require.Contains(t, requests, "/dockapiv3/user/seturl")
-	require.Contains(t, requests, "/dockapiv3/goods/subscribe")
+	require.Equal(t, []string{"/dockapiv3/goods/subscribe"}, requests)
 
 	var status string
 	err = core.DB().GetCore().GetScan(ctx, &status, `SELECT status FROM supplier_product_subscription WHERE binding_id = ?`, binding.BindingID)

@@ -129,7 +129,7 @@
 - 路由前缀：`/api/admin/supplier-platform-types`、`/api/admin/supplier-platforms*`、`/api/admin/supplier-product-subscriptions*`、`/api/open/supplier-platforms/{providerCode}/{platformAccountId}/product-change-callback`
 - 权限：后台供应商接口使用 `supplier.index`；开放回调用上游签名验签。
 - 主要能力：平台类型字典、平台账号分页、详情、增删改、启停、余额刷新、余额日志落库、平台关闭后级联关停商品绑定、卡卡云商品详情适配器、卡卡云商品订阅、取消订阅、重新订阅、商品变动推送回调。
-- 边界：`platform_docs/` 保存渠道原始协议，`docs/` 保存本仓库实现说明；卡卡云商品详情因平台接口限制固定走公共域名，下单、查单和其他 provider 仍使用账号配置域名。
+- 边界：`platform_docs/` 保存渠道原始协议，`docs/` 保存本仓库实现说明；卡卡云商品详情、商品订阅和取消订阅因平台接口限制固定走公共域名，下单、查单和其他 provider 仍使用账号配置域名。卡卡云商品变动接收 URL 由运营在卡卡云后台配置，系统只在本地记录 `callback_url` 供展示、复制和排查，不调用 `user/geturl` 或 `user/seturl`。
 
 ### 订单履约
 

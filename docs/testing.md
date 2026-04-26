@@ -103,7 +103,7 @@ go test ./internal/bootstrap -run TestApplicationStartsAndClosesBackgroundWorker
 
 ```bash
 go test ./internal/library/supplierplatform/provider -run 'TestKakayunProductSubscriptionProvider|TestKakayunProductChangePushProvider|TestLookupProductPush' -count=1 -timeout 60s
-go test ./internal/logic/admin -run 'TestAutoSubscribeKakayunBinding|TestApplyProductGoodsChannelPriceChange' -count=1 -timeout 60s
+go test ./internal/logic/admin -run 'TestAutoSubscribeKakayunBinding|TestSupplierProductSubscription|TestCancel|TestResubscribe|TestApplyProductGoodsChannelPriceChange' -count=1 -timeout 60s
 go test ./test/contract -run 'TestOpenSupplierProductChangeCallbackReturnsPlainOK|TestSupplierProductSubscriptionListCancelAndResubscribe|TestProductGoodsChannelPriceChangeList' -count=1 -timeout 60s
 ```
 

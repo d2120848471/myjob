@@ -373,8 +373,7 @@ func (l *ProductGoodsLogic) subscribeProductGoodsChannelBinding(ctx context.Cont
 		return recordFailure(actionErr, callbackURL, requestSnapshot, responseSnapshot)
 	}
 
-	now := l.core.Now()
-	request, err := provider.BuildGetReceiveURLsRequest(opCtx, account, now)
+	request, err := provider.BuildSubscribeRequest(opCtx, account, l.core.Now(), supplierprovider.ProductSubscribeInput{SupplierGoodsNo: target.SupplierGoodsNo})
 	if err != nil {
 		return fail(err)
 	}
@@ -383,39 +382,7 @@ func (l *ProductGoodsLogic) subscribeProductGoodsChannelBinding(ctx context.Cont
 	if err != nil {
 		return fail(err)
 	}
-	urls, message, err := provider.ParseGetReceiveURLsResponse(http.StatusOK, []byte(httpResult.RawBody))
-	if err != nil {
-		return fail(subscriptionProviderError(message, err))
-	}
-
-	if !productSubscriptionURLExists(urls, callbackURL) {
-		request, err = provider.BuildSetReceiveURLRequest(opCtx, account, l.core.Now(), supplierprovider.ProductReceiveURLInput{
-			ReceiveURL: callbackURL,
-		})
-		if err != nil {
-			return fail(err)
-		}
-		httpResult, err = l.executeProductSubscriptionRequest(target, request)
-		requestSnapshot, responseSnapshot = httpResult.RequestSnapshot, httpResult.ResponseSnapshot
-		if err != nil {
-			return fail(err)
-		}
-		message, err = provider.ParseMutationResponse(http.StatusOK, []byte(httpResult.RawBody))
-		if err != nil {
-			return fail(subscriptionProviderError(message, err))
-		}
-	}
-
-	request, err = provider.BuildSubscribeRequest(opCtx, account, l.core.Now(), supplierprovider.ProductSubscribeInput{SupplierGoodsNo: target.SupplierGoodsNo})
-	if err != nil {
-		return fail(err)
-	}
-	httpResult, err = l.executeProductSubscriptionRequest(target, request)
-	requestSnapshot, responseSnapshot = httpResult.RequestSnapshot, httpResult.ResponseSnapshot
-	if err != nil {
-		return fail(err)
-	}
-	message, err = provider.ParseMutationResponse(http.StatusOK, []byte(httpResult.RawBody))
+	message, err := provider.ParseMutationResponse(http.StatusOK, []byte(httpResult.RawBody))
 	if err != nil {
 		return fail(subscriptionProviderError(message, err))
 	}
@@ -670,16 +637,6 @@ func sanitizeProductSubscriptionSnapshot(value string, target productGoodsChanne
 	value = strings.ReplaceAll(value, target.SecretKey, "***")
 	value = strings.ReplaceAll(value, target.TokenID, "***")
 	return value
-}
-
-func productSubscriptionURLExists(items []supplierprovider.ProductReceiveURLItem, callbackURL string) bool {
-	callbackURL = strings.TrimSpace(callbackURL)
-	for _, item := range items {
-		if strings.TrimSpace(item.URL) == callbackURL {
-			return true
-		}
-	}
-	return false
 }
 
 func subscriptionProviderError(message string, err error) error {
