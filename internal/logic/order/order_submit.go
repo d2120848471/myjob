@@ -86,7 +86,15 @@ func (l *OrderLogic) submitOrder(ctx context.Context, order entity.ExternalOrder
 	}
 	attemptNo := order.AttemptCount + 1
 	supplierUSOrderNo := order.OrderNo + "-T" + intToString(attemptNo)
-	attempt, claimed, err := l.claimOrderWithPendingAttempt(ctx, order, candidate, attemptNo, supplierUSOrderNo)
+	priceSnapshot, err := channelpricing.OrderSnapshot(candidate.pricingRule(), order.Quantity)
+	if err != nil {
+		return err
+	}
+	maxMoney, err := kakayunMaxMoney(candidate, config, priceSnapshot, order.Quantity)
+	if err != nil {
+		return err
+	}
+	attempt, claimed, err := l.claimOrderWithPendingAttempt(ctx, order, candidate, attemptNo, supplierUSOrderNo, priceSnapshot)
 	if err != nil || !claimed {
 		return err
 	}
@@ -95,6 +103,7 @@ func (l *OrderLogic) submitOrder(ctx context.Context, order entity.ExternalOrder
 		Quantity:          order.Quantity,
 		Account:           order.Account,
 		SupplierUSOrderNo: supplierUSOrderNo,
+		MaxMoney:          maxMoney,
 	})
 	if err != nil && result.OrderStatus == "" {
 		result = createSubmitResult{
@@ -206,12 +215,8 @@ func (l *OrderLogic) handleAttemptFailed(ctx context.Context, order entity.Exter
 	return l.submitOrder(ctx, order)
 }
 
-func (l *OrderLogic) claimOrderWithPendingAttempt(ctx context.Context, order entity.ExternalOrder, candidate orderChannelCandidate, attemptNo int, supplierUSOrderNo string) (entity.ExternalOrderAttempt, bool, error) {
+func (l *OrderLogic) claimOrderWithPendingAttempt(ctx context.Context, order entity.ExternalOrder, candidate orderChannelCandidate, attemptNo int, supplierUSOrderNo string, priceSnapshot channelpricing.OrderPriceSnapshot) (entity.ExternalOrderAttempt, bool, error) {
 	now := l.core.Now()
-	priceSnapshot, err := channelpricing.OrderSnapshot(candidate.pricingRule(), order.Quantity)
-	if err != nil {
-		return entity.ExternalOrderAttempt{}, false, err
-	}
 	nextPollAt := now.Add(pollIntervalDuration(l.core.Config().OpenOrder.PollIntervalSeconds))
 	attempt := entity.ExternalOrderAttempt{
 		OrderID:             order.ID,
@@ -231,7 +236,7 @@ func (l *OrderLogic) claimOrderWithPendingAttempt(ctx context.Context, order ent
 		CreatedAt:           now,
 		UpdatedAt:           now,
 	}
-	err = l.core.DB().Transaction(ctx, func(ctx context.Context, tx gdb.TX) error {
+	err := l.core.DB().Transaction(ctx, func(ctx context.Context, tx gdb.TX) error {
 		claimed, err := l.markOrderSubmitting(ctx, tx, order, attemptNo, nextPollAt, priceSnapshot, now)
 		if err != nil || !claimed {
 			return err
@@ -371,23 +376,31 @@ func (l *OrderLogic) loadReorderConfig(ctx context.Context, goodsID int64) (reor
 		ReorderTimeoutEnabled int    `db:"reorder_timeout_enabled"`
 		ReorderTimeoutMinutes int    `db:"reorder_timeout_minutes"`
 		OrderStrategy         string `db:"order_strategy"`
-	}{OrderStrategy: "fixed_order"}
+		AllowLossSaleEnabled  int    `db:"allow_loss_sale_enabled"`
+		MaxLossAmount         string `db:"max_loss_amount"`
+	}{OrderStrategy: "fixed_order", MaxLossAmount: "0.0000"}
 	err := l.core.DB().GetCore().GetScan(ctx, &row, `
-SELECT smart_reorder_enabled, reorder_timeout_enabled, reorder_timeout_minutes, order_strategy
+SELECT smart_reorder_enabled, reorder_timeout_enabled, reorder_timeout_minutes, order_strategy,
+       allow_loss_sale_enabled, max_loss_amount
 FROM product_goods_channel_config
 WHERE goods_id = ?
 `, goodsID)
 	if err != nil {
-		return reorderConfig{OrderStrategy: "fixed_order"}, nil
+		return reorderConfig{OrderStrategy: "fixed_order", MaxLossAmount: "0.0000"}, nil
 	}
 	if strings.TrimSpace(row.OrderStrategy) == "" {
 		row.OrderStrategy = "fixed_order"
 	}
+	if strings.TrimSpace(row.MaxLossAmount) == "" {
+		row.MaxLossAmount = "0.0000"
+	}
 	return reorderConfig{
-		SmartEnabled:   row.SmartReorderEnabled,
-		TimeoutEnabled: row.ReorderTimeoutEnabled,
-		TimeoutMinutes: row.ReorderTimeoutMinutes,
-		OrderStrategy:  row.OrderStrategy,
+		SmartEnabled:         row.SmartReorderEnabled,
+		TimeoutEnabled:       row.ReorderTimeoutEnabled,
+		TimeoutMinutes:       row.ReorderTimeoutMinutes,
+		OrderStrategy:        row.OrderStrategy,
+		AllowLossSaleEnabled: row.AllowLossSaleEnabled,
+		MaxLossAmount:        row.MaxLossAmount,
 	}, nil
 }
 

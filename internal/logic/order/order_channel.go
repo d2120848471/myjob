@@ -47,6 +47,7 @@ SELECT
     a.provider_code,
     b.supplier_goods_no,
     b.supplier_goods_name,
+    b.source_cost_price,
     b.cost_price,
     COALESCE(g.default_sell_price, '0.0000') AS default_sell_price,
     b.is_auto_change,
