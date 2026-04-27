@@ -48,6 +48,14 @@ go test ./test/integration -count=1 -timeout 60s
 go test ./test/integration -run TestOrderWorker -count=1 -timeout 60s
 ```
 
+充值风控聚焦回归：
+
+```bash
+go test ./test/contract -run 'TestRechargeRisk' -count=1 -timeout 60s
+go test ./test/integration -run 'TestOpenOrder(CreatesFailedOrderWhenRechargeRiskMatches|DoesNotRiskBlockWhenRuleDisabled)' -count=1 -timeout 60s
+go test ./internal/app -run 'Test(ExternalOrderSchemaContainsRequiredTablesAndIndexes|RechargeRiskSchemaContainsComments)' -count=1 -timeout 60s
+```
+
 runtime smoke test 需要显式开启：
 
 ```bash

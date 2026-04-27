@@ -199,6 +199,8 @@ export GF_DAO_LINK='mysql:root:root123456@tcp(127.0.0.1:3306)/admin?charset=utf8
 
 ## 订单金额快照
 
+开放下单会在创建订单前检查启用的充值风控规则。匹配口径为充值账号精确匹配，并要求当前商品名称包含规则中的商品关键词。命中后系统仍创建 `external_order`，但状态直接为 `failed`，写入 `last_receipt` 和 `recharge_risk_record`，同时递增规则 `hit_count`；该订单不会触发 worker，也不会生成 `external_order_attempt`。
+
 订单提交会按实际选中的渠道绑定规则写入 `unit_price / order_amount / cost_amount / profit_amount`，并在 `external_order_attempt` 保存渠道主体快照。历史订单如需再次修复，应先按明确订单号或历史时间窗口预览影响范围，再在维护窗口执行一次性 SQL；不要对实时处理中订单做批量回算。
 
 卡卡云下单会传 `maxmoney` 作为上游防亏本最大进货总金额。该值使用渠道绑定的 `source_cost_price` 计算原始进货总额，再与订单销售金额加允许亏本金额取较小值：`min(source_cost_price * quantity, order_amount + allowed_loss)`。商品库存配置未开启亏本销售时，`allowed_loss` 固定为 `0`；开启时使用 `max_loss_amount`，且该金额按订单总额计入。

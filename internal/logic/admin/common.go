@@ -29,6 +29,7 @@ type Services struct {
 	ProductGoodsChannelPriceChange service.ProductGoodsChannelPriceChangeService
 	SupplierProductCallback        service.SupplierProductCallbackService
 	SupplierPlatform               service.SupplierPlatformService
+	RechargeRisk                   service.RechargeRiskService
 	SMSConfig                      service.SMSConfigService
 	System                         service.SystemConfigService
 	AuditLog                       service.AuditLogService
@@ -52,6 +53,7 @@ func NewServices(core *app.Core) *Services {
 		ProductGoodsChannelPriceChange: productGoods,
 		SupplierProductCallback:        productGoods,
 		SupplierPlatform:               NewSupplierPlatformLogic(core),
+		RechargeRisk:                   &RechargeRiskLogic{core: core},
 		SMSConfig:                      &SMSConfigLogic{core: core},
 		System:                         &SystemConfigLogic{core: core},
 		AuditLog:                       &AuditLogLogic{core: core},

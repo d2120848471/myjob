@@ -53,13 +53,6 @@ func (l *OrderLogic) CreateOpenOrder(ctx context.Context, req *adminapi.OpenOrde
 	if req.Quantity < goods.MinPurchaseQty || req.Quantity > goods.MaxPurchaseQty {
 		return nil, apiErr(consts.CodeBadRequest, "购买数量不在允许范围内")
 	}
-	candidates, err := l.loadCandidateChannels(ctx, goods.ID, nil)
-	if err != nil {
-		return nil, err
-	}
-	if len(candidates) == 0 {
-		return nil, apiErr(consts.CodeBadRequest, "暂无可用云发卡渠道")
-	}
 	now := l.core.Now()
 	unitPrice, err := normalizeOrderMoney(goods.DefaultSellPrice)
 	if err != nil {
@@ -68,6 +61,31 @@ func (l *OrderLogic) CreateOpenOrder(ctx context.Context, req *adminapi.OpenOrde
 	orderAmount, err := multiplyOrderMoney(unitPrice, req.Quantity)
 	if err != nil {
 		return nil, apiErr(consts.CodeBadRequest, "订单金额计算失败")
+	}
+	riskMatch, matched, err := l.matchRechargeRisk(ctx, account, goods.Name)
+	if err != nil {
+		return nil, apiErr(consts.CodeInternalError, "充值风控规则查询失败")
+	}
+	if matched {
+		orderNo, created, err := l.createRiskFailedOpenOrder(ctx, req, goods, account, unitPrice, orderAmount, riskMatch, now)
+		if err != nil {
+			return nil, apiErr(consts.CodeInternalError, "风控失败订单创建失败")
+		}
+		if created {
+			return &adminapi.OpenOrderCreateRes{
+				OrderNo:    orderNo,
+				StatusCode: OrderStatusFailed,
+				StatusText: orderStatusText(OrderStatusFailed),
+				CreatedAt:  formatAppTime(now),
+			}, nil
+		}
+	}
+	candidates, err := l.loadCandidateChannels(ctx, goods.ID, nil)
+	if err != nil {
+		return nil, err
+	}
+	if len(candidates) == 0 {
+		return nil, apiErr(consts.CodeBadRequest, "暂无可用云发卡渠道")
 	}
 	orderNo := ""
 	for attempt := 0; attempt < maxOpenOrderCreateAttempts; attempt++ {

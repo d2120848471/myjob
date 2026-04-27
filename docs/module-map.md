@@ -17,6 +17,7 @@
 | 商品管理 | 后台维护商品主档、渠道绑定、库存配置和自动改价记录，开放订单会按商品编码定位可用商品。 |
 | 第三方对接 | 后台维护供应商平台账号，余额刷新、商品订阅和订单履约通过 provider 适配器访问上游。 |
 | 订单履约 | 开放接口创建订单后进入待提交队列，worker 按选中渠道定价规则提交上游、轮询状态，并在窗口内按规则补单。 |
+| 充值风控 | 后台配置充值账号风控规则；开放下单命中启用规则时本地创建失败订单、记录拦截流水并停止上游提交。 |
 | 短信配置 | 超管维护短信 provider 配置，运行态读取配置后用于登录二验验证码发送。 |
 | 系统参数配置 | 超管按分组维护系统参数，保存时兼容旧单组写法和新多分组写法。 |
 | 审计日志 | 登录、关键后台操作和异常行为落库，后台按管理员、时间和关键字查询。 |
@@ -144,6 +145,17 @@
 - 主要能力：开放下单、开放查单、待提交扫描、云发卡提交、订单轮询、窗口内补单、后台订单列表筛选和统计。
 - 边界：一期只支持直充、渠道供货商品；订单提交后按实际选中渠道的固定/百分比利润规则写入金额快照，后台订单销售主体优先展示当前渠道主体；卡卡云下单会按订单层计算出的 `maxmoney` 传递防亏本上限，计算口径使用渠道绑定 `source_cost_price`，provider 只负责协议字段透传和签名；对外查单不暴露渠道、成本和利润。
 
+### 充值风控
+
+- 协议：`api/recharge_risk.go`
+- controller：`internal/controller/admin/recharge_risk.go`
+- service：`RechargeRiskService`（`internal/service/recharge_risk.go`）
+- logic：`internal/logic/admin/recharge_risk*.go`、订单命中点 `internal/logic/order/order_risk.go`
+- 路由前缀：`/api/admin/recharge-risks*`
+- 权限：`order.recharge_risk`
+- 主要能力：配置充值账号风控规则、启停规则、查询风控规则列表、查询拦截记录；开放下单命中启用规则时创建失败订单并写入拦截流水。
+- 边界：规则匹配只使用充值账号精确匹配和商品名关键词包含；不实现正则、优先级、批量导入导出或前端页面代码。
+
 ### 短信配置
 
 - 协议：`api/settings_sms.go`（薄入口：`api/settings.go`）
@@ -229,6 +241,7 @@ HTTP 协议适配层。`admin` 承载后台接口，`open` 承载开放订单接
 | 供应商商品变动回调 | `/api/open/supplier-platforms/{providerCode}/{platformAccountId}/product-change-callback` | 上游签名 |
 | 开放订单 | `/api/open/orders*` | 固定 `open_order.token` |
 | 后台订单记录 | `/api/admin/orders` | `order.manage` |
+| 充值风控 | `/api/admin/recharge-risks*` | `order.recharge_risk` |
 | 短信配置 | `/api/admin/settings/sms` | super-only |
 | 系统参数配置 | `/api/admin/settings/system` | super-only |
 | 操作日志 | `/api/admin/logs/operations` | `admin.action` |

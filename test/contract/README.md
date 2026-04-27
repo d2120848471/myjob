@@ -15,5 +15,6 @@ go test ./test/contract -count=1 -timeout 60s
 - 统一响应 `code / message / data`。
 - 登录、短信二验、权限和核心后台业务流。
 - 商品、第三方对接、开放订单和后台订单主流程。
+- 充值风控规则、权限、OpenAPI 暴露和风控记录列表。
 
 契约测试会启动测试态应用，使用 MySQL 测试库 `admin_test`、`miniredis` 和 mock 短信 sender。

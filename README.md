@@ -20,7 +20,7 @@ MyJob Admin Backend 是运行在仓库根目录的 GoFrame 单体后台项目。
 - 后台管理：员工、用户组与授权、主体、品牌、行业、商品模板、购买数量限制策略、商品、商品渠道绑定和库存配置。
 - 设置与审计：短信配置、系统参数配置、操作日志、登录日志。
 - 第三方对接：平台类型字典、平台账号管理、余额刷新、余额日志落库。
-- 订单履约：开放下单/查单、云发卡异步提交与轮询、后台订单记录列表和基础统计。
+- 订单履约：开放下单/查单、充值账号风控拦截、云发卡异步提交与轮询、后台订单记录列表和基础统计。
 
 ## 快速开始
 
@@ -80,5 +80,5 @@ CI 会执行 test、build 和 lint。详细测试分层、MySQL 测试库和 liv
 - `docs/development.md`：本地开发、配置、SQL/schema 和 DAO 说明。
 - `docs/testing.md`：测试分层、执行命令、CI/lint 和外部依赖边界。
 - `docs/migration.md`：历史迁移背景。
-- `docs/superpowers/README.md`：阶段性规格和实施计划目录约定；当前无保留文档。
+- `docs/superpowers/README.md`：阶段性规格和实施计划目录约定。
 - `platform_docs/README.md`：第三方渠道原始接口资料总览。

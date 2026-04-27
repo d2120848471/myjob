@@ -2,6 +2,7 @@ package orderlogic
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -83,6 +84,58 @@ func TestCreateOpenOrderRetriesOrderNoUniqueConflict(t *testing.T) {
 	require.Equal(t, "ORETRYOK", res.OrderNo)
 	require.EqualValues(t, 1, scalarOrderTestInt(t, core, `SELECT COUNT(*) FROM external_order WHERE order_no = ?`, "ORETRYDUP"))
 	require.EqualValues(t, 1, scalarOrderTestInt(t, core, `SELECT COUNT(*) FROM external_order WHERE order_no = ?`, "ORETRYOK"))
+}
+
+func TestRechargeRiskSnapshotsFitColumnLimits(t *testing.T) {
+	longToken := strings.Repeat("token", 30)
+	longReason := strings.Repeat("r", 512)
+
+	require.LessOrEqual(t, len([]rune(riskRecordTokenSnapshot(longToken))), 64)
+	require.LessOrEqual(t, len([]rune(riskOrderReceipt(longReason))), 512)
+}
+
+func TestCreateRiskFailedOpenOrderRechecksRuleStatus(t *testing.T) {
+	core, err := app.NewTestCore()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = core.Close() })
+
+	ctx := context.Background()
+	fixture := seedOpenOrderCreationFixture(t, core, "G-RISK-RECHECK")
+	now := core.Now()
+	_, err = core.DB().Exec(ctx, `
+INSERT INTO recharge_risk_rule (
+    account, goods_keyword, reason, status, hit_count,
+    created_by_id, created_by_name, updated_by_id, updated_by_name,
+    is_deleted, created_at, updated_at
+) VALUES ('risk-recheck-account', '重试', '规则已停用不应拦截', 1, 0, 1, 'admin', 1, 'admin', 0, ?, ?)
+`, now, now)
+	require.NoError(t, err)
+
+	logic := NewOrderLogic(core)
+	goods, err := logic.loadOpenOrderGoods(ctx, fixture.goodsCode)
+	require.NoError(t, err)
+	match, matched, err := logic.matchRechargeRisk(ctx, "risk-recheck-account", goods.Name)
+	require.NoError(t, err)
+	require.True(t, matched)
+	_, err = core.DB().Exec(ctx, `UPDATE recharge_risk_rule SET status = 0, updated_at = ? WHERE id = ?`, core.Now(), match.RuleID)
+	require.NoError(t, err)
+
+	unitPrice, err := normalizeOrderMoney(goods.DefaultSellPrice)
+	require.NoError(t, err)
+	orderAmount, err := multiplyOrderMoney(unitPrice, 1)
+	require.NoError(t, err)
+	orderNo, created, err := logic.createRiskFailedOpenOrder(ctx, &adminapi.OpenOrderCreateReq{
+		Token:    "test-open-order-token",
+		GoodsID:  fixture.goodsCode,
+		Account:  "risk-recheck-account",
+		Quantity: 1,
+	}, goods, "risk-recheck-account", unitPrice, orderAmount, match, core.Now())
+	require.NoError(t, err)
+	require.False(t, created)
+	require.Empty(t, orderNo)
+	require.EqualValues(t, 0, scalarOrderTestInt(t, core, `SELECT COUNT(*) FROM external_order WHERE account = ?`, "risk-recheck-account"))
+	require.EqualValues(t, 0, scalarOrderTestInt(t, core, `SELECT COUNT(*) FROM recharge_risk_record WHERE account = ?`, "risk-recheck-account"))
+	require.EqualValues(t, 0, scalarOrderTestInt(t, core, `SELECT hit_count FROM recharge_risk_rule WHERE id = ?`, match.RuleID))
 }
 
 type openOrderCreationFixture struct {

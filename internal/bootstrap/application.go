@@ -95,6 +95,7 @@ func assemble(core *app.Core) (*Application, error) {
 	subscriptionCtrl := admincontroller.NewSupplierProductSubscription(services.SupplierProductSubscription)
 	priceChangeCtrl := admincontroller.NewProductGoodsChannelPriceChange(services.ProductGoodsChannelPriceChange)
 	supplierPlatformCtrl := admincontroller.NewSupplierPlatform(services.SupplierPlatform)
+	rechargeRiskCtrl := admincontroller.NewRechargeRisk(services.RechargeRisk)
 	settingsCtrl := admincontroller.NewSettings(services.SMSConfig, services.System)
 	operationLogCtrl := admincontroller.NewOperationLog(services.AuditLog)
 	loginLogCtrl := admincontroller.NewLoginLog(services.AuditLog)
@@ -169,6 +170,10 @@ func assemble(core *app.Core) (*Application, error) {
 		group.Group("", func(group *ghttp.RouterGroup) {
 			group.Middleware(guard.Require("order.manage", false))
 			group.Bind(adminOrderCtrl)
+		})
+		group.Group("", func(group *ghttp.RouterGroup) {
+			group.Middleware(guard.Require("order.recharge_risk", false))
+			group.Bind(rechargeRiskCtrl)
 		})
 		group.Group("", func(group *ghttp.RouterGroup) {
 			group.Middleware(guard.Require("", true))

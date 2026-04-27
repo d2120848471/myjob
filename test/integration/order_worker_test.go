@@ -120,6 +120,125 @@ func TestOrderWorkerPassesKakayunMaxMoneyWithAllowedLoss(t *testing.T) {
 	require.Equal(t, "12.5000", captured[0]["maxmoney"])
 }
 
+func TestOpenOrderCreatesFailedOrderWhenRechargeRiskMatches(t *testing.T) {
+	var createCount atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		createCount.Add(1)
+		_, _ = w.Write([]byte(`{"code":1,"message":"下单成功"}`))
+	}))
+	defer server.Close()
+
+	h := newOrderIntegrationHarness(t)
+	token := h.loginAdmin(t)
+	leafBrandID := h.createBrandPath(t, token, "风控品牌", "剪辑工具", "剪映")
+	subjectID := h.createSubject(t, token, "风控主体", 0)
+	goodsID := h.createDirectRechargeGoods(t, token, leafBrandID, "剪映专业版会员", "20.0000")
+	platformID := h.createKakayunPlatform(t, token, "风控云发卡", subjectID, 0, strings.TrimPrefix(server.URL, "http://"))
+	require.Equal(t, 0, h.postJSON("/api/admin/products/"+int64ToString(goodsID)+"/channel-bindings", map[string]any{
+		"platform_account_id": platformID,
+		"supplier_goods_no":   "2478601",
+		"supplier_goods_name": "剪映专业版会员",
+		"source_cost_price":   "10.0000",
+		"dock_status":         1,
+		"sort":                10,
+	}, token).Code)
+	rule := h.postJSON("/api/admin/recharge-risks/rules", map[string]any{
+		"account":       "bad-jianying-account",
+		"goods_keyword": "剪映",
+		"reason":        "客户多次提交错误剪映账号",
+		"status":        1,
+	}, token)
+	require.Equal(t, 0, rule.Code)
+
+	detail := h.getJSON("/api/admin/products/"+int64ToString(goodsID), token)
+	require.Equal(t, 0, detail.Code)
+	var goodsDetail struct {
+		GoodsCode string `json:"goods_code"`
+	}
+	require.NoError(t, json.Unmarshal(detail.Data, &goodsDetail))
+
+	create := h.postJSON("/api/open/orders", map[string]any{
+		"token":    "test-open-order-token",
+		"goods_id": goodsDetail.GoodsCode,
+		"account":  "bad-jianying-account",
+		"quantity": 1,
+	}, "")
+	require.Equal(t, 0, create.Code)
+	var createData struct {
+		OrderNo    string `json:"order_no"`
+		StatusCode string `json:"status_code"`
+		StatusText string `json:"status_text"`
+	}
+	require.NoError(t, json.Unmarshal(create.Data, &createData))
+	require.NotEmpty(t, createData.OrderNo)
+	require.Equal(t, "failed", createData.StatusCode)
+	require.Equal(t, "失败", createData.StatusText)
+
+	require.NoError(t, h.orderService.SubmitPendingOnce(context.Background()))
+	require.EqualValues(t, 0, createCount.Load())
+	order := h.loadOrder(t, createData.OrderNo)
+	require.Equal(t, "failed", order.Status)
+	require.Contains(t, order.LastReceipt, "客户多次提交错误剪映账号")
+	require.EqualValues(t, 0, h.scalarInt(t, `SELECT COUNT(*) FROM external_order_attempt WHERE order_id = ?`, order.ID))
+	require.EqualValues(t, 1, h.scalarInt(t, `SELECT hit_count FROM recharge_risk_rule WHERE account = ? AND is_deleted = 0`, "bad-jianying-account"))
+	require.EqualValues(t, 1, h.scalarInt(t, `SELECT COUNT(*) FROM recharge_risk_record WHERE order_no = ? AND matched_keyword = ?`, createData.OrderNo, "剪映"))
+}
+
+func TestOpenOrderDoesNotRiskBlockWhenRuleDisabled(t *testing.T) {
+	var createCount atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		createCount.Add(1)
+		_, _ = w.Write([]byte(`{"code":1,"message":"下单成功","data":{"orderno":"SDRISKDISABLED","usorderno":"O-T1"}}`))
+	}))
+	defer server.Close()
+
+	h := newOrderIntegrationHarness(t)
+	token := h.loginAdmin(t)
+	leafBrandID := h.createBrandPath(t, token, "停用风控品牌", "修图工具", "醒图")
+	subjectID := h.createSubject(t, token, "停用风控主体", 0)
+	goodsID := h.createDirectRechargeGoods(t, token, leafBrandID, "醒图会员", "20.0000")
+	platformID := h.createKakayunPlatform(t, token, "停用风控云发卡", subjectID, 0, strings.TrimPrefix(server.URL, "http://"))
+	require.Equal(t, 0, h.postJSON("/api/admin/products/"+int64ToString(goodsID)+"/channel-bindings", map[string]any{
+		"platform_account_id": platformID,
+		"supplier_goods_no":   "2478602",
+		"supplier_goods_name": "醒图会员",
+		"source_cost_price":   "10.0000",
+		"dock_status":         1,
+		"sort":                10,
+	}, token).Code)
+	require.Equal(t, 0, h.postJSON("/api/admin/recharge-risks/rules", map[string]any{
+		"account":       "disabled-risk-account",
+		"goods_keyword": "醒图",
+		"reason":        "停用规则不应拦截",
+		"status":        0,
+	}, token).Code)
+
+	detail := h.getJSON("/api/admin/products/"+int64ToString(goodsID), token)
+	require.Equal(t, 0, detail.Code)
+	var goodsDetail struct {
+		GoodsCode string `json:"goods_code"`
+	}
+	require.NoError(t, json.Unmarshal(detail.Data, &goodsDetail))
+
+	create := h.postJSON("/api/open/orders", map[string]any{
+		"token":    "test-open-order-token",
+		"goods_id": goodsDetail.GoodsCode,
+		"account":  "disabled-risk-account",
+		"quantity": 1,
+	}, "")
+	require.Equal(t, 0, create.Code)
+	var createData struct {
+		OrderNo    string `json:"order_no"`
+		StatusCode string `json:"status_code"`
+	}
+	require.NoError(t, json.Unmarshal(create.Data, &createData))
+	require.Equal(t, "pending_submit", createData.StatusCode)
+
+	require.NoError(t, h.orderService.SubmitPendingOnce(context.Background()))
+	require.EqualValues(t, 1, createCount.Load())
+	require.EqualValues(t, 0, h.scalarInt(t, `SELECT COUNT(*) FROM recharge_risk_record WHERE order_no = ?`, createData.OrderNo))
+}
+
 func TestOrderWorkerFailsOrderWhenKakayunMaxMoneyCannotBeCalculated(t *testing.T) {
 	var createCount atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
