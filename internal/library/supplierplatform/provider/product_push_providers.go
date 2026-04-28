@@ -39,7 +39,7 @@ func (xingquanyiProvider) ParseProductChangePush(account AccountConfig, _ time.T
 	if !kakayunSignEqual(expected, codeString(payload["sign"])) {
 		return ProductChangePushResult{Raw: raw}, errors.New("星权益推送签名错误")
 	}
-	eventData := nestedMap(payload, "event_data")
+	eventData := productChangeEventData(payload["event_data"])
 	priceValue := payload["goods_price"]
 	if _, ok := payload["goods_price"]; !ok {
 		priceValue = eventData["price"]
@@ -50,7 +50,7 @@ func (xingquanyiProvider) ParseProductChangePush(account AccountConfig, _ time.T
 	}
 	status := payload["status"]
 	if _, ok := payload["status"]; !ok {
-		status = eventData["status"]
+		status = firstNonEmptyValue(eventData["status"], eventData["supply_state"], eventData["hold_state"], eventData["stock_state"])
 	}
 	return productChangePushResultFromFields(raw, firstNonEmptyText(payload["product_id"], payload["id"]), name, priceValue, status, "星权益推送缺少商品编号")
 }
@@ -74,6 +74,21 @@ func productChangePushPayload(body []byte) (map[string]any, string, error) {
 		return nil, raw, err
 	}
 	return payload, raw, nil
+}
+
+func productChangeEventData(value any) map[string]any {
+	if payload, ok := value.(map[string]any); ok {
+		return payload
+	}
+	text := strings.TrimSpace(codeString(value))
+	if text == "" || text == "<nil>" {
+		return map[string]any{}
+	}
+	payload := map[string]any{}
+	if err := json.Unmarshal([]byte(text), &payload); err != nil {
+		return map[string]any{}
+	}
+	return payload
 }
 
 func productChangePushResultFromFields(raw, supplierGoodsNo, goodsName string, priceValue any, statusValue any, missingMessage string) (ProductChangePushResult, error) {

@@ -12,7 +12,7 @@ import (
 
 func kayixinHeaders(account AccountConfig, now time.Time, body string) map[string]string {
 	version := "3.0"
-	timestamp := strconv.FormatInt(now.UnixMilli(), 10)
+	timestamp := strconv.FormatInt(now.Unix(), 10)
 	return map[string]string{
 		"X-App-Id":    strings.TrimSpace(account.TokenID),
 		"X-Signature": md5Lower(strings.TrimSpace(account.TokenID) + strings.TrimSpace(account.SecretKey) + version + timestamp + body),

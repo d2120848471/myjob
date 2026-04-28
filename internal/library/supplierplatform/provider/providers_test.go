@@ -517,6 +517,9 @@ func TestMultiPlatformOrderProvidersBuildCreateRequests(t *testing.T) {
 			require.Equal(t, "O20260428123045123456-T1-S1", payload["outerNumber"])
 			require.Equal(t, float64(20), payload["safePrice"])
 			require.Equal(t, []any{map[string]any{"name": "充值账号", "value": "13800138000"}}, payload["attach"])
+			require.Equal(t, strconv.FormatInt(now.Unix(), 10), req.Header.Get("X-Timestamp"))
+			expectedSign := md5Lower(account.TokenID + account.SecretKey + "3.0" + strconv.FormatInt(now.Unix(), 10) + string(body))
+			require.Equal(t, expectedSign, req.Header.Get("X-Signature"))
 		}},
 		{"kasushou", "/api/v1/order/buy", func(t *testing.T, req *http.Request, body []byte) {
 			payload := decodeJSONBodyAny(t, body)
@@ -583,6 +586,41 @@ func TestMultiPlatformOrderProvidersBuildCreateRequests(t *testing.T) {
 			tc.assert(t, req, readRequestBody(t, req))
 		})
 	}
+}
+
+func TestKakayunOrderProviderBuildQueryRequestUsesFixedPublicDomain(t *testing.T) {
+	provider, ok := LookupOrder("kakayun")
+	require.True(t, ok)
+
+	req, err := provider.BuildQueryOrderRequest(
+		context.Background(),
+		AccountConfig{TokenID: "merchant001", SecretKey: "secretXYZ"},
+		time.Date(2026, 4, 28, 12, 30, 45, 123000000, time.UTC),
+		"http://seller-api.example.com",
+		QueryOrderInput{SupplierOrderNo: "SUP001", SupplierUSOrderNo: "OUT001"},
+	)
+	require.NoError(t, err)
+	require.Equal(t, "http://public.kky.v3.api.kakayun.vip/dockapiv3/order/get", req.URL.String())
+}
+
+func TestXingquanyiOrderProviderBuildQueryRequestUsesOuterOrderEndpointWhenOnlyExternalNo(t *testing.T) {
+	provider, ok := LookupOrder("xingquanyi")
+	require.True(t, ok)
+
+	req, err := provider.BuildQueryOrderRequest(
+		context.Background(),
+		AccountConfig{TokenID: "merchant001", SecretKey: "secretXYZ"},
+		time.Date(2026, 4, 28, 12, 30, 45, 123000000, time.UTC),
+		"http://platform.example.com",
+		QueryOrderInput{SupplierUSOrderNo: "OUT001"},
+	)
+	require.NoError(t, err)
+	require.Equal(t, "http://platform.example.com/api/outer-order", req.URL.String())
+
+	payload := decodeJSONBodyAny(t, readRequestBody(t, req))
+	require.Equal(t, "OUT001", payload["outer_order_id"])
+	require.NotContains(t, payload, "order_id")
+	require.NotEmpty(t, payload["sign"])
 }
 
 func TestMultiPlatformOrderProvidersBuildQueryRequests(t *testing.T) {

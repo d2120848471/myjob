@@ -166,10 +166,15 @@ func (xingquanyiProvider) ParseCreateOrderResponse(statusCode int, body []byte) 
 
 func (xingquanyiProvider) BuildQueryOrderRequest(ctx context.Context, account AccountConfig, now time.Time, baseURL string, input QueryOrderInput) (*http.Request, error) {
 	params := xingquanyiBaseParams(account, now)
-	params["order_id"] = strings.TrimSpace(input.SupplierOrderNo)
-	params["outer_order_id"] = strings.TrimSpace(input.SupplierUSOrderNo)
+	path := "/api/order"
+	if supplierOrderNo := strings.TrimSpace(input.SupplierOrderNo); supplierOrderNo != "" {
+		params["order_id"] = supplierOrderNo
+	} else {
+		path = "/api/outer-order"
+		params["outer_order_id"] = strings.TrimSpace(input.SupplierUSOrderNo)
+	}
 	params["sign"] = md5Lower(strings.TrimSpace(account.SecretKey) + concatSortedNameValues(params))
-	return newJSONRequest(ctx, strings.TrimRight(baseURL, "/")+"/api/order", params, nil)
+	return newJSONRequest(ctx, strings.TrimRight(baseURL, "/")+path, params, nil)
 }
 
 func (xingquanyiProvider) ParseQueryOrderResponse(statusCode int, body []byte) (QueryOrderResult, error) {

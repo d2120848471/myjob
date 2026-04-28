@@ -179,6 +179,22 @@ func TestXingquanyiProductChangePushProviderParseAndRejectsInvalidSign(t *testin
 	require.Equal(t, "15.6700", result.GoodsPrice.StringFixed(4))
 	require.Equal(t, "1", result.GoodsStatus)
 
+	payload = map[string]any{
+		"product_id":   "20001",
+		"product_name": "星权益会员",
+		"event_data":   `{"price":"18.9900","supply_state":1}`,
+		"event_type":   "price_changed",
+		"timestamp":    1735002160,
+	}
+	payload["sign"] = xingquanyiPushSign(payload, account.SecretKey)
+
+	result, err = provider.ParseProductChangePush(account, time.Unix(1735002160, 0), marshalJSONForTest(t, payload))
+	require.NoError(t, err)
+	require.Equal(t, "20001", result.SupplierGoodsNo)
+	require.True(t, result.GoodsPriceValid)
+	require.Equal(t, "18.9900", result.GoodsPrice.StringFixed(4))
+	require.Equal(t, "1", result.GoodsStatus)
+
 	payload["sign"] = "bad-sign"
 	_, err = provider.ParseProductChangePush(account, time.Unix(1735002160, 0), marshalJSONForTest(t, payload))
 	require.Error(t, err)

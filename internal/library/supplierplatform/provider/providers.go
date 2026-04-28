@@ -22,6 +22,7 @@ type feisuyuanProvider struct{}
 type xinghaiProvider struct{}
 
 const kakayunProductInfoBaseURL = "http://public.kky.v3.api.kakayun.vip"
+const kakayunOrderQueryBaseURL = "http://public.kky.v3.api.kakayun.vip"
 
 func (kakayunProvider) Code() string { return "kakayun" }
 func (kakayunProvider) Name() string { return "卡卡云" }
@@ -176,9 +177,21 @@ func (kakayunProvider) BuildQueryOrderRequest(ctx context.Context, account Accou
 		"usorderno": strings.TrimSpace(input.SupplierUSOrderNo),
 	}
 	payload["sign"] = kakayunSign(payload, account.SecretKey)
-	return newJSONRequest(ctx, strings.TrimRight(baseURL, "/")+"/dockapiv3/order/get", payload, map[string]string{
+	return newJSONRequest(ctx, kakayunOrderQueryBaseURLFor(baseURL)+"/dockapiv3/order/get", payload, map[string]string{
 		"User-Agent": "curl/7.81.0",
 	})
+}
+
+// kakayunOrderQueryBaseURLFor 按上游文档固定卡卡云查单公网域；本地回环地址仅用于集成测试注入 httptest 服务。
+func kakayunOrderQueryBaseURLFor(baseURL string) string {
+	parsed, err := url.Parse(strings.TrimSpace(baseURL))
+	if err == nil {
+		switch parsed.Hostname() {
+		case "127.0.0.1", "localhost", "::1":
+			return strings.TrimRight(baseURL, "/")
+		}
+	}
+	return kakayunOrderQueryBaseURL
 }
 
 func (kakayunProvider) ParseQueryOrderResponse(statusCode int, body []byte) (QueryOrderResult, error) {
