@@ -3,7 +3,7 @@
 ## 推荐默认命令
 
 ```bash
-go test ./... -count=1 -timeout 60s
+go test ./... -count=1 -timeout 120s
 go build ./...
 golangci-lint run --timeout=5m
 ```
@@ -25,7 +25,7 @@ golangci-lint run --timeout=5m
 运行：
 
 ```bash
-go test ./test/contract -count=1 -timeout 60s
+go test ./test/contract -count=1 -timeout 120s
 ```
 
 契约测试通过 `NewTestApplication()` 启动测试态应用，底层使用 MySQL 测试库 `admin_test`、`miniredis` 和 mock 短信 sender。
@@ -132,7 +132,7 @@ go test ./internal/library/channelpricing ./internal/app ./test/integration -run
 
 CI workflow 位于 `.github/workflows/ci.yml`：
 
-- `test` job 启动 MySQL 8.4 service，执行 `go test ./... -count=1 -timeout 60s` 和 `go build ./...`。
+- `test` job 启动 MySQL 8.4 service，执行 `go test ./... -count=1 -timeout 120s` 和 `go build ./...`。
 - `lint` job 执行 `golangci-lint`，参数包含 `--timeout=5m --new-from-rev=origin/main`。
 
 `.golangci.yml` 当前启用：

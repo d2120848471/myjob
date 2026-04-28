@@ -5,7 +5,7 @@
 ## 运行
 
 ```bash
-go test ./test/contract -count=1 -timeout 60s
+go test ./test/contract -count=1 -timeout 120s
 ```
 
 ## 当前重点

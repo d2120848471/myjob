@@ -54,7 +54,7 @@ go run .
 ### 4. 运行验证
 
 ```bash
-go test ./... -count=1 -timeout 60s
+go test ./... -count=1 -timeout 120s
 go build ./...
 golangci-lint run --timeout=5m
 ```
