@@ -1,6 +1,7 @@
 package supplierprovider
 
 import (
+	"encoding/json"
 	"net/url"
 	"strconv"
 	"strings"
@@ -93,6 +94,44 @@ func decimalStringOrZero(value string) string {
 		return "0"
 	}
 	return amount.Round(4).StringFixed(4)
+}
+
+func decimalJSONNumberOrZero(value string) json.Number {
+	amount, err := decimal.NewFromString(strings.TrimSpace(value))
+	if err != nil {
+		return json.Number("0")
+	}
+	return json.Number(amount.Round(4).String())
+}
+
+func formatXinghaiItemPrice(value string) string {
+	amount, err := decimal.NewFromString(strings.TrimSpace(value))
+	if err != nil {
+		return "0"
+	}
+	return amount.Round(3).String()
+}
+
+func feisuyuanAccountType(extraConfig map[string]any) string {
+	for _, key := range []string{"accountType", "account_type"} {
+		if value, ok := extraConfig[key]; ok {
+			if normalized := normalizeFeisuyuanAccountType(value); normalized != "" {
+				return normalized
+			}
+		}
+	}
+	return "0"
+}
+
+func normalizeFeisuyuanAccountType(value any) string {
+	parsed, err := strconv.Atoi(strings.TrimSpace(codeString(value)))
+	if err != nil {
+		return ""
+	}
+	if parsed == 1 || parsed == 2 {
+		return strconv.Itoa(parsed)
+	}
+	return "0"
 }
 
 func firstDataItem(payload map[string]any) map[string]any {

@@ -96,14 +96,7 @@ func (l *OrderLogic) pollOrder(ctx context.Context, order entity.ExternalOrder) 
 }
 
 func (l *OrderLogic) executeQueryOrder(provider supplierprovider.OrderProvider, account entity.SupplierPlatformAccount, input supplierprovider.QueryOrderInput) (queryPollResult, error) {
-	providerAccount := supplierprovider.AccountConfig{
-		ProviderCode: account.ProviderCode,
-		Domain:       account.Domain,
-		BackupDomain: account.BackupDomain,
-		TokenID:      account.TokenID,
-		SecretKey:    account.SecretKey,
-		ExtraConfig:  map[string]any{},
-	}
+	providerAccount := supplierAccountConfigFromEntity(account)
 	client := l.httpClientForOrderProvider(account.ProviderCode)
 	result := queryPollResult{
 		Status:            supplierprovider.SupplierOrderStatusUnknown,

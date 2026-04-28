@@ -61,7 +61,6 @@ func aggregateSegmentStatuses(segments []entity.ExternalOrderAttemptSegment) seg
 	hasUnknown := false
 	hasProcessing := false
 	hasSubmitted := false
-	hasSuccess := false
 	hasFailed := false
 	hasPending := false
 	receipts := make([]string, 0, len(segments))
@@ -85,21 +84,13 @@ func aggregateSegmentStatuses(segments []entity.ExternalOrderAttemptSegment) seg
 		case OrderAttemptStatusPending, "":
 			hasPending = true
 		case OrderAttemptStatusSuccess:
-			hasSuccess = true
 		default:
 			hasUnknown = true
 		}
 	}
 	receipt := strings.Join(receipts, "；")
 	if hasFailed {
-		// 拆单里只要已有子单被受理或状态不确定，就不能把父 attempt 判 failed 去触发整单补单。
-		if hasUnknown || hasProcessing || hasSubmitted || hasSuccess {
-			message := "上游子单部分失败，需人工确认"
-			if receipt != "" {
-				message += "：" + receipt
-			}
-			return segmentAggregateResult{OrderStatus: supplierprovider.SupplierOrderStatusUnknown, AttemptStatus: OrderAttemptStatusUnknown, SupplierOrderNo: supplierOrderNo, Receipt: message, Message: message}
-		}
+		// 明确失败的子单优先触发现有补单链路；处理中或未知子单不能掩盖已确认失败。
 		return segmentAggregateResult{OrderStatus: supplierprovider.SupplierOrderStatusFailed, AttemptStatus: OrderAttemptStatusFailed, SupplierOrderNo: supplierOrderNo, Receipt: receipt, Message: defaultOrderMessage(receipt, "上游子单失败")}
 	}
 	if hasUnknown {

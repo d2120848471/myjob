@@ -16,7 +16,7 @@ func (kayixinProvider) BuildCreateOrderRequest(ctx context.Context, account Acco
 		"goodsId":     mustIntString(input.SupplierGoodsNo),
 		"notifyUrl":   "",
 		"outerNumber": strings.TrimSpace(input.SupplierUSOrderNo),
-		"safePrice":   decimalStringOrZero(safePriceValue(input)),
+		"safePrice":   decimalJSONNumberOrZero(safePriceValue(input)),
 		"sku":         "",
 	}
 	body, err := orderedJSONBody(payload)
@@ -102,12 +102,12 @@ func (kasushouProvider) ParseCreateOrderResponse(statusCode int, body []byte) (C
 }
 
 func (kasushouProvider) BuildQueryOrderRequest(ctx context.Context, account AccountConfig, now time.Time, baseURL string, input QueryOrderInput) (*http.Request, error) {
-	payload := map[string]any{"external_orderno": strings.TrimSpace(input.SupplierUSOrderNo), "ordersn": strings.TrimSpace(input.SupplierOrderNo)}
+	payload := map[string]any{"day": "0", "external_orderno": strings.TrimSpace(input.SupplierUSOrderNo), "ordersn": strings.TrimSpace(input.SupplierOrderNo)}
 	body, err := orderedJSONBody(payload)
 	if err != nil {
 		return nil, err
 	}
-	return newEmptyJSONRequest(ctx, strings.TrimRight(baseURL, "/")+"/api/v1/order/detail", body, kasushouHeaders(account, now, body))
+	return newEmptyJSONRequest(ctx, strings.TrimRight(baseURL, "/")+"/api/v1/order/info", body, kasushouHeaders(account, now, body))
 }
 
 func (kasushouProvider) ParseQueryOrderResponse(statusCode int, body []byte) (QueryOrderResult, error) {
@@ -126,15 +126,26 @@ func (kasushouProvider) ParseQueryOrderResponse(statusCode int, body []byte) (Qu
 }
 
 func (xingquanyiProvider) BuildCreateOrderRequest(ctx context.Context, account AccountConfig, now time.Time, baseURL string, input CreateOrderInput) (*http.Request, error) {
-	params := xingquanyiBaseParams(account, now)
-	params["notify_url"] = ""
-	params["outer_order_id"] = strings.TrimSpace(input.SupplierUSOrderNo)
-	params["product_id"] = strings.TrimSpace(input.SupplierGoodsNo)
-	params["quantity"] = strconv.Itoa(input.Quantity)
-	params["recharge_account"] = strings.TrimSpace(input.Account)
-	params["safe_cost"] = decimalStringOrZero(safePriceValue(input))
-	params["sign"] = md5Lower(strings.TrimSpace(account.SecretKey) + concatSortedNameValues(params))
-	return newJSONRequest(ctx, strings.TrimRight(baseURL, "/")+"/api/buy", params, nil)
+	signParams := xingquanyiBaseParams(account, now)
+	signParams["notify_url"] = ""
+	signParams["outer_order_id"] = strings.TrimSpace(input.SupplierUSOrderNo)
+	signParams["product_id"] = strings.TrimSpace(input.SupplierGoodsNo)
+	signParams["quantity"] = strconv.Itoa(input.Quantity)
+	signParams["recharge_account"] = strings.TrimSpace(input.Account)
+	signParams["safe_cost"] = decimalStringOrZero(safePriceValue(input))
+	signParams["sign"] = md5Lower(strings.TrimSpace(account.SecretKey) + concatSortedNameValues(signParams))
+	payload := map[string]any{
+		"customer_id":      signParams["customer_id"],
+		"notify_url":       signParams["notify_url"],
+		"outer_order_id":   signParams["outer_order_id"],
+		"product_id":       mustIntString(input.SupplierGoodsNo),
+		"quantity":         input.Quantity,
+		"recharge_account": signParams["recharge_account"],
+		"safe_cost":        signParams["safe_cost"],
+		"sign":             signParams["sign"],
+		"timestamp":        signParams["timestamp"],
+	}
+	return newJSONRequest(ctx, strings.TrimRight(baseURL, "/")+"/api/buy", payload, nil)
 }
 
 func (xingquanyiProvider) ParseCreateOrderResponse(statusCode int, body []byte) (CreateOrderResult, error) {
@@ -144,6 +155,9 @@ func (xingquanyiProvider) ParseCreateOrderResponse(statusCode int, body []byte) 
 	}
 	if codeString(payload["code"]) != "ok" {
 		message := nonEmptyText(responseMessage(payload), "星权益下单失败")
+		if codeString(payload["code"]) == "server_error" {
+			return CreateOrderResult{Accepted: false, Status: SupplierOrderStatusUnknown, SupplierStatus: codeString(payload["code"]), Message: message, Raw: raw}, ErrSupplierUnknownResponse
+		}
 		return CreateOrderResult{Accepted: false, Status: SupplierOrderStatusFailed, SupplierStatus: codeString(payload["code"]), Message: message, Raw: raw}, errors.New(message)
 	}
 	data := nestedMap(payload, "data")
@@ -165,7 +179,10 @@ func (xingquanyiProvider) ParseQueryOrderResponse(statusCode int, body []byte) (
 	}
 	if codeString(payload["code"]) != "ok" {
 		message := nonEmptyText(responseMessage(payload), "星权益查单失败")
-		return QueryOrderResult{Status: SupplierOrderStatusUnknown, Message: message, Raw: raw}, errors.New(message)
+		if codeString(payload["code"]) == "server_error" {
+			return QueryOrderResult{Status: SupplierOrderStatusUnknown, SupplierStatus: codeString(payload["code"]), Message: message, Raw: raw}, ErrSupplierUnknownResponse
+		}
+		return QueryOrderResult{Status: SupplierOrderStatusUnknown, SupplierStatus: codeString(payload["code"]), Message: message, Raw: raw}, errors.New(message)
 	}
 	data := nestedMap(payload, "data")
 	statusCodeText := codeString(data["state"])
@@ -204,9 +221,9 @@ func (youkayunProvider) ParseCreateOrderResponse(statusCode int, body []byte) (C
 }
 
 func (youkayunProvider) BuildQueryOrderRequest(ctx context.Context, account AccountConfig, now time.Time, baseURL string, input QueryOrderInput) (*http.Request, error) {
-	fields := map[string]string{"ordersn": strings.TrimSpace(input.SupplierOrderNo), "outorderno": strings.TrimSpace(input.SupplierUSOrderNo), "userid": strings.TrimSpace(account.TokenID)}
+	fields := map[string]string{"orderno": strings.TrimSpace(input.SupplierOrderNo), "outer_order_id": strings.TrimSpace(input.SupplierUSOrderNo), "userid": strings.TrimSpace(account.TokenID)}
 	fields["sign"] = md5Lower(sortedQuery(fields) + strings.TrimSpace(account.SecretKey))
-	return newMultipartRequest(ctx, strings.TrimRight(baseURL, "/")+"/api/orderquery", fields, nil)
+	return newMultipartRequest(ctx, strings.TrimRight(baseURL, "/")+"/api/queryorder", fields, nil)
 }
 
 func (youkayunProvider) ParseQueryOrderResponse(statusCode int, body []byte) (QueryOrderResult, error) {
@@ -227,9 +244,9 @@ func (youkayunProvider) ParseQueryOrderResponse(statusCode int, body []byte) (Qu
 func (julangyunProvider) BuildCreateOrderRequest(ctx context.Context, account AccountConfig, now time.Time, baseURL string, input CreateOrderInput) (*http.Request, error) {
 	payload := map[string]any{
 		"accessOrderNo":   strings.TrimSpace(input.SupplierUSOrderNo),
-		"accessPrice":     decimalStringOrZero(safePriceValue(input)),
+		"accessPrice":     decimalJSONNumberOrZero(safePriceValue(input)),
+		"callbackUrl":     "",
 		"goodsCode":       strings.TrimSpace(input.SupplierGoodsNo),
-		"notifyUrl":       "",
 		"orderNum":        input.Quantity,
 		"rechargeAccount": strings.TrimSpace(input.Account),
 	}
@@ -275,7 +292,7 @@ func (xinghaiProvider) BuildCreateOrderRequest(ctx context.Context, account Acco
 		"appId":       strings.TrimSpace(account.TokenID),
 		"callbackUrl": "",
 		"itemId":      strings.TrimSpace(input.SupplierGoodsNo),
-		"itemPrice":   decimalStringOrZero(safePriceValue(input)),
+		"itemPrice":   formatXinghaiItemPrice(safePriceValue(input)),
 		"outOrderId":  strings.TrimSpace(input.SupplierUSOrderNo),
 		"timestamp":   now.Format("20060102150405000"),
 		"uuid":        strings.TrimSpace(input.Account),
@@ -322,7 +339,7 @@ func (xinghaiProvider) ParseQueryOrderResponse(statusCode int, body []byte) (Que
 
 func (feisuyuanProvider) BuildCreateOrderRequest(ctx context.Context, account AccountConfig, now time.Time, baseURL string, input CreateOrderInput) (*http.Request, error) {
 	params := map[string]string{
-		"accountType":     "0",
+		"accountType":     feisuyuanAccountType(account.ExtraConfig),
 		"merchantId":      strings.TrimSpace(account.TokenID),
 		"notifyUrl":       "",
 		"number":          "1",
@@ -355,7 +372,7 @@ func (feisuyuanProvider) ParseCreateOrderResponse(statusCode int, body []byte) (
 func (feisuyuanProvider) BuildQueryOrderRequest(ctx context.Context, account AccountConfig, now time.Time, baseURL string, input QueryOrderInput) (*http.Request, error) {
 	params := map[string]string{"merchantId": strings.TrimSpace(account.TokenID), "outTradeNo": strings.TrimSpace(input.SupplierUSOrderNo), "timeStamp": strconv.FormatInt(now.Unix(), 10), "version": "1.0"}
 	params["sign"] = feisuyuanSign(params, account.SecretKey)
-	return newFormRequest(ctx, strings.TrimRight(baseURL, "/")+"/recharge/order/query", stringMapValues(params), nil)
+	return newFormRequest(ctx, strings.TrimRight(baseURL, "/")+"/recharge/query", stringMapValues(params), nil)
 }
 
 func (feisuyuanProvider) ParseQueryOrderResponse(statusCode int, body []byte) (QueryOrderResult, error) {

@@ -113,14 +113,7 @@ func (l *OrderLogic) submitOrder(ctx context.Context, order entity.ExternalOrder
 }
 
 func (l *OrderLogic) executeCreateOrder(ctx context.Context, provider supplierprovider.OrderProvider, account entity.SupplierPlatformAccount, input supplierprovider.CreateOrderInput) (createSubmitResult, error) {
-	providerAccount := supplierprovider.AccountConfig{
-		ProviderCode: account.ProviderCode,
-		Domain:       account.Domain,
-		BackupDomain: account.BackupDomain,
-		TokenID:      account.TokenID,
-		SecretKey:    account.SecretKey,
-		ExtraConfig:  map[string]any{},
-	}
+	providerAccount := supplierAccountConfigFromEntity(account)
 	now := l.core.Now()
 	client := l.httpClientForOrderProvider(account.ProviderCode)
 	result := createSubmitResult{

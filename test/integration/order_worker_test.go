@@ -168,7 +168,7 @@ func TestOrderWorkerSplitsFeisuyuanQuantityIntoSegments(t *testing.T) {
 	require.EqualValues(t, 3, h.scalarInt(t, `SELECT COUNT(*) FROM external_order_attempt_segment WHERE attempt_id = ?`, attempt.ID))
 }
 
-func TestOrderWorkerDoesNotReorderWholeSplitOrderAfterPartialFailure(t *testing.T) {
+func TestOrderWorkerReordersSplitOrderAfterSegmentFailure(t *testing.T) {
 	feisuyuanRequests := make([]string, 0, 3)
 	var kakayunRequests atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -247,18 +247,24 @@ func TestOrderWorkerDoesNotReorderWholeSplitOrderAfterPartialFailure(t *testing.
 
 	require.NoError(t, h.orderService.SubmitPendingOnce(context.Background()))
 	order := h.loadOrder(t, createData.OrderNo)
-	require.Equal(t, "unknown", order.Status)
-	require.Equal(t, 1, order.AttemptCount)
-	require.EqualValues(t, 0, kakayunRequests.Load())
+	require.Equal(t, "processing", order.Status)
+	require.Equal(t, 2, order.AttemptCount)
+	require.EqualValues(t, 1, kakayunRequests.Load())
 	require.Len(t, feisuyuanRequests, 2)
+
+	firstAttempt := entity.ExternalOrderAttempt{}
+	require.NoError(t, h.app.Core().DB().GetCore().GetScan(context.Background(), &firstAttempt, `SELECT * FROM external_order_attempt WHERE order_id = ? AND attempt_no = 1`, order.ID))
+	require.Equal(t, "failed", firstAttempt.Status)
+	require.Contains(t, firstAttempt.Receipt, "库存不足")
+
 	attempt := h.loadCurrentAttempt(t, order.ID)
-	require.Equal(t, "unknown", attempt.Status)
-	require.Contains(t, attempt.Receipt, "部分失败")
+	require.Equal(t, "kakayun", attempt.ProviderCode)
+	require.Equal(t, "submitted", attempt.Status)
 	segments := make([]struct {
 		SegmentNo int    `db:"segment_no"`
 		Status    string `db:"status"`
 	}, 0)
-	require.NoError(t, h.app.Core().DB().GetCore().GetScan(context.Background(), &segments, `SELECT segment_no, status FROM external_order_attempt_segment WHERE attempt_id = ? ORDER BY segment_no ASC`, attempt.ID))
+	require.NoError(t, h.app.Core().DB().GetCore().GetScan(context.Background(), &segments, `SELECT segment_no, status FROM external_order_attempt_segment WHERE attempt_id = ? ORDER BY segment_no ASC`, firstAttempt.ID))
 	require.Equal(t, []struct {
 		SegmentNo int    `db:"segment_no"`
 		Status    string `db:"status"`

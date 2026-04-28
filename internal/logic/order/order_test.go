@@ -96,23 +96,85 @@ func TestAggregateSegmentStatuses(t *testing.T) {
 	require.Equal(t, OrderAttemptStatusProcessing, processing.AttemptStatus)
 }
 
-func TestAggregateSegmentStatusesPartialFailureBecomesUnknown(t *testing.T) {
-	partial := aggregateSegmentStatuses([]entity.ExternalOrderAttemptSegment{
-		{Status: OrderAttemptStatusSubmitted, Receipt: "子单1已受理"},
-		{Status: OrderAttemptStatusFailed, Receipt: "子单2失败"},
-		{Status: OrderAttemptStatusPending, Receipt: "子单3未提交"},
-	})
+func TestAggregateSegmentStatusesFailureDominates(t *testing.T) {
+	tests := []struct {
+		name     string
+		segments []entity.ExternalOrderAttemptSegment
+	}{
+		{
+			name: "success and failed",
+			segments: []entity.ExternalOrderAttemptSegment{
+				{SegmentNo: 1, Status: OrderAttemptStatusSuccess, Receipt: "子单1成功"},
+				{SegmentNo: 2, Status: OrderAttemptStatusFailed, Receipt: "子单2失败"},
+			},
+		},
+		{
+			name: "processing and failed",
+			segments: []entity.ExternalOrderAttemptSegment{
+				{SegmentNo: 1, Status: OrderAttemptStatusProcessing, Receipt: "子单1处理中"},
+				{SegmentNo: 2, Status: OrderAttemptStatusFailed, Receipt: "子单2失败"},
+			},
+		},
+		{
+			name: "unknown and failed",
+			segments: []entity.ExternalOrderAttemptSegment{
+				{SegmentNo: 1, Status: OrderAttemptStatusUnknown, Receipt: "子单1未知"},
+				{SegmentNo: 2, Status: OrderAttemptStatusFailed, Receipt: "子单2失败"},
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := aggregateSegmentStatuses(tc.segments)
+			require.Equal(t, supplierprovider.SupplierOrderStatusFailed, result.OrderStatus)
+			require.Equal(t, OrderAttemptStatusFailed, result.AttemptStatus)
+			require.Contains(t, result.Message, "子单2失败")
+		})
+	}
+}
 
-	require.Equal(t, supplierprovider.SupplierOrderStatusUnknown, partial.OrderStatus)
-	require.Equal(t, OrderAttemptStatusUnknown, partial.AttemptStatus)
-	require.Contains(t, partial.Message, "部分")
-
-	successThenFailed := aggregateSegmentStatuses([]entity.ExternalOrderAttemptSegment{
-		{Status: OrderAttemptStatusSuccess, Receipt: "子单1成功"},
-		{Status: OrderAttemptStatusFailed, Receipt: "子单2失败"},
-	})
-	require.Equal(t, supplierprovider.SupplierOrderStatusUnknown, successThenFailed.OrderStatus)
-	require.Equal(t, OrderAttemptStatusUnknown, successThenFailed.AttemptStatus)
+func TestAggregateSegmentStatusesMixedNonFailure(t *testing.T) {
+	tests := []struct {
+		name          string
+		segments      []entity.ExternalOrderAttemptSegment
+		orderStatus   string
+		attemptStatus string
+	}{
+		{
+			name: "success and processing",
+			segments: []entity.ExternalOrderAttemptSegment{
+				{Status: OrderAttemptStatusSuccess},
+				{Status: OrderAttemptStatusProcessing},
+			},
+			orderStatus:   supplierprovider.SupplierOrderStatusProcessing,
+			attemptStatus: OrderAttemptStatusProcessing,
+		},
+		{
+			name: "success and unknown",
+			segments: []entity.ExternalOrderAttemptSegment{
+				{Status: OrderAttemptStatusSuccess},
+				{Status: OrderAttemptStatusUnknown},
+			},
+			orderStatus:   supplierprovider.SupplierOrderStatusUnknown,
+			attemptStatus: OrderAttemptStatusUnknown,
+		},
+		{
+			name: "all success",
+			segments: []entity.ExternalOrderAttemptSegment{
+				{Status: OrderAttemptStatusSuccess},
+				{Status: OrderAttemptStatusSuccess},
+			},
+			orderStatus:   supplierprovider.SupplierOrderStatusSuccess,
+			attemptStatus: OrderAttemptStatusSuccess,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := aggregateSegmentStatuses(tc.segments)
+			require.Equal(t, tc.orderStatus, result.OrderStatus)
+			require.Equal(t, tc.attemptStatus, result.AttemptStatus)
+		})
+	}
 }
 
 func TestAggregateSegmentStatusesSingleFailureCanFailAttempt(t *testing.T) {
@@ -122,6 +184,24 @@ func TestAggregateSegmentStatusesSingleFailureCanFailAttempt(t *testing.T) {
 
 	require.Equal(t, supplierprovider.SupplierOrderStatusFailed, failed.OrderStatus)
 	require.Equal(t, OrderAttemptStatusFailed, failed.AttemptStatus)
+}
+
+func TestSupplierAccountConfigFromEntityParsesExtraConfig(t *testing.T) {
+	config := supplierAccountConfigFromEntity(entity.SupplierPlatformAccount{
+		ProviderCode: "feisuyuan",
+		Domain:       "main.example.com",
+		BackupDomain: "backup.example.com",
+		TokenID:      "merchant001",
+		SecretKey:    "secretXYZ",
+		ExtraConfig:  `{"accountType":1}`,
+	})
+
+	require.Equal(t, "feisuyuan", config.ProviderCode)
+	require.Equal(t, "main.example.com", config.Domain)
+	require.Equal(t, "backup.example.com", config.BackupDomain)
+	require.Equal(t, "merchant001", config.TokenID)
+	require.Equal(t, "secretXYZ", config.SecretKey)
+	require.Equal(t, float64(1), config.ExtraConfig["accountType"])
 }
 
 func TestCreateOpenOrderRetriesOrderNoUniqueConflict(t *testing.T) {

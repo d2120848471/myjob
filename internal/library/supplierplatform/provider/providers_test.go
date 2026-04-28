@@ -515,7 +515,7 @@ func TestMultiPlatformOrderProvidersBuildCreateRequests(t *testing.T) {
 			require.Equal(t, float64(10001), payload["goodsId"])
 			require.Equal(t, float64(2), payload["count"])
 			require.Equal(t, "O20260428123045123456-T1-S1", payload["outerNumber"])
-			require.Equal(t, "20.0000", payload["safePrice"])
+			require.Equal(t, float64(20), payload["safePrice"])
 			require.Equal(t, []any{map[string]any{"name": "充值账号", "value": "13800138000"}}, payload["attach"])
 		}},
 		{"kasushou", "/api/v1/order/buy", func(t *testing.T, req *http.Request, body []byte) {
@@ -527,12 +527,13 @@ func TestMultiPlatformOrderProvidersBuildCreateRequests(t *testing.T) {
 			require.Equal(t, map[string]any{"recharge_account": "13800138000"}, payload["attach"])
 		}},
 		{"xingquanyi", "/api/buy", func(t *testing.T, req *http.Request, body []byte) {
-			payload := decodeJSONBody(t, body)
-			require.Equal(t, "10001", payload["product_id"])
-			require.Equal(t, "2", payload["quantity"])
+			payload := decodeJSONBodyAny(t, body)
+			require.Equal(t, float64(10001), payload["product_id"])
+			require.Equal(t, float64(2), payload["quantity"])
 			require.Equal(t, "13800138000", payload["recharge_account"])
 			require.Equal(t, "O20260428123045123456-T1-S1", payload["outer_order_id"])
 			require.Equal(t, "20.0000", payload["safe_cost"])
+			require.NotEmpty(t, payload["sign"])
 		}},
 		{"youkayun", "/api/buygoods", func(t *testing.T, req *http.Request, body []byte) {
 			fields := decodeMultipartFields(t, req, body)
@@ -548,7 +549,9 @@ func TestMultiPlatformOrderProvidersBuildCreateRequests(t *testing.T) {
 			require.Equal(t, "O20260428123045123456-T1-S1", payload["accessOrderNo"])
 			require.Equal(t, "13800138000", payload["rechargeAccount"])
 			require.Equal(t, float64(2), payload["orderNum"])
-			require.Equal(t, "20.0000", payload["accessPrice"])
+			require.Equal(t, "", payload["callbackUrl"])
+			require.NotContains(t, payload, "notifyUrl")
+			require.Equal(t, float64(20), payload["accessPrice"])
 		}},
 		{"xinghai", "/api/order/submit", func(t *testing.T, req *http.Request, body []byte) {
 			values, err := url.ParseQuery(string(body))
@@ -557,13 +560,14 @@ func TestMultiPlatformOrderProvidersBuildCreateRequests(t *testing.T) {
 			require.Equal(t, "2", values.Get("amount"))
 			require.Equal(t, "13800138000", values.Get("uuid"))
 			require.Equal(t, "O20260428123045123456-T1-S1", values.Get("outOrderId"))
-			require.Equal(t, "20.0000", values.Get("itemPrice"))
+			require.Equal(t, "20", values.Get("itemPrice"))
 		}},
 		{"feisuyuan", "/recharge/order", func(t *testing.T, req *http.Request, body []byte) {
 			values, err := url.ParseQuery(string(body))
 			require.NoError(t, err)
 			require.Equal(t, "10001", values.Get("productId"))
 			require.Equal(t, "1", values.Get("number"))
+			require.Equal(t, "0", values.Get("accountType"))
 			require.Equal(t, "13800138000", values.Get("rechargeAccount"))
 			require.Equal(t, "O20260428123045123456-T1-S1", values.Get("outTradeNo"))
 			require.Empty(t, values.Get("maxmoney"))
@@ -574,6 +578,53 @@ func TestMultiPlatformOrderProvidersBuildCreateRequests(t *testing.T) {
 			provider, ok := LookupOrder(tc.code)
 			require.True(t, ok)
 			req, err := provider.BuildCreateOrderRequest(context.Background(), account, now, "http://platform.example.com", input)
+			require.NoError(t, err)
+			require.Equal(t, "http://platform.example.com"+tc.path, req.URL.String())
+			tc.assert(t, req, readRequestBody(t, req))
+		})
+	}
+}
+
+func TestMultiPlatformOrderProvidersBuildQueryRequests(t *testing.T) {
+	now := time.Date(2026, 4, 28, 12, 30, 45, 123000000, time.UTC)
+	account := AccountConfig{TokenID: "merchant001", SecretKey: "secretXYZ", ExtraConfig: map[string]any{}}
+	input := QueryOrderInput{SupplierOrderNo: "SUP001", SupplierUSOrderNo: "OUT001"}
+	tests := []struct {
+		code   string
+		path   string
+		assert func(t *testing.T, req *http.Request, body []byte)
+	}{
+		{"kasushou", "/api/v1/order/info", func(t *testing.T, req *http.Request, body []byte) {
+			payload := decodeJSONBodyAny(t, body)
+			require.Equal(t, "OUT001", payload["external_orderno"])
+			require.Equal(t, "SUP001", payload["ordersn"])
+			require.Equal(t, "0", payload["day"])
+		}},
+		{"youkayun", "/api/queryorder", func(t *testing.T, req *http.Request, body []byte) {
+			fields := decodeMultipartFields(t, req, body)
+			require.Equal(t, "SUP001", fields["orderno"])
+			require.Equal(t, "OUT001", fields["outer_order_id"])
+			require.Equal(t, "merchant001", fields["userid"])
+			require.NotEmpty(t, fields["sign"])
+			require.NotContains(t, fields, "ordersn")
+			require.NotContains(t, fields, "outorderno")
+		}},
+		{"feisuyuan", "/recharge/query", func(t *testing.T, req *http.Request, body []byte) {
+			values, err := url.ParseQuery(string(body))
+			require.NoError(t, err)
+			require.Equal(t, "merchant001", values.Get("merchantId"))
+			require.Equal(t, "OUT001", values.Get("outTradeNo"))
+			require.Equal(t, strconv.FormatInt(now.Unix(), 10), values.Get("timeStamp"))
+			require.Equal(t, "1.0", values.Get("version"))
+			expected := md5Upper("merchantId=merchant001&outTradeNo=OUT001&timeStamp=" + strconv.FormatInt(now.Unix(), 10) + "&key=secretXYZ")
+			require.Equal(t, expected, values.Get("sign"))
+		}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.code, func(t *testing.T) {
+			provider, ok := LookupOrder(tc.code)
+			require.True(t, ok)
+			req, err := provider.BuildQueryOrderRequest(context.Background(), account, now, "http://platform.example.com", input)
 			require.NoError(t, err)
 			require.Equal(t, "http://platform.example.com"+tc.path, req.URL.String())
 			tc.assert(t, req, readRequestBody(t, req))
@@ -617,6 +668,69 @@ func TestMultiPlatformOrderProvidersParseCreateAndQuery(t *testing.T) {
 			processing, err := provider.ParseQueryOrderResponse(http.StatusOK, []byte(tc.queryProgress))
 			require.NoError(t, err)
 			require.Equal(t, SupplierOrderStatusProcessing, processing.Status)
+		})
+	}
+}
+
+func TestXingquanyiServerErrorIsUnknown(t *testing.T) {
+	provider := xingquanyiProvider{}
+
+	create, err := provider.ParseCreateOrderResponse(http.StatusOK, []byte(`{"code":"server_error","message":"服务端未知错误"}`))
+	require.Error(t, err)
+	require.False(t, create.Accepted)
+	require.Equal(t, SupplierOrderStatusUnknown, create.Status)
+	require.NotEqual(t, SupplierOrderStatusFailed, create.Status)
+	require.Equal(t, "server_error", create.SupplierStatus)
+	require.Equal(t, "服务端未知错误", create.Message)
+
+	query, err := provider.ParseQueryOrderResponse(http.StatusOK, []byte(`{"code":"server_error","message":"服务端未知错误"}`))
+	require.Error(t, err)
+	require.Equal(t, SupplierOrderStatusUnknown, query.Status)
+	require.NotEqual(t, SupplierOrderStatusFailed, query.Status)
+	require.Equal(t, "server_error", query.SupplierStatus)
+	require.Equal(t, "服务端未知错误", query.Message)
+}
+
+func TestFormatXinghaiItemPrice(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{input: "20", want: "20"},
+		{input: "20.1", want: "20.1"},
+		{input: "20.1200", want: "20.12"},
+		{input: "20.1234", want: "20.123"},
+		{input: "20.1235", want: "20.124"},
+		{input: "bad", want: "0"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.input, func(t *testing.T) {
+			require.Equal(t, tc.want, formatXinghaiItemPrice(tc.input))
+		})
+	}
+}
+
+func TestFeisuyuanBuildCreateRequestAccountType(t *testing.T) {
+	now := time.Date(2026, 4, 28, 12, 30, 45, 123000000, time.UTC)
+	input := CreateOrderInput{SupplierGoodsNo: "10001", Quantity: 1, Account: "13800138000", SupplierUSOrderNo: "OUT001"}
+	tests := []struct {
+		name        string
+		extraConfig map[string]any
+		want        string
+	}{
+		{name: "default", extraConfig: nil, want: "0"},
+		{name: "camel key", extraConfig: map[string]any{"accountType": 1}, want: "1"},
+		{name: "snake key", extraConfig: map[string]any{"account_type": 2}, want: "2"},
+		{name: "invalid", extraConfig: map[string]any{"accountType": 9}, want: "0"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			account := AccountConfig{TokenID: "merchant001", SecretKey: "secretXYZ", ExtraConfig: tc.extraConfig}
+			req, err := feisuyuanProvider{}.BuildCreateOrderRequest(context.Background(), account, now, "http://platform.example.com", input)
+			require.NoError(t, err)
+			values, err := url.ParseQuery(string(readRequestBody(t, req)))
+			require.NoError(t, err)
+			require.Equal(t, tc.want, values.Get("accountType"))
 		})
 	}
 }
