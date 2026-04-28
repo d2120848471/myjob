@@ -9,10 +9,6 @@
 
 ## 当前文档
 
-- `specs/2026-04-27-recharge-risk-design.md`：充值账号风控管理设计。
-- `plans/2026-04-27-recharge-risk.md`：充值账号风控管理实施计划。
-- `specs/2026-04-26-kakayun-maxmoney-loss-guard-design.md`：卡卡云下单 `maxmoney` 防亏本设计。
-- `plans/2026-04-26-kakayun-maxmoney-loss-guard.md`：卡卡云下单 `maxmoney` 防亏本实施计划。
 
 已完成事项应沉淀到稳定文档中，例如根 `README.md`、`docs/module-map.md`、`docs/development.md` 或 `docs/testing.md`。
 
