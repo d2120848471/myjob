@@ -15,8 +15,8 @@
 | 商品模板管理 | 维护充值模板和账号校验类型，商品配置时复用模板字段和展示规则。 |
 | 商品购买数量限制策略 | 维护后台限购策略基础数据，当前只负责策略管理，不进入真实购买校验链。 |
 | 商品管理 | 后台维护商品主档、渠道绑定、库存配置和自动改价记录，开放订单会按商品编码定位可用商品。 |
-| 第三方对接 | 后台维护供应商平台账号，余额刷新、商品订阅和订单履约通过 provider 适配器访问上游。 |
-| 订单履约 | 开放接口创建订单后进入待提交队列，worker 按选中渠道定价规则提交上游、轮询状态，并在窗口内按规则补单。 |
+| 第三方对接 | 后台维护供应商平台账号，余额刷新、商品主动同步、部分商品推送和订单履约通过 provider 适配器访问上游。 |
+| 订单履约 | 开放接口创建订单后进入待提交队列，worker 按 provider 能力拆分上游子单、提交、轮询聚合状态，并在窗口内按规则补单。 |
 | 充值风控 | 后台配置充值账号风控规则；开放下单命中启用规则时本地创建失败订单、记录拦截流水并停止上游提交。 |
 | 短信配置 | 超管维护短信 provider 配置，运行态读取配置后用于登录二验验证码发送。 |
 | 系统参数配置 | 超管按分组维护系统参数，保存时兼容旧单组写法和新多分组写法。 |
@@ -117,7 +117,7 @@
 - logic：`internal/logic/admin/product_goods*.go`、`internal/logic/admin/product_goods_channel*.go`、`internal/logic/admin/product_goods_channel_config*.go`
 - 路由前缀：`/api/admin/products*`、`/api/admin/products/{goodsId}/channel-bindings*`、`/api/admin/products/{goodsId}/inventory-config`、`/api/admin/product-goods-channel-price-changes`
 - 权限：`product.goods`
-- 主要能力：商品列表、详情、表单选项、新增、编辑、删除、启停、渠道摘要、库存配置、渠道绑定弹窗、单条自动改价、卡卡云商品名称和进货价同步、自动改价记录、卡卡云推送改价记录。
+- 主要能力：商品列表、详情、表单选项、新增、编辑、删除、启停、渠道摘要、库存配置、渠道绑定弹窗、单条自动改价、多供应商商品名称和进货价主动同步、自动改价记录、可验签供应商推送改价记录。
 - 边界：商品主档、渠道绑定和库存配置保持同 package 多文件拆分；商品关闭后不触发上游商品信息同步。
 
 ### 第三方对接
@@ -129,8 +129,8 @@
 - provider：`internal/library/supplierplatform/provider/*`
 - 路由前缀：`/api/admin/supplier-platform-types`、`/api/admin/supplier-platforms*`、`/api/admin/supplier-product-subscriptions*`、`/api/open/supplier-platforms/{providerCode}/{platformAccountId}/product-change-callback`
 - 权限：后台供应商接口使用 `supplier.index`；开放回调用上游签名验签。
-- 主要能力：平台类型字典、平台账号分页、详情、增删改、启停、余额刷新、余额日志落库、平台关闭后级联关停商品绑定、卡卡云商品详情适配器、卡卡云商品订阅、取消订阅、重新订阅、商品变动推送回调。
-- 边界：`platform_docs/` 保存渠道原始协议，`docs/` 保存本仓库实现说明；卡卡云商品详情、商品订阅和取消订阅因平台接口限制固定走公共域名，下单、查单和其他 provider 仍使用账号配置域名。卡卡云商品变动接收 URL 由运营在卡卡云后台配置，系统只在本地记录 `callback_url` 供展示、复制和排查，不调用 `user/geturl` 或 `user/seturl`。
+- 主要能力：平台类型字典、平台账号分页、详情、增删改、启停、余额刷新、余额日志落库、多供应商下单/查单 provider、商品详情主动同步、卡卡云商品订阅、商品变动推送回调。
+- 边界：`platform_docs/` 保存渠道原始协议，`docs/` 保存本仓库实现说明；订单履约通过 provider capability 判断是否拆单和是否传上游安全价；卡卡云以外的平台不进入订阅列表，不调用上游订阅或取消订阅。卡卡云商品变动接收 URL 由运营在卡卡云后台配置，系统只在本地记录 `callback_url` 供展示、复制和排查，不调用 `user/geturl` 或 `user/seturl`。
 
 ### 订单履约
 
@@ -142,8 +142,8 @@
 - provider：`internal/library/supplierplatform/provider/*`
 - 路由前缀：`/api/open/orders*`、`/api/admin/orders`
 - 进入条件：开放订单使用固定 `open_order.token`；后台订单记录使用 `order.manage`。
-- 主要能力：开放下单、开放查单、待提交扫描、云发卡提交、订单轮询、窗口内补单、后台订单列表筛选和统计。
-- 边界：一期只支持直充、渠道供货商品；订单提交后按实际选中渠道的固定/百分比利润规则写入金额快照，后台订单销售主体优先展示当前渠道主体；卡卡云下单会按订单层计算出的 `maxmoney` 传递防亏本上限，计算口径使用渠道绑定 `source_cost_price`，provider 只负责协议字段透传和签名；对外查单不暴露渠道、成本和利润。
+- 主要能力：开放下单、开放查单、待提交扫描、多供应商提交、segment 子单聚合轮询、窗口内补单、后台订单列表筛选和统计。
+- 边界：一期只支持直充、渠道供货商品；订单提交后按实际选中渠道的固定/百分比利润规则写入金额快照，后台订单销售主体优先展示当前渠道主体；本地订单响应结构不暴露 segment，segment 仅用于保存拆单平台的真实上游请求和查单状态；对外查单不暴露渠道、成本和利润。
 
 ### 充值风控
 

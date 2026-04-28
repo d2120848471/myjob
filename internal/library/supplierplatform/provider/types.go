@@ -46,14 +46,36 @@ const (
 	SupplierOrderStatusUnknown    = "unknown"
 )
 
+// SafetyPriceMode 表示上游防亏损字段的金额口径。
+type SafetyPriceMode string
+
+const (
+	SafetyPriceModeUnsupported SafetyPriceMode = "unsupported"
+	SafetyPriceModeTotal       SafetyPriceMode = "total"
+	SafetyPriceModeUnit        SafetyPriceMode = "unit"
+)
+
+// SafetyPriceCapability 描述 provider 是否支持把本地防亏损阈值透传给上游。
+type SafetyPriceCapability struct {
+	Mode      SafetyPriceMode
+	FieldName string
+}
+
+// OrderProviderCapabilities 描述订单 provider 对数量拆分和安全价字段的支持情况。
+type OrderProviderCapabilities struct {
+	MaxQuantityPerCreate int
+	SafetyPrice          SafetyPriceCapability
+}
+
 // CreateOrderInput 是上游下单接口所需的最小业务参数。
 type CreateOrderInput struct {
 	SupplierGoodsNo   string
 	Quantity          int
 	Account           string
 	SupplierUSOrderNo string
-	// MaxMoney 是上游订单总金额口径的最大进货金额，用于卡卡云防亏本校验。
-	MaxMoney string
+	// MaxMoney 兼容历史卡卡云调用；新 provider 应优先读取 SafePrice。
+	MaxMoney  string
+	SafePrice string
 }
 
 // CreateOrderResult 表示上游下单响应解析后的稳定结果。
@@ -90,6 +112,7 @@ type OrderProvider interface {
 	Code() string
 	Name() string
 	CandidateBaseURLs(account AccountConfig) []string
+	Capabilities() OrderProviderCapabilities
 	BuildCreateOrderRequest(ctx context.Context, account AccountConfig, now time.Time, baseURL string, input CreateOrderInput) (*http.Request, error)
 	ParseCreateOrderResponse(statusCode int, body []byte) (CreateOrderResult, error)
 	BuildQueryOrderRequest(ctx context.Context, account AccountConfig, now time.Time, baseURL string, input QueryOrderInput) (*http.Request, error)
@@ -117,4 +140,11 @@ type ProductInfoProvider interface {
 	CandidateBaseURLs(account AccountConfig) []string
 	BuildProductInfoRequest(ctx context.Context, account AccountConfig, now time.Time, baseURL string, input ProductInfoInput) (*http.Request, error)
 	ParseProductInfoResponse(statusCode int, body []byte) (ProductInfoResult, error)
+}
+
+// ProductInfoListProvider 表示只能或更适合通过商品列表同步商品信息的平台能力。
+type ProductInfoListProvider interface {
+	ProductInfoProvider
+	BuildProductInfoListRequest(ctx context.Context, account AccountConfig, now time.Time, baseURL string) (*http.Request, error)
+	ParseProductInfoListResponse(statusCode int, body []byte) (map[string]ProductInfoResult, error)
 }

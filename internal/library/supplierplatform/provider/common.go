@@ -145,6 +145,42 @@ func newEmptyJSONRequest(ctx context.Context, url string, body string, headers m
 	return req, nil
 }
 
+func orderedJSONBody(payload map[string]any) (string, error) {
+	keys := make([]string, 0, len(payload))
+	for key := range payload {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	var builder strings.Builder
+	builder.WriteString("{")
+	for index, key := range keys {
+		if index > 0 {
+			builder.WriteString(",")
+		}
+		keyRaw, err := json.Marshal(key)
+		if err != nil {
+			return "", err
+		}
+		valueRaw, err := json.Marshal(payload[key])
+		if err != nil {
+			return "", err
+		}
+		builder.Write(keyRaw)
+		builder.WriteString(":")
+		builder.Write(valueRaw)
+	}
+	builder.WriteString("}")
+	return builder.String(), nil
+}
+
+func newSortedJSONRequest(ctx context.Context, requestURL string, payload map[string]any, headers map[string]string) (*http.Request, error) {
+	body, err := orderedJSONBody(payload)
+	if err != nil {
+		return nil, err
+	}
+	return newEmptyJSONRequest(ctx, requestURL, body, headers)
+}
+
 func newFormRequest(ctx context.Context, url string, values url.Values, headers map[string]string) (*http.Request, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(values.Encode()))
 	if err != nil {
@@ -155,6 +191,13 @@ func newFormRequest(ctx context.Context, url string, values url.Values, headers 
 		req.Header.Set(key, value)
 	}
 	return req, nil
+}
+
+func safePriceValue(input CreateOrderInput) string {
+	if strings.TrimSpace(input.SafePrice) != "" {
+		return strings.TrimSpace(input.SafePrice)
+	}
+	return strings.TrimSpace(input.MaxMoney)
 }
 
 func newMultipartRequest(ctx context.Context, requestURL string, fields map[string]string, headers map[string]string) (*http.Request, error) {

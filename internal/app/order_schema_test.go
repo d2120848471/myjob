@@ -98,6 +98,35 @@ CREATE TABLE external_order_attempt (
 	require.Contains(t, columnNames, "platform_subject_name")
 }
 
+func TestExternalOrderAttemptSegmentSchemaExists(t *testing.T) {
+	core, err := NewTestCore()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = core.Close() })
+
+	columns := loadColumnNames(t, core, "external_order_attempt_segment")
+	for _, column := range []string{
+		"id", "order_id", "attempt_id", "segment_no", "quantity", "provider_code",
+		"supplier_goods_no", "supplier_us_order_no", "supplier_order_no",
+		"supplier_status", "refund_status", "request_snapshot", "response_snapshot",
+		"receipt", "status", "submitted_at", "last_checked_at", "created_at", "updated_at",
+	} {
+		require.Contains(t, columns, column)
+	}
+}
+
+func TestEnsureExternalOrderAttemptSegmentSchemaIsIdempotent(t *testing.T) {
+	core, err := NewTestCore()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = core.Close() })
+
+	ctx := context.Background()
+	_, err = core.DB().Exec(ctx, `DROP TABLE IF EXISTS external_order_attempt_segment`)
+	require.NoError(t, err)
+	require.NoError(t, core.ensureExternalOrderAttemptSegmentSchema(ctx))
+	require.NoError(t, core.ensureExternalOrderAttemptSegmentSchema(ctx))
+	require.Contains(t, loadColumnNames(t, core, "external_order_attempt_segment"), "supplier_us_order_no")
+}
+
 func TestOpenOrderDefaultConfigIsUsableForTests(t *testing.T) {
 	cfg := modelconfig.Default()
 	require.Equal(t, "test-open-order-token", cfg.OpenOrder.Token)

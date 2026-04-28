@@ -10,6 +10,7 @@ import (
 
 	"myjob/internal/consts"
 	"myjob/internal/library/channelpricing"
+	supplierprovider "myjob/internal/library/supplierplatform/provider"
 
 	"github.com/shopspring/decimal"
 )
@@ -71,13 +72,15 @@ WHERE b.goods_id = ?
   AND b.supplier_goods_no <> ''
   AND a.is_deleted = 0
   AND a.status = 1
-  AND a.provider_code = 'kakayun'
 ORDER BY b.sort ASC, b.id ASC
 	`, goodsID, openOrderGoodsTypeDirectRecharge, openOrderSupplyTypeChannel); err != nil {
 		return nil, apiErr(consts.CodeInternalError, "候选渠道查询失败")
 	}
 	filtered := make([]orderChannelCandidate, 0, len(rows))
 	for _, row := range rows {
+		if _, ok := supplierprovider.LookupOrder(row.ProviderCode); !ok {
+			continue
+		}
 		if attempted != nil {
 			if _, ok := attempted[row.BindingID]; ok {
 				continue

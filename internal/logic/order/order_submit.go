@@ -1,23 +1,18 @@
 package orderlogic
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"io"
-	"net/http"
 	"strings"
 	"time"
 
-	runtimeapp "myjob/internal/app"
 	"myjob/internal/library/channelpricing"
 	supplierprovider "myjob/internal/library/supplierplatform/provider"
 	"myjob/internal/model/entity"
 
 	"github.com/gogf/gf/v2/database/gdb"
-	"github.com/shopspring/decimal"
 )
 
 type createSubmitResult struct {
@@ -90,31 +85,19 @@ func (l *OrderLogic) submitOrder(ctx context.Context, order entity.ExternalOrder
 	if err != nil {
 		return err
 	}
-	maxMoney, err := kakayunMaxMoney(candidate, config, priceSnapshot, order.Quantity)
+	capabilities := provider.Capabilities()
+	segments := buildOrderSegments(supplierUSOrderNo, order.Quantity, capabilities)
+	submitPlans, err := buildOrderSegmentSubmitPlans(candidate, config, priceSnapshot, capabilities, order.Quantity, segments)
 	if err != nil {
-		return l.markOrderFailed(ctx, order.ID, 0, "卡卡云防亏本金额计算失败："+err.Error())
+		return l.markOrderFailed(ctx, order.ID, 0, "防亏损金额计算失败："+err.Error())
 	}
-	attempt, claimed, err := l.claimOrderWithPendingAttempt(ctx, order, candidate, attemptNo, supplierUSOrderNo, priceSnapshot)
+	attempt, claimed, err := l.claimOrderWithPendingAttempt(ctx, order, candidate, attemptNo, supplierUSOrderNo, priceSnapshot, segments)
 	if err != nil || !claimed {
 		return err
 	}
-	result, err := l.executeCreateOrder(ctx, provider, account, supplierprovider.CreateOrderInput{
-		SupplierGoodsNo:   candidate.SupplierGoodsNo,
-		Quantity:          order.Quantity,
-		Account:           order.Account,
-		SupplierUSOrderNo: supplierUSOrderNo,
-		MaxMoney:          maxMoney,
-	})
-	if err != nil && result.OrderStatus == "" {
-		result = createSubmitResult{
-			OrderStatus:       OrderStatusUnknown,
-			AttemptStatus:     OrderAttemptStatusUnknown,
-			SupplierUSOrderNo: supplierUSOrderNo,
-			Message:           err.Error(),
-		}
-	}
-	if strings.TrimSpace(result.SupplierUSOrderNo) == "" {
-		result.SupplierUSOrderNo = supplierUSOrderNo
+	result, err := l.submitAttemptSegments(ctx, provider, account, order, candidate, attempt, supplierUSOrderNo, submitPlans)
+	if err != nil {
+		return err
 	}
 	if err := l.applySubmitResultToAttempt(ctx, order, candidate, attempt, attemptNo, result); err != nil {
 		return err
@@ -215,7 +198,7 @@ func (l *OrderLogic) handleAttemptFailed(ctx context.Context, order entity.Exter
 	return l.submitOrder(ctx, order)
 }
 
-func (l *OrderLogic) claimOrderWithPendingAttempt(ctx context.Context, order entity.ExternalOrder, candidate orderChannelCandidate, attemptNo int, supplierUSOrderNo string, priceSnapshot channelpricing.OrderPriceSnapshot) (entity.ExternalOrderAttempt, bool, error) {
+func (l *OrderLogic) claimOrderWithPendingAttempt(ctx context.Context, order entity.ExternalOrder, candidate orderChannelCandidate, attemptNo int, supplierUSOrderNo string, priceSnapshot channelpricing.OrderPriceSnapshot, plans []orderSegmentPlan) (entity.ExternalOrderAttempt, bool, error) {
 	now := l.core.Now()
 	nextPollAt := now.Add(pollIntervalDuration(l.core.Config().OpenOrder.PollIntervalSeconds))
 	attempt := entity.ExternalOrderAttempt{
@@ -257,6 +240,10 @@ INSERT INTO external_order_attempt (
 		}
 		attempt.ID, err = insertResult.LastInsertId()
 		if err != nil {
+			return err
+		}
+		attempt.OrderID = order.ID
+		if err := insertAttemptSegments(ctx, tx, attempt, candidate, plans, now); err != nil {
 			return err
 		}
 		_, err = tx.Exec(`
@@ -402,75 +389,4 @@ WHERE goods_id = ?
 		AllowLossSaleEnabled: row.AllowLossSaleEnabled,
 		MaxLossAmount:        row.MaxLossAmount,
 	}, nil
-}
-
-func (l *OrderLogic) httpClientForOrderProvider(providerCode string) *http.Client {
-	if providerCode != ProviderCodeKakayun {
-		return l.httpClient
-	}
-	client := *l.httpClient
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	if baseTransport, ok := l.httpClient.Transport.(*http.Transport); ok && baseTransport != nil {
-		transport = baseTransport.Clone()
-	}
-	transport.DisableCompression = true
-	client.Transport = transport
-	return &client
-}
-
-func snapshotOrderRequest(request *http.Request, account entity.SupplierPlatformAccount) (string, error) {
-	body := []byte{}
-	if request.Body != nil {
-		raw, err := io.ReadAll(request.Body)
-		if err != nil {
-			return "", err
-		}
-		body = raw
-		request.Body = io.NopCloser(bytes.NewReader(raw))
-		request.GetBody = func() (io.ReadCloser, error) {
-			return io.NopCloser(bytes.NewReader(raw)), nil
-		}
-	}
-	headers := make(map[string][]string, len(request.Header))
-	for key, values := range request.Header {
-		copied := make([]string, len(values))
-		copy(copied, values)
-		headers[key] = copied
-	}
-	payload := map[string]any{
-		"url":     request.URL.String(),
-		"method":  request.Method,
-		"headers": headers,
-		"body":    string(body),
-	}
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		return "", err
-	}
-	return truncateOrderSnapshot(sanitizeOrderSnapshot(string(raw), account)), nil
-}
-
-func sanitizeOrderSnapshot(value string, account entity.SupplierPlatformAccount) string {
-	value = strings.ReplaceAll(value, account.SecretKey, runtimeapp.MaskSecret(account.SecretKey))
-	value = strings.ReplaceAll(value, account.TokenID, runtimeapp.MaskSecret(account.TokenID))
-	return value
-}
-
-func truncateOrderSnapshot(value string) string {
-	if len(value) <= 4096 {
-		return value
-	}
-	return value[:4096]
-}
-
-func defaultOrderMessage(value, fallback string) string {
-	value = strings.TrimSpace(value)
-	if value != "" {
-		return value
-	}
-	return fallback
-}
-
-func intToString(value int) string {
-	return decimal.NewFromInt(int64(value)).String()
 }

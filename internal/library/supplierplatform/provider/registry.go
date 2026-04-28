@@ -14,11 +14,25 @@ var defaultRegistry = map[string]BalanceProvider{
 }
 
 var defaultOrderRegistry = map[string]OrderProvider{
-	"kakayun": kakayunProvider{},
+	"kakayun":    kakayunProvider{},
+	"kayixin":    kayixinProvider{},
+	"kasushou":   kasushouProvider{},
+	"xingquanyi": xingquanyiProvider{},
+	"youkayun":   youkayunProvider{},
+	"julangyun":  julangyunProvider{},
+	"xinghai":    xinghaiProvider{},
+	"feisuyuan":  feisuyuanProvider{},
 }
 
 var defaultProductInfoRegistry = map[string]ProductInfoProvider{
-	"kakayun": kakayunProvider{},
+	"kakayun":    kakayunProvider{},
+	"kayixin":    kayixinProvider{},
+	"kasushou":   kasushouProvider{},
+	"xingquanyi": xingquanyiProvider{},
+	"youkayun":   youkayunProvider{},
+	"julangyun":  julangyunProvider{},
+	"xinghai":    xinghaiProvider{},
+	"feisuyuan":  feisuyuanProvider{},
 }
 
 var defaultProductSubscriptionRegistry = map[string]ProductSubscriptionProvider{
@@ -26,7 +40,10 @@ var defaultProductSubscriptionRegistry = map[string]ProductSubscriptionProvider{
 }
 
 var defaultProductChangePushRegistry = map[string]ProductChangePushProvider{
-	"kakayun": kakayunProvider{},
+	"kakayun":    kakayunProvider{},
+	"kasushou":   kasushouProvider{},
+	"xingquanyi": xingquanyiProvider{},
+	"youkayun":   youkayunProvider{},
 }
 
 // Lookup 根据 provider_code 查找余额查询适配器实现。

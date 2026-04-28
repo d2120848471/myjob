@@ -56,6 +56,9 @@ func (c *Core) bootstrap(ctx context.Context) error {
 	if err := c.ensureExternalOrderAttemptSchema(ctx); err != nil {
 		return err
 	}
+	if err := c.ensureExternalOrderAttemptSegmentSchema(ctx); err != nil {
+		return err
+	}
 	if err := c.ensureRechargeRiskSchema(ctx); err != nil {
 		return err
 	}

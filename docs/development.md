@@ -168,7 +168,7 @@ docker exec $(docker compose ps -q mysql) mysql -uroot -proot123456 -D admin -e 
 - `manifest/sql/005_supplier_platform.sql`：第三方平台类型、账号和余额日志结构。
 - `manifest/sql/006_product_goods_channel_binding.sql`：商品渠道绑定表结构。
 - `manifest/sql/007_product_goods_channel_config.sql`：商品库存配置表结构。
-- `manifest/sql/008_external_order.sql`：外部订单主表和渠道尝试表结构。
+- `manifest/sql/008_external_order.sql`：外部订单主表、渠道尝试表和尝试子单表结构。
 
 生成超级管理员初始化 SQL：
 
@@ -193,17 +193,25 @@ export GF_DAO_LINK='mysql:root:root123456@tcp(127.0.0.1:3306)/admin?charset=utf8
 
 商品渠道同步入口在 `internal/logic/admin/product_goods_channel_sync.go`。同步进价时必须复用 `computeChannelCostSnapshot`，保证商品税态和渠道税态的加税、扣税规则与人工维护绑定一致；自动改价利润字段只保留用户配置，不在同步流程中重写。
 
+## 多供应商订单与商品同步 provider
+
+订单 provider 通过 `internal/library/supplierplatform/provider.OrderProvider` 暴露统一下单和查单能力。新增平台时必须声明 `Capabilities()`，明确单次最大提交数量和安全价字段口径；订单业务层根据该能力拆分 `external_order_attempt_segment`，provider 只负责协议字段、签名和状态映射。
+
+商品详情同步优先实现 `ProductInfoProvider`。如果平台只有全量商品列表接口，则同时实现 `ProductInfoListProvider`，业务侧按平台账号和商品编号缓存本轮列表结果，避免跨账号污染。
+
+商品订阅记录只面向卡卡云。其他平台即使支持后台配置商品通知，也不写入 `supplier_product_subscription`，不提供取消或重订阅接口，价格名称靠主动同步兜底。
+
 ### 供应商商品推送订阅
 
-商品变动推送 provider 需要实现 `ProductSubscriptionProvider` 和 `ProductChangePushProvider`。回调 URL 统一使用 `/api/open/supplier-platforms/{providerCode}/{platformAccountId}/product-change-callback`，通过平台账号 ID 找密钥验签。卡卡云接收 URL 由运营人员在卡卡云后台自行配置，系统不调用 `user/geturl`、`user/seturl`，也不向订阅或取消订阅请求传 `receiveurl` / `oldreceiveurl`。新增渠道绑定后的自动订阅只调用 `goods/subscribe`，失败只能写入 `supplier_product_subscription`，不得阻断本地绑定保存；后台手动重新订阅失败必须让接口调用方感知，并保留最近请求、响应和失败原因。
+商品变动推送 provider 需要实现 `ProductChangePushProvider` 并能在当前 body-only 回调接口内完成验签。回调 URL 统一使用 `/api/open/supplier-platforms/{providerCode}/{platformAccountId}/product-change-callback`，通过平台账号 ID 找密钥验签。卡卡云接收 URL 由运营人员在卡卡云后台自行配置，系统不调用 `user/geturl`、`user/seturl`，也不向订阅或取消订阅请求传 `receiveurl` / `oldreceiveurl`。新增渠道绑定后的自动订阅只面向卡卡云调用 `goods/subscribe`，失败只能写入 `supplier_product_subscription`，不得阻断本地绑定保存；后台手动重新订阅失败必须让接口调用方感知，并保留最近请求、响应和失败原因。
 
 ## 订单金额快照
 
 开放下单会在创建订单前检查启用的充值风控规则。匹配口径为充值账号精确匹配，并要求当前商品名称包含规则中的商品关键词。命中后系统仍创建 `external_order`，但状态直接为 `failed`，写入 `last_receipt` 和 `recharge_risk_record`，同时递增规则 `hit_count`；该订单不会触发 worker，也不会生成 `external_order_attempt`。
 
-订单提交会按实际选中的渠道绑定规则写入 `unit_price / order_amount / cost_amount / profit_amount`，并在 `external_order_attempt` 保存渠道主体快照。历史订单如需再次修复，应先按明确订单号或历史时间窗口预览影响范围，再在维护窗口执行一次性 SQL；不要对实时处理中订单做批量回算。
+订单提交会按实际选中的渠道绑定规则写入 `unit_price / order_amount / cost_amount / profit_amount`，并在 `external_order_attempt` 保存渠道主体快照。限制单次只能提交一个数量的平台会拆分为多条 `external_order_attempt_segment`，父 attempt 只保存聚合状态，真实上游商家单号、请求快照和查单状态以 segment 为准。历史订单如需再次修复，应先按明确订单号或历史时间窗口预览影响范围，再在维护窗口执行一次性 SQL；不要对实时处理中订单做批量回算。
 
-卡卡云下单会传 `maxmoney` 作为上游防亏本最大进货总金额。该值使用渠道绑定的 `source_cost_price` 计算原始进货总额，再与订单销售金额加允许亏本金额取较小值：`min(source_cost_price * quantity, order_amount + allowed_loss)`。商品库存配置未开启亏本销售时，`allowed_loss` 固定为 `0`；开启时使用 `max_loss_amount`，且该金额按订单总额计入。
+支持安全价字段的平台会按 provider 声明的总价或单价口径传递上游防亏损金额。该值使用渠道绑定的 `source_cost_price` 计算原始进货额，再与订单销售金额加允许亏本金额按 segment 数量分摊后取较小值。商品库存配置未开启亏本销售时，`allowed_loss` 固定为 `0`；开启时使用 `max_loss_amount`，且该金额按订单总额计入。不支持上游安全价字段的平台必须先通过本地防亏损校验，否则不提交上游。
 
 `external_order_attempt` 的渠道主体快照列有启动兜底补列逻辑，并设置了较短的 MySQL `lock_wait_timeout`。生产大表仍建议先在维护窗口执行显式 DDL，再启动新版本，避免启动期等待元数据锁。
 

@@ -66,6 +66,13 @@ func (l *OrderLogic) pollOrder(ctx context.Context, order entity.ExternalOrder) 
 	if !ok {
 		return l.markOrderFailed(ctx, order.ID, attempt.ID, "平台适配器不存在")
 	}
+	segments, err := l.loadAttemptSegments(ctx, attempt.ID)
+	if err != nil {
+		return err
+	}
+	if len(segments) > 0 {
+		return l.pollAttemptSegments(ctx, order, attempt, provider, account, segments)
+	}
 	result, err := l.executeQueryOrder(provider, account, supplierprovider.QueryOrderInput{
 		SupplierOrderNo:   attempt.SupplierOrderNo,
 		SupplierUSOrderNo: attempt.SupplierUSOrderNo,

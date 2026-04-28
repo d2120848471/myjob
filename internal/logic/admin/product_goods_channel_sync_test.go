@@ -230,6 +230,50 @@ WHERE goods_id = ? AND supplier_goods_name LIKE '上游-SKU-%'
 	require.Equal(t, 3, value.Int())
 }
 
+func TestSyncChannelBindingsOnceUsesListProviderCache(t *testing.T) {
+	core, err := app.NewTestCore()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = core.Close() })
+	ctx := context.Background()
+	seedProductGoodsSyncTaxConfig(t, core)
+
+	var requestCount atomic.Int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount.Add(1)
+		require.Equal(t, "/api/item/query", r.URL.Path)
+		_, _ = w.Write([]byte(`{"code":"00","msg":"查询成功","data":[{"itemId":"SKU-100","itemName":"星海-SKU-100","price":"11.0000"},{"itemId":"SKU-101","itemName":"星海-SKU-101","price":"12.0000"}]}`))
+	}))
+	t.Cleanup(server.Close)
+
+	goodsID := seedProductGoodsSyncGoods(t, core, 1, 1, strings.TrimPrefix(server.URL, "http://"), 1, 1)
+	seedProductGoodsSyncExtraBinding(t, core, goodsID, "SKU-101")
+	_, err = core.DB().Exec(ctx, `
+UPDATE supplier_platform_account
+SET provider_code = 'xinghai', provider_name = '星海', type_id = 57, updated_at = ?
+WHERE id IN (
+    SELECT platform_account_id
+    FROM product_goods_channel_binding
+    WHERE goods_id = ?
+)
+`, core.Now(), goodsID)
+	require.NoError(t, err)
+	logic := newProductGoodsSyncTestLogic(t, core, server.URL)
+
+	result, err := logic.SyncChannelBindingsOnce(ctx, ProductGoodsChannelSyncOptions{GoodsID: goodsID, Limit: 200})
+	require.NoError(t, err)
+	require.Equal(t, 2, result.Scanned)
+	require.Equal(t, 2, result.Updated)
+	require.Equal(t, int64(1), requestCount.Load())
+
+	value, err := core.DB().GetCore().GetValue(ctx, `
+SELECT COUNT(*)
+FROM product_goods_channel_binding
+WHERE goods_id = ? AND supplier_goods_name LIKE '星海-SKU-%'
+`, goodsID)
+	require.NoError(t, err)
+	require.Equal(t, 2, value.Int())
+}
+
 func TestSyncChannelBindingsOnceDoesNotOverwriteWithBadUpstreamData(t *testing.T) {
 	core, err := app.NewTestCore()
 	require.NoError(t, err)

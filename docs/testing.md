@@ -93,33 +93,32 @@ schema 和注释约束：
 go test ./internal/app -run 'Test(MySQLSchemaIncludesTableAndColumnComments|ManifestMySQLSchemaFilesIncludeTableAndColumnComments)' -count=1 -timeout 60s
 ```
 
-云发卡 provider 聚焦回归：
+多供应商 provider 聚焦回归：
 
 ```bash
-go test ./internal/library/supplierplatform/provider -run TestKakayunOrderProvider -count=1 -timeout 60s
+go test ./internal/library/supplierplatform/provider -run 'TestMultiPlatform(Order|ProductInfo)|Test.*ProductChangePush|TestOrderProviderCapabilities' -count=1 -timeout 60s
 ```
 
-卡卡云下单防亏本聚焦回归：
+订单拆单和防亏损聚焦回归：
 
 ```bash
-go test ./internal/library/supplierplatform/provider -run TestKakayunOrderProviderBuildCreateRequest -count=1 -timeout 60s
-go test ./internal/logic/order -run TestKakayunMaxMoney -count=1 -timeout 60s
-go test ./test/integration -run 'TestOrderWorker(SubmitsPendingOrderToKakayun|PassesKakayunMaxMoneyWithAllowedLoss|FailsOrderWhenKakayunMaxMoneyCannotBeCalculated|ReordersOnlyInsideConfiguredWindow|ReordersWhenCreateExplicitlyFails)' -count=1 -timeout 60s
+go test ./internal/logic/order -run 'TestSegmentSafetyPrice|TestBuildOrderSegments|TestAggregateSegmentStatuses' -count=1 -timeout 60s
+go test ./test/integration -run 'TestOrderWorker(SubmitsPendingOrderToYoukayun|SplitsFeisuyuanQuantityIntoSegments|PassesKakayunMaxMoneyWithAllowedLoss|FailsOrderWhenKakayunMaxMoneyCannotBeCalculated)' -count=1 -timeout 60s
 ```
 
-卡卡云商品信息同步聚焦回归：
+多供应商商品信息同步聚焦回归：
 
 ```bash
-go test ./internal/library/supplierplatform/provider -run 'TestKakayunProductInfoProvider|TestLookupProductInfo' -count=1 -timeout 60s
-go test ./internal/logic/admin -run 'TestSyncChannelBindingsOnce|TestSaveInventoryConfigTriggersImmediateSyncWhenSwitchEnabled|TestProductGoodsChannelSyncWorker' -count=1 -timeout 60s
+go test ./internal/library/supplierplatform/provider -run 'Test.*ProductInfo|TestListBasedProductInfoProviders' -count=1 -timeout 60s
+go test ./internal/logic/admin -run 'TestSyncChannelBindingsOnce|TestSaveInventoryConfigTriggersImmediateSyncWhenSwitchEnabled|TestProductGoodsChannelSyncWorker|TestProductGoodsChannelSync' -count=1 -timeout 60s
 go test ./internal/bootstrap -run TestApplicationStartsAndClosesBackgroundWorkers -count=1 -timeout 60s
 ```
 
-卡卡云商品推送订阅和改价记录聚焦回归：
+商品推送订阅和改价记录聚焦回归：
 
 ```bash
-go test ./internal/library/supplierplatform/provider -run 'TestKakayunProductSubscriptionProvider|TestKakayunProductChangePushProvider|TestLookupProductPush' -count=1 -timeout 60s
-go test ./internal/logic/admin -run 'TestAutoSubscribeKakayunBinding|TestSupplierProductSubscription|TestCancel|TestResubscribe|TestApplyProductGoodsChannelPriceChange' -count=1 -timeout 60s
+go test ./internal/library/supplierplatform/provider -run 'Test.*ProductChangePush|TestLookupProductSubscriptionOnlyRegistersKakayun' -count=1 -timeout 60s
+go test ./internal/logic/admin -run 'TestAutoSubscribeKakayunBinding|TestAutoSubscribeNonKakayunBinding|TestSupplierProductSubscription|TestCancel|TestResubscribe|TestApplyProductGoodsChannelPriceChange' -count=1 -timeout 60s
 go test ./test/contract -run 'TestOpenSupplierProductChangeCallbackReturnsPlainOK|TestSupplierProductSubscriptionListCancelAndResubscribe|TestProductGoodsChannelPriceChangeList' -count=1 -timeout 60s
 ```
 

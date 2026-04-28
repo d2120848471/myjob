@@ -60,6 +60,29 @@ func TestAutoSubscribeKakayunBindingRecordsSuccess(t *testing.T) {
 	require.Equal(t, callbackURL, row.CallbackURL)
 }
 
+func TestAutoSubscribeNonKakayunBindingDoesNotCreateSubscription(t *testing.T) {
+	core, err := app.NewTestCore()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = core.Close() })
+
+	logic := NewProductGoodsLogic(core)
+	seedProductGoodsSyncTaxConfig(t, core)
+	goodsID := seedProductGoodsSyncGoods(t, core, 1, 1, "youkayun.example.test", 1, 1)
+	candidate := loadSinglePriceChangeCandidate(t, logic, goodsID)
+	_, err = core.DB().Exec(context.Background(), `
+UPDATE supplier_platform_account
+SET provider_code = 'youkayun', provider_name = '优卡云', type_id = 7, updated_at = ?
+WHERE id = ?
+`, core.Now(), candidate.PlatformAccountID)
+	require.NoError(t, err)
+
+	logic.triggerProductGoodsChannelAutoSubscription(context.Background(), candidate.BindingID)
+
+	count, err := core.DB().GetCore().GetValue(context.Background(), `SELECT COUNT(*) FROM supplier_product_subscription WHERE provider_code <> 'kakayun'`)
+	require.NoError(t, err)
+	require.Equal(t, 0, count.Int())
+}
+
 func TestAutoSubscribeKakayunBindingRecordsFailureWithoutReturningError(t *testing.T) {
 	core, err := app.NewTestCore()
 	require.NoError(t, err)

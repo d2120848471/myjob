@@ -93,3 +93,26 @@ type ExternalOrderAttempt struct {
 	CreatedAt           time.Time    `db:"created_at" json:"created_at"`
 	UpdatedAt           time.Time    `db:"updated_at" json:"updated_at"`
 }
+
+// ExternalOrderAttemptSegment 表示一次渠道尝试下拆分出的真实上游子单。
+type ExternalOrderAttemptSegment struct {
+	ID                int64        `db:"id" json:"id"`
+	OrderID           int64        `db:"order_id" json:"order_id"`
+	AttemptID         int64        `db:"attempt_id" json:"attempt_id"`
+	SegmentNo         int          `db:"segment_no" json:"segment_no"`
+	Quantity          int          `db:"quantity" json:"quantity"`
+	ProviderCode      string       `db:"provider_code" json:"provider_code"`
+	SupplierGoodsNo   string       `db:"supplier_goods_no" json:"supplier_goods_no"`
+	SupplierUSOrderNo string       `db:"supplier_us_order_no" json:"supplier_us_order_no"`
+	SupplierOrderNo   string       `db:"supplier_order_no" json:"supplier_order_no"`
+	SupplierStatus    string       `db:"supplier_status" json:"supplier_status"`
+	RefundStatus      string       `db:"refund_status" json:"refund_status"`
+	RequestSnapshot   string       `db:"request_snapshot" json:"request_snapshot"`
+	ResponseSnapshot  string       `db:"response_snapshot" json:"response_snapshot"`
+	Receipt           string       `db:"receipt" json:"receipt"`
+	Status            string       `db:"status" json:"status"`
+	SubmittedAt       sql.NullTime `db:"submitted_at" json:"submitted_at"`
+	LastCheckedAt     sql.NullTime `db:"last_checked_at" json:"last_checked_at"`
+	CreatedAt         time.Time    `db:"created_at" json:"created_at"`
+	UpdatedAt         time.Time    `db:"updated_at" json:"updated_at"`
+}

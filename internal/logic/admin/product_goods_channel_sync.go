@@ -177,17 +177,17 @@ func (l *ProductGoodsLogic) fetchProductGoodsChannelProductInfo(ctx context.Cont
 	if cached, exists := cache[cacheKey]; exists {
 		return cached, nil
 	}
-	extraConfig, err := parseExtraConfig(candidate.ExtraConfig)
+	if listProvider, ok := provider.(supplierprovider.ProductInfoListProvider); ok {
+		return l.fetchProductGoodsChannelProductInfoFromList(ctx, candidate, cache, listProvider)
+	}
+	return l.fetchProductGoodsChannelProductInfoByDetail(ctx, candidate, cache, provider)
+}
+
+func (l *ProductGoodsLogic) fetchProductGoodsChannelProductInfoByDetail(ctx context.Context, candidate productGoodsChannelSyncCandidate, cache map[string]supplierprovider.ProductInfoResult, provider supplierprovider.ProductInfoProvider) (supplierprovider.ProductInfoResult, error) {
+	cacheKey := fmt.Sprintf("%d:%s", candidate.PlatformAccountID, candidate.SupplierGoodsNo)
+	account, err := productGoodsChannelSyncAccountConfig(candidate)
 	if err != nil {
 		return supplierprovider.ProductInfoResult{}, err
-	}
-	account := supplierprovider.AccountConfig{
-		ProviderCode: candidate.ProviderCode,
-		Domain:       candidate.Domain,
-		BackupDomain: candidate.BackupDomain,
-		TokenID:      candidate.TokenID,
-		SecretKey:    candidate.SecretKey,
-		ExtraConfig:  extraConfig,
 	}
 	client := l.httpClientForProductInfoProvider(candidate.ProviderCode)
 	var lastErr error
@@ -218,6 +218,71 @@ func (l *ProductGoodsLogic) fetchProductGoodsChannelProductInfo(ctx context.Cont
 		return supplierprovider.ProductInfoResult{}, lastErr
 	}
 	return supplierprovider.ProductInfoResult{}, errors.New("供应商商品详情候选地址为空")
+}
+
+func (l *ProductGoodsLogic) fetchProductGoodsChannelProductInfoFromList(ctx context.Context, candidate productGoodsChannelSyncCandidate, cache map[string]supplierprovider.ProductInfoResult, provider supplierprovider.ProductInfoListProvider) (supplierprovider.ProductInfoResult, error) {
+	cacheKey := fmt.Sprintf("%d:%s", candidate.PlatformAccountID, candidate.SupplierGoodsNo)
+	extraConfig, err := parseExtraConfig(candidate.ExtraConfig)
+	if err != nil {
+		return supplierprovider.ProductInfoResult{}, err
+	}
+	account := supplierprovider.AccountConfig{
+		ProviderCode: candidate.ProviderCode,
+		Domain:       candidate.Domain,
+		BackupDomain: candidate.BackupDomain,
+		TokenID:      candidate.TokenID,
+		SecretKey:    candidate.SecretKey,
+		ExtraConfig:  extraConfig,
+	}
+	client := l.httpClientForProductInfoProvider(candidate.ProviderCode)
+	var lastErr error
+	for _, baseURL := range provider.CandidateBaseURLs(account) {
+		request, buildErr := provider.BuildProductInfoListRequest(ctx, account, l.core.Now(), baseURL)
+		if buildErr != nil {
+			return supplierprovider.ProductInfoResult{}, buildErr
+		}
+		response, requestErr := client.Do(request)
+		if requestErr != nil {
+			lastErr = requestErr
+			continue
+		}
+		body, readErr := io.ReadAll(response.Body)
+		_ = response.Body.Close()
+		if readErr != nil {
+			return supplierprovider.ProductInfoResult{}, readErr
+		}
+		items, parseErr := provider.ParseProductInfoListResponse(response.StatusCode, body)
+		if parseErr != nil {
+			lastErr = parseErr
+			continue
+		}
+		for supplierGoodsNo, info := range items {
+			cache[fmt.Sprintf("%d:%s", candidate.PlatformAccountID, supplierGoodsNo)] = info
+		}
+		if info, exists := cache[cacheKey]; exists {
+			return info, nil
+		}
+		lastErr = errors.New("供应商商品列表缺少绑定商品编号")
+	}
+	if lastErr != nil {
+		return supplierprovider.ProductInfoResult{}, lastErr
+	}
+	return supplierprovider.ProductInfoResult{}, errors.New("供应商商品详情候选地址为空")
+}
+
+func productGoodsChannelSyncAccountConfig(candidate productGoodsChannelSyncCandidate) (supplierprovider.AccountConfig, error) {
+	extraConfig, err := parseExtraConfig(candidate.ExtraConfig)
+	if err != nil {
+		return supplierprovider.AccountConfig{}, err
+	}
+	return supplierprovider.AccountConfig{
+		ProviderCode: candidate.ProviderCode,
+		Domain:       candidate.Domain,
+		BackupDomain: candidate.BackupDomain,
+		TokenID:      candidate.TokenID,
+		SecretKey:    candidate.SecretKey,
+		ExtraConfig:  extraConfig,
+	}, nil
 }
 
 func (l *ProductGoodsLogic) applyProductGoodsChannelProductInfo(ctx context.Context, candidate productGoodsChannelSyncCandidate, info supplierprovider.ProductInfoResult) (bool, error) {

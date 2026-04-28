@@ -65,6 +65,32 @@ CREATE TABLE IF NOT EXISTS external_order_attempt (
   KEY idx_external_order_attempt_platform (platform_account_id, created_at)
 ) COMMENT='外部订单渠道尝试表';
 
+CREATE TABLE IF NOT EXISTS external_order_attempt_segment (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '尝试子单ID',
+  order_id BIGINT UNSIGNED NOT NULL COMMENT '订单ID',
+  attempt_id BIGINT UNSIGNED NOT NULL COMMENT '尝试ID',
+  segment_no INT NOT NULL COMMENT '子单序号',
+  quantity INT NOT NULL COMMENT '子单数量',
+  provider_code VARCHAR(32) NOT NULL COMMENT '适配器编码',
+  supplier_goods_no VARCHAR(128) NOT NULL COMMENT '上游商品编号',
+  supplier_us_order_no VARCHAR(80) NOT NULL COMMENT '上游商家单号',
+  supplier_order_no VARCHAR(128) NOT NULL DEFAULT '' COMMENT '上游订单号',
+  supplier_status VARCHAR(32) NOT NULL DEFAULT '' COMMENT '上游原始状态',
+  refund_status VARCHAR(32) NOT NULL DEFAULT '' COMMENT '上游退款状态',
+  request_snapshot TEXT NOT NULL COMMENT '请求快照',
+  response_snapshot TEXT NOT NULL COMMENT '响应快照',
+  receipt VARCHAR(512) NOT NULL DEFAULT '' COMMENT '上游回执',
+  status VARCHAR(32) NOT NULL COMMENT '子单状态',
+  submitted_at DATETIME NULL COMMENT '提交时间',
+  last_checked_at DATETIME NULL COMMENT '最近查单时间',
+  created_at DATETIME NOT NULL COMMENT '创建时间',
+  updated_at DATETIME NOT NULL COMMENT '更新时间',
+  UNIQUE KEY uk_external_order_attempt_segment_no (attempt_id, segment_no),
+  UNIQUE KEY uk_external_order_segment_supplier_us (provider_code, supplier_us_order_no),
+  KEY idx_external_order_segment_attempt (attempt_id, id),
+  KEY idx_external_order_segment_order (order_id, id)
+) COMMENT='外部订单渠道尝试子单表';
+
 CREATE TABLE IF NOT EXISTS recharge_risk_rule (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '风控规则ID',
   account VARCHAR(255) NOT NULL COMMENT '充值账号',

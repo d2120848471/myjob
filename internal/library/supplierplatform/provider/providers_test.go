@@ -195,6 +195,35 @@ func TestKakayunCandidateBaseURLs_UsesConfiguredDomains(t *testing.T) {
 	)
 }
 
+func TestOrderProviderCapabilities(t *testing.T) {
+	tests := []struct {
+		code     string
+		provider interface {
+			Capabilities() OrderProviderCapabilities
+		}
+		maxQty      int
+		safetyMode  SafetyPriceMode
+		safetyField string
+	}{
+		{code: "kakayun", provider: kakayunProvider{}, maxQty: 0, safetyMode: SafetyPriceModeTotal, safetyField: "maxmoney"},
+		{code: "kayixin", provider: kayixinProvider{}, maxQty: 0, safetyMode: SafetyPriceModeTotal, safetyField: "safePrice"},
+		{code: "kasushou", provider: kasushouProvider{}, maxQty: 0, safetyMode: SafetyPriceModeTotal, safetyField: "safe_price"},
+		{code: "xingquanyi", provider: xingquanyiProvider{}, maxQty: 0, safetyMode: SafetyPriceModeUnit, safetyField: "safe_cost"},
+		{code: "youkayun", provider: youkayunProvider{}, maxQty: 0, safetyMode: SafetyPriceModeTotal, safetyField: "maxmoney"},
+		{code: "julangyun", provider: julangyunProvider{}, maxQty: 0, safetyMode: SafetyPriceModeTotal, safetyField: "accessPrice"},
+		{code: "xinghai", provider: xinghaiProvider{}, maxQty: 0, safetyMode: SafetyPriceModeUnit, safetyField: "itemPrice"},
+		{code: "feisuyuan", provider: feisuyuanProvider{}, maxQty: 1, safetyMode: SafetyPriceModeUnsupported, safetyField: ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.code, func(t *testing.T) {
+			capabilities := tc.provider.Capabilities()
+			require.Equal(t, tc.maxQty, capabilities.MaxQuantityPerCreate)
+			require.Equal(t, tc.safetyMode, capabilities.SafetyPrice.Mode)
+			require.Equal(t, tc.safetyField, capabilities.SafetyPrice.FieldName)
+		})
+	}
+}
+
 func TestKakayunProductInfoProviderBuildRequestAndParse(t *testing.T) {
 	provider, ok := LookupProductInfo("kakayun")
 	require.True(t, ok)
@@ -282,13 +311,76 @@ func TestKakayunProductInfoProviderKeepsNameWhenPriceInvalid(t *testing.T) {
 	require.False(t, result.GoodsPriceValid)
 }
 
-func TestLookupProductInfoOnlyRegistersKakayun(t *testing.T) {
+func TestLookupProductInfoIncludesKakayun(t *testing.T) {
 	provider, ok := LookupProductInfo("kakayun")
 	require.True(t, ok)
 	require.Equal(t, "kakayun", provider.Code())
+}
 
-	_, ok = LookupProductInfo("kayixin")
-	require.False(t, ok)
+func TestProductInfoProviderRegistriesIncludeAllConfiguredPlatforms(t *testing.T) {
+	codes := []string{"kakayun", "kayixin", "kasushou", "xingquanyi", "youkayun", "julangyun", "xinghai", "feisuyuan"}
+	for _, code := range codes {
+		t.Run(code, func(t *testing.T) {
+			provider, ok := LookupProductInfo(code)
+			require.True(t, ok)
+			require.Equal(t, code, provider.Code())
+		})
+	}
+}
+
+func TestMultiPlatformProductInfoProvidersBuildAndParse(t *testing.T) {
+	now := time.Date(2026, 4, 28, 12, 30, 45, 0, time.UTC)
+	account := AccountConfig{TokenID: "merchant001", SecretKey: "secretXYZ", ExtraConfig: map[string]any{}}
+	tests := []struct {
+		code string
+		path string
+		body string
+	}{
+		{"kayixin", "/api/v3/goods/getDetail", `{"code":1000,"msg":"success","data":{"goodsId":10001,"name":"卡易信会员","salesPrice":12.34,"status":1}}`},
+		{"kasushou", "/api/v1/goods/info", `{"code":200,"msg":"成功","data":{"id":10001,"goods_name":"卡速售会员","goods_price":"23.4500","status":1}}`},
+		{"xingquanyi", "/api/product", `{"code":"ok","message":"","data":{"id":10001,"product_name":"星权益会员","name":"月卡","price":"34.5600"}}`},
+		{"youkayun", "/api/goodsdetails", `{"code":1000,"msg":"查询成功","data":{"id":10001,"goods_name":"优卡云会员","goods_price":"45.6700","status":1}}`},
+		{"julangyun", "/api/recharge/goods/detail", `{"code":200,"message":"处理成功","data":{"goodsCode":"10001","goodsName":"聚浪云会员","goodsPrice":56.78,"goodsStatus":1}}`},
+	}
+	for _, tc := range tests {
+		t.Run(tc.code, func(t *testing.T) {
+			provider, ok := LookupProductInfo(tc.code)
+			require.True(t, ok)
+			req, err := provider.BuildProductInfoRequest(context.Background(), account, now, "http://platform.example.com", ProductInfoInput{SupplierGoodsNo: "10001"})
+			require.NoError(t, err)
+			require.Equal(t, "http://platform.example.com"+tc.path, req.URL.String())
+
+			info, err := provider.ParseProductInfoResponse(http.StatusOK, []byte(tc.body))
+			require.NoError(t, err)
+			require.Equal(t, "10001", info.SupplierGoodsNo)
+			require.NotEmpty(t, info.GoodsName)
+			require.True(t, info.GoodsPriceValid)
+		})
+	}
+}
+
+func TestListBasedProductInfoProvidersParseMatchedItem(t *testing.T) {
+	tests := []struct {
+		code  string
+		body  string
+		name  string
+		price string
+	}{
+		{"xinghai", `{"code":"00","msg":"查询成功","data":[{"itemId":"10001","itemName":"星海会员","price":"67.8900"},{"itemId":"10002","itemName":"其他","price":"1"}]}`, "星海会员", "67.8900"},
+		{"feisuyuan", `{"code":"0000","products":[{"product_id":"10001","channel_price":"78.9000","item_name":"飞速源会员"},{"product_id":"10002","channel_price":"1","item_name":"其他"}]}`, "飞速源会员", "78.9000"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.code, func(t *testing.T) {
+			provider, ok := LookupProductInfo(tc.code)
+			require.True(t, ok)
+			listProvider, ok := provider.(ProductInfoListProvider)
+			require.True(t, ok)
+			results, err := listProvider.ParseProductInfoListResponse(http.StatusOK, []byte(tc.body))
+			require.NoError(t, err)
+			require.Equal(t, tc.name, results["10001"].GoodsName)
+			require.Equal(t, tc.price, results["10001"].GoodsPrice.StringFixed(4))
+		})
+	}
 }
 
 func TestKayixinBuildRequest_UsesObjectBodyWhenConfigured(t *testing.T) {
@@ -396,6 +488,137 @@ func TestKakayunOrderProviderCreateExplicitFailureIsFailed(t *testing.T) {
 	require.False(t, result.Accepted)
 	require.Equal(t, SupplierOrderStatusFailed, result.Status)
 	require.Equal(t, "库存不足", result.Message)
+}
+
+func TestOrderProviderRegistriesIncludeAllConfiguredPlatforms(t *testing.T) {
+	codes := []string{"kakayun", "kayixin", "kasushou", "xingquanyi", "youkayun", "julangyun", "xinghai", "feisuyuan"}
+	for _, code := range codes {
+		t.Run(code, func(t *testing.T) {
+			provider, ok := LookupOrder(code)
+			require.True(t, ok)
+			require.Equal(t, code, provider.Code())
+		})
+	}
+}
+
+func TestMultiPlatformOrderProvidersBuildCreateRequests(t *testing.T) {
+	now := time.Date(2026, 4, 28, 12, 30, 45, 123000000, time.UTC)
+	account := AccountConfig{TokenID: "merchant001", SecretKey: "secretXYZ", ExtraConfig: map[string]any{}}
+	input := CreateOrderInput{SupplierGoodsNo: "10001", Quantity: 2, Account: "13800138000", SupplierUSOrderNo: "O20260428123045123456-T1-S1", SafePrice: "20.0000"}
+	tests := []struct {
+		code   string
+		path   string
+		assert func(t *testing.T, req *http.Request, body []byte)
+	}{
+		{"kayixin", "/api/v3/order/create", func(t *testing.T, req *http.Request, body []byte) {
+			payload := decodeJSONBodyAny(t, body)
+			require.Equal(t, float64(10001), payload["goodsId"])
+			require.Equal(t, float64(2), payload["count"])
+			require.Equal(t, "O20260428123045123456-T1-S1", payload["outerNumber"])
+			require.Equal(t, "20.0000", payload["safePrice"])
+			require.Equal(t, []any{map[string]any{"name": "充值账号", "value": "13800138000"}}, payload["attach"])
+		}},
+		{"kasushou", "/api/v1/order/buy", func(t *testing.T, req *http.Request, body []byte) {
+			payload := decodeJSONBodyAny(t, body)
+			require.Equal(t, float64(10001), payload["id"])
+			require.Equal(t, float64(2), payload["quantity"])
+			require.Equal(t, "O20260428123045123456-T1-S1", payload["external_orderno"])
+			require.Equal(t, "20.0000", payload["safe_price"])
+			require.Equal(t, map[string]any{"recharge_account": "13800138000"}, payload["attach"])
+		}},
+		{"xingquanyi", "/api/buy", func(t *testing.T, req *http.Request, body []byte) {
+			payload := decodeJSONBody(t, body)
+			require.Equal(t, "10001", payload["product_id"])
+			require.Equal(t, "2", payload["quantity"])
+			require.Equal(t, "13800138000", payload["recharge_account"])
+			require.Equal(t, "O20260428123045123456-T1-S1", payload["outer_order_id"])
+			require.Equal(t, "20.0000", payload["safe_cost"])
+		}},
+		{"youkayun", "/api/buygoods", func(t *testing.T, req *http.Request, body []byte) {
+			fields := decodeMultipartFields(t, req, body)
+			require.Equal(t, "10001", fields["goodsid"])
+			require.Equal(t, "2", fields["quantity"])
+			require.Equal(t, "13800138000", fields["accountname"])
+			require.Equal(t, "O20260428123045123456-T1-S1", fields["outorderno"])
+			require.Equal(t, "20.0000", fields["maxmoney"])
+		}},
+		{"julangyun", "/api/recharge/order/submit", func(t *testing.T, req *http.Request, body []byte) {
+			payload := decodeJSONBodyAny(t, body)
+			require.Equal(t, "10001", payload["goodsCode"])
+			require.Equal(t, "O20260428123045123456-T1-S1", payload["accessOrderNo"])
+			require.Equal(t, "13800138000", payload["rechargeAccount"])
+			require.Equal(t, float64(2), payload["orderNum"])
+			require.Equal(t, "20.0000", payload["accessPrice"])
+		}},
+		{"xinghai", "/api/order/submit", func(t *testing.T, req *http.Request, body []byte) {
+			values, err := url.ParseQuery(string(body))
+			require.NoError(t, err)
+			require.Equal(t, "10001", values.Get("itemId"))
+			require.Equal(t, "2", values.Get("amount"))
+			require.Equal(t, "13800138000", values.Get("uuid"))
+			require.Equal(t, "O20260428123045123456-T1-S1", values.Get("outOrderId"))
+			require.Equal(t, "20.0000", values.Get("itemPrice"))
+		}},
+		{"feisuyuan", "/recharge/order", func(t *testing.T, req *http.Request, body []byte) {
+			values, err := url.ParseQuery(string(body))
+			require.NoError(t, err)
+			require.Equal(t, "10001", values.Get("productId"))
+			require.Equal(t, "1", values.Get("number"))
+			require.Equal(t, "13800138000", values.Get("rechargeAccount"))
+			require.Equal(t, "O20260428123045123456-T1-S1", values.Get("outTradeNo"))
+			require.Empty(t, values.Get("maxmoney"))
+		}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.code, func(t *testing.T) {
+			provider, ok := LookupOrder(tc.code)
+			require.True(t, ok)
+			req, err := provider.BuildCreateOrderRequest(context.Background(), account, now, "http://platform.example.com", input)
+			require.NoError(t, err)
+			require.Equal(t, "http://platform.example.com"+tc.path, req.URL.String())
+			tc.assert(t, req, readRequestBody(t, req))
+		})
+	}
+}
+
+func TestMultiPlatformOrderProvidersParseCreateAndQuery(t *testing.T) {
+	tests := []struct {
+		code          string
+		createBody    string
+		querySuccess  string
+		queryFailed   string
+		queryProgress string
+	}{
+		{"kayixin", `{"code":1000,"msg":"购买成功","data":{"orderNumber":"KYX001"}}`, `{"code":1000,"data":{"orderNumber":"KYX001","outerNumber":"OUT001","status":3,"result":"完成"}}`, `{"code":1000,"data":{"status":4,"result":"退款"}}`, `{"code":1000,"data":{"status":2,"result":"处理中"}}`},
+		{"kasushou", `{"code":200,"msg":"下单成功","data":{"ordersn":"KSS001","external_orderno":"OUT001"}}`, `{"code":200,"data":[{"ordersn":"KSS001","external_orderno":"OUT001","status":3,"recharge_hints":"完成"}]}`, `{"code":200,"data":[{"status":4,"recharge_hints":"取消"}]}`, `{"code":200,"data":[{"status":2,"recharge_hints":"处理中"}]}`},
+		{"xingquanyi", `{"code":"ok","message":"","data":{"order_id":"XQY001","state":101}}`, `{"code":"ok","data":{"id":"XQY001","outer_order_id":"OUT001","state":200,"recharge_info":"完成"}}`, `{"code":"ok","data":{"state":500,"recharge_info":"失败"}}`, `{"code":"ok","data":{"state":101,"recharge_info":"处理中"}}`},
+		{"youkayun", `{"code":1000,"msg":"获取成功","data":{"ordersn":"YKY001","outorderno":"OUT001"}}`, `{"code":1000,"data":{"ordersn":"YKY001","outer_order_no":"OUT001","status":3}}`, `{"code":1000,"data":{"status":5}}`, `{"code":1000,"data":{"status":2}}`},
+		{"julangyun", `{"code":200,"message":"处理成功","data":{"returnOrderNo":"JLY001","accessOrderNo":"OUT001","orderStatus":20}}`, `{"code":200,"data":{"returnOrderNo":"JLY001","accessOrderNo":"OUT001","orderStatus":30}}`, `{"code":200,"data":{"orderStatus":40}}`, `{"code":200,"data":{"orderStatus":20}}`},
+		{"xinghai", `{"code":"00","msg":"下单成功","orderId":"XH001","outOrderId":"OUT001"}`, `{"code":"00","orderId":"XH001","outOrderId":"OUT001","orderStatus":"2","orderDesc":"成功"}`, `{"code":"00","orderStatus":"3","orderDesc":"失败"}`, `{"code":"00","orderStatus":"1","orderDesc":"处理中"}`},
+		{"feisuyuan", `{"code":"2000","message":"ok"}`, `{"code":"0000","status":"01","message":"success","outTradeNo":"OUT001"}`, `{"code":"0000","status":"03","message":"fail","outTradeNo":"OUT001"}`, `{"code":"0000","status":"02","message":"pending","outTradeNo":"OUT001"}`},
+	}
+	for _, tc := range tests {
+		t.Run(tc.code, func(t *testing.T) {
+			provider, ok := LookupOrder(tc.code)
+			require.True(t, ok)
+			create, err := provider.ParseCreateOrderResponse(http.StatusOK, []byte(tc.createBody))
+			require.NoError(t, err)
+			require.True(t, create.Accepted)
+			require.Equal(t, SupplierOrderStatusProcessing, create.Status)
+
+			success, err := provider.ParseQueryOrderResponse(http.StatusOK, []byte(tc.querySuccess))
+			require.NoError(t, err)
+			require.Equal(t, SupplierOrderStatusSuccess, success.Status)
+
+			failed, err := provider.ParseQueryOrderResponse(http.StatusOK, []byte(tc.queryFailed))
+			require.NoError(t, err)
+			require.Equal(t, SupplierOrderStatusFailed, failed.Status)
+
+			processing, err := provider.ParseQueryOrderResponse(http.StatusOK, []byte(tc.queryProgress))
+			require.NoError(t, err)
+			require.Equal(t, SupplierOrderStatusProcessing, processing.Status)
+		})
+	}
 }
 
 func TestProvidersParseBalanceResponse(t *testing.T) {

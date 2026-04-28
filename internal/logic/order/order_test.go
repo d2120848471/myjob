@@ -8,6 +8,8 @@ import (
 
 	adminapi "myjob/api"
 	"myjob/internal/app"
+	supplierprovider "myjob/internal/library/supplierplatform/provider"
+	"myjob/internal/model/entity"
 
 	"github.com/stretchr/testify/require"
 )
@@ -56,6 +58,70 @@ func TestSelectCandidateWeightedPercentSkipsZeroWeight(t *testing.T) {
 func TestPollIntervalDurationUsesConfiguredSeconds(t *testing.T) {
 	require.Equal(t, 7*time.Second, pollIntervalDuration(7))
 	require.Equal(t, 30*time.Second, pollIntervalDuration(0))
+}
+
+func TestBuildOrderSegmentsRespectsProviderMaxQuantity(t *testing.T) {
+	segments := buildOrderSegments("O20260428123045123456-T1", 3, supplierprovider.OrderProviderCapabilities{MaxQuantityPerCreate: 1})
+	require.Equal(t, []orderSegmentPlan{
+		{SegmentNo: 1, Quantity: 1, SupplierUSOrderNo: "O20260428123045123456-T1-S1"},
+		{SegmentNo: 2, Quantity: 1, SupplierUSOrderNo: "O20260428123045123456-T1-S2"},
+		{SegmentNo: 3, Quantity: 1, SupplierUSOrderNo: "O20260428123045123456-T1-S3"},
+	}, segments)
+}
+
+func TestBuildOrderSegmentsUsesSingleSegmentWhenUnlimited(t *testing.T) {
+	segments := buildOrderSegments("O20260428123045123456-T1", 3, supplierprovider.OrderProviderCapabilities{})
+	require.Equal(t, []orderSegmentPlan{{SegmentNo: 1, Quantity: 3, SupplierUSOrderNo: "O20260428123045123456-T1-S1"}}, segments)
+}
+
+func TestAggregateSegmentStatuses(t *testing.T) {
+	success := aggregateSegmentStatuses([]entity.ExternalOrderAttemptSegment{
+		{Status: OrderAttemptStatusSuccess},
+		{Status: OrderAttemptStatusSuccess},
+	})
+	require.Equal(t, supplierprovider.SupplierOrderStatusSuccess, success.OrderStatus)
+	require.Equal(t, OrderAttemptStatusSuccess, success.AttemptStatus)
+
+	failed := aggregateSegmentStatuses([]entity.ExternalOrderAttemptSegment{
+		{Status: OrderAttemptStatusFailed, Receipt: "失败"},
+	})
+	require.Equal(t, supplierprovider.SupplierOrderStatusFailed, failed.OrderStatus)
+	require.Equal(t, OrderAttemptStatusFailed, failed.AttemptStatus)
+
+	processing := aggregateSegmentStatuses([]entity.ExternalOrderAttemptSegment{
+		{Status: OrderAttemptStatusSuccess},
+		{Status: OrderAttemptStatusProcessing},
+	})
+	require.Equal(t, supplierprovider.SupplierOrderStatusProcessing, processing.OrderStatus)
+	require.Equal(t, OrderAttemptStatusProcessing, processing.AttemptStatus)
+}
+
+func TestAggregateSegmentStatusesPartialFailureBecomesUnknown(t *testing.T) {
+	partial := aggregateSegmentStatuses([]entity.ExternalOrderAttemptSegment{
+		{Status: OrderAttemptStatusSubmitted, Receipt: "子单1已受理"},
+		{Status: OrderAttemptStatusFailed, Receipt: "子单2失败"},
+		{Status: OrderAttemptStatusPending, Receipt: "子单3未提交"},
+	})
+
+	require.Equal(t, supplierprovider.SupplierOrderStatusUnknown, partial.OrderStatus)
+	require.Equal(t, OrderAttemptStatusUnknown, partial.AttemptStatus)
+	require.Contains(t, partial.Message, "部分")
+
+	successThenFailed := aggregateSegmentStatuses([]entity.ExternalOrderAttemptSegment{
+		{Status: OrderAttemptStatusSuccess, Receipt: "子单1成功"},
+		{Status: OrderAttemptStatusFailed, Receipt: "子单2失败"},
+	})
+	require.Equal(t, supplierprovider.SupplierOrderStatusUnknown, successThenFailed.OrderStatus)
+	require.Equal(t, OrderAttemptStatusUnknown, successThenFailed.AttemptStatus)
+}
+
+func TestAggregateSegmentStatusesSingleFailureCanFailAttempt(t *testing.T) {
+	failed := aggregateSegmentStatuses([]entity.ExternalOrderAttemptSegment{
+		{Status: OrderAttemptStatusFailed, Receipt: "失败"},
+	})
+
+	require.Equal(t, supplierprovider.SupplierOrderStatusFailed, failed.OrderStatus)
+	require.Equal(t, OrderAttemptStatusFailed, failed.AttemptStatus)
 }
 
 func TestCreateOpenOrderRetriesOrderNoUniqueConflict(t *testing.T) {

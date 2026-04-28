@@ -5,8 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -61,6 +63,210 @@ func TestOrderWorkerSubmitsPendingOrderToKakayun(t *testing.T) {
 	attempt := h.loadCurrentAttempt(t, order.ID)
 	require.Equal(t, "SD202604240001", attempt.SupplierOrderNo)
 	require.Equal(t, "submitted", attempt.Status)
+}
+
+func TestOrderWorkerSubmitsPendingOrderToYoukayun(t *testing.T) {
+	var captured map[string]string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/buygoods":
+			fields := parseRequestFieldsForIntegration(t, r)
+			captured = map[string]string{
+				"goodsid":    fields.Get("goodsid"),
+				"account":    fields.Get("accountname"),
+				"outorderno": fields.Get("outorderno"),
+				"maxmoney":   fields.Get("maxmoney"),
+			}
+			_, _ = w.Write([]byte(`{"code":1000,"msg":"获取成功","data":{"ordersn":"YKY202604280001","outorderno":"` + fields.Get("outorderno") + `","money":"10.0000"}}`))
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	h := newOrderIntegrationHarness(t)
+	token := h.loginAdmin(t)
+	leafBrandID := h.createBrandPath(t, token, "优卡云品牌", "视频会员", "优酷")
+	subjectID := h.createSubject(t, token, "优卡云主体", 0)
+	goodsID := h.createDirectRechargeGoods(t, token, leafBrandID, "优卡云订单商品", "20.0000")
+	platformID := h.createSupplierPlatform(t, token, "优卡云订单平台", 7, subjectID, 0, strings.TrimPrefix(server.URL, "http://"), "10052")
+	require.Equal(t, 0, h.postJSON("/api/admin/products/"+int64ToString(goodsID)+"/channel-bindings", map[string]any{
+		"platform_account_id": platformID,
+		"supplier_goods_no":   "10001",
+		"supplier_goods_name": "优卡云测试商品",
+		"source_cost_price":   "10.0000",
+		"dock_status":         1,
+		"sort":                10,
+	}, token).Code)
+
+	detail := h.getJSON("/api/admin/products/"+int64ToString(goodsID), token)
+	require.Equal(t, 0, detail.Code)
+	var goodsDetail struct {
+		GoodsCode string `json:"goods_code"`
+	}
+	require.NoError(t, json.Unmarshal(detail.Data, &goodsDetail))
+	create := h.postJSON("/api/open/orders", map[string]any{"token": "test-open-order-token", "goods_id": goodsDetail.GoodsCode, "account": "13800138000", "quantity": 1}, "")
+	require.Equal(t, 0, create.Code)
+	require.NoError(t, h.orderService.SubmitPendingOnce(context.Background()))
+
+	require.Equal(t, "10001", captured["goodsid"])
+	require.Equal(t, "13800138000", captured["account"])
+	require.Contains(t, captured["outorderno"], "-T1-S1")
+	require.Equal(t, "10.0000", captured["maxmoney"])
+}
+
+func TestOrderWorkerSplitsFeisuyuanQuantityIntoSegments(t *testing.T) {
+	received := make([]string, 0, 3)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "/recharge/order", r.URL.Path)
+		body := readAllForIntegration(t, r)
+		values, err := url.ParseQuery(body)
+		require.NoError(t, err)
+		require.Equal(t, "1", values.Get("number"))
+		received = append(received, values.Get("outTradeNo"))
+		_, _ = w.Write([]byte(`{"code":"2000","message":"ok"}`))
+	}))
+	defer server.Close()
+
+	h := newOrderIntegrationHarness(t)
+	token := h.loginAdmin(t)
+	leafBrandID := h.createBrandPath(t, token, "飞速源品牌", "视频会员", "芒果")
+	subjectID := h.createSubject(t, token, "飞速源主体", 0)
+	goodsID := h.createDirectRechargeGoods(t, token, leafBrandID, "飞速源订单商品", "20.0000")
+	_, err := h.app.Core().DB().Exec(context.Background(), `UPDATE product_goods SET max_purchase_qty = 3 WHERE id = ?`, goodsID)
+	require.NoError(t, err)
+	platformID := h.createSupplierPlatform(t, token, "飞速源订单平台", 56, subjectID, 0, strings.TrimPrefix(server.URL, "http://"), "23329")
+	require.Equal(t, 0, h.postJSON("/api/admin/products/"+int64ToString(goodsID)+"/channel-bindings", map[string]any{
+		"platform_account_id": platformID,
+		"supplier_goods_no":   "106",
+		"supplier_goods_name": "飞速源测试商品",
+		"source_cost_price":   "10.0000",
+		"dock_status":         1,
+		"sort":                10,
+	}, token).Code)
+
+	detail := h.getJSON("/api/admin/products/"+int64ToString(goodsID), token)
+	require.Equal(t, 0, detail.Code)
+	var goodsDetail struct {
+		GoodsCode string `json:"goods_code"`
+	}
+	require.NoError(t, json.Unmarshal(detail.Data, &goodsDetail))
+	create := h.postJSON("/api/open/orders", map[string]any{"token": "test-open-order-token", "goods_id": goodsDetail.GoodsCode, "account": "13800138000", "quantity": 3}, "")
+	require.Equal(t, 0, create.Code)
+	var createData struct {
+		OrderNo string `json:"order_no"`
+	}
+	require.NoError(t, json.Unmarshal(create.Data, &createData))
+
+	require.NoError(t, h.orderService.SubmitPendingOnce(context.Background()))
+	require.Len(t, received, 3)
+	require.Contains(t, received[0], "-S1")
+	require.Contains(t, received[1], "-S2")
+	require.Contains(t, received[2], "-S3")
+	order := h.loadOrder(t, createData.OrderNo)
+	attempt := h.loadCurrentAttempt(t, order.ID)
+	require.EqualValues(t, 3, h.scalarInt(t, `SELECT COUNT(*) FROM external_order_attempt_segment WHERE attempt_id = ?`, attempt.ID))
+}
+
+func TestOrderWorkerDoesNotReorderWholeSplitOrderAfterPartialFailure(t *testing.T) {
+	feisuyuanRequests := make([]string, 0, 3)
+	var kakayunRequests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/recharge/order":
+			body := readAllForIntegration(t, r)
+			values, err := url.ParseQuery(body)
+			require.NoError(t, err)
+			outTradeNo := values.Get("outTradeNo")
+			feisuyuanRequests = append(feisuyuanRequests, outTradeNo)
+			if strings.Contains(outTradeNo, "-S2") {
+				_, _ = w.Write([]byte(`{"code":"1000","message":"库存不足"}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"code":"2000","message":"ok","outTradeNo":"` + outTradeNo + `"}`))
+		case "/dockapiv3/order/create":
+			kakayunRequests.Add(1)
+			_, _ = w.Write([]byte(`{"code":1,"message":"下单成功","data":{"orderno":"SHOULD-NOT-CREATE","usorderno":"unexpected"}}`))
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	h := newOrderIntegrationHarness(t)
+	token := h.loginAdmin(t)
+	leafBrandID := h.createBrandPath(t, token, "拆单部分失败品牌", "视频会员", "芒果")
+	subjectID := h.createSubject(t, token, "拆单部分失败主体", 0)
+	goodsID := h.createDirectRechargeGoods(t, token, leafBrandID, "拆单部分失败商品", "20.0000")
+	_, err := h.app.Core().DB().Exec(context.Background(), `UPDATE product_goods SET max_purchase_qty = 3 WHERE id = ?`, goodsID)
+	require.NoError(t, err)
+	host := strings.TrimPrefix(server.URL, "http://")
+	feisuyuanPlatformID := h.createSupplierPlatform(t, token, "拆单部分失败飞速源", 56, subjectID, 0, host, "23329")
+	kakayunPlatformID := h.createKakayunPlatformWithToken(t, token, "拆单部分失败卡卡云", subjectID, 0, host, "10052-partial")
+	require.Equal(t, 0, h.postJSON("/api/admin/products/"+int64ToString(goodsID)+"/channel-bindings", map[string]any{
+		"platform_account_id": feisuyuanPlatformID,
+		"supplier_goods_no":   "106",
+		"supplier_goods_name": "飞速源测试商品",
+		"source_cost_price":   "10.0000",
+		"dock_status":         1,
+		"sort":                10,
+	}, token).Code)
+	require.Equal(t, 0, h.postJSON("/api/admin/products/"+int64ToString(goodsID)+"/channel-bindings", map[string]any{
+		"platform_account_id": kakayunPlatformID,
+		"supplier_goods_no":   "2478510",
+		"supplier_goods_name": "卡卡云兜底商品",
+		"source_cost_price":   "10.0000",
+		"dock_status":         1,
+		"sort":                20,
+	}, token).Code)
+	saveConfig := h.request(http.MethodPut, "/api/admin/products/"+int64ToString(goodsID)+"/inventory-config", map[string]any{
+		"smart_reorder_enabled":   1,
+		"reorder_timeout_enabled": 1,
+		"reorder_timeout_minutes": 10,
+		"order_strategy":          "fixed_order",
+		"sync_cost_price_enabled": 0,
+		"sync_goods_name_enabled": 0,
+		"allow_loss_sale_enabled": 0,
+		"max_loss_amount":         "0.0000",
+		"combo_goods_enabled":     0,
+	}, token)
+	require.Equal(t, 0, saveConfig.Code)
+
+	detail := h.getJSON("/api/admin/products/"+int64ToString(goodsID), token)
+	require.Equal(t, 0, detail.Code)
+	var goodsDetail struct {
+		GoodsCode string `json:"goods_code"`
+	}
+	require.NoError(t, json.Unmarshal(detail.Data, &goodsDetail))
+	create := h.postJSON("/api/open/orders", map[string]any{"token": "test-open-order-token", "goods_id": goodsDetail.GoodsCode, "account": "13800138000", "quantity": 3}, "")
+	require.Equal(t, 0, create.Code)
+	var createData struct {
+		OrderNo string `json:"order_no"`
+	}
+	require.NoError(t, json.Unmarshal(create.Data, &createData))
+
+	require.NoError(t, h.orderService.SubmitPendingOnce(context.Background()))
+	order := h.loadOrder(t, createData.OrderNo)
+	require.Equal(t, "unknown", order.Status)
+	require.Equal(t, 1, order.AttemptCount)
+	require.EqualValues(t, 0, kakayunRequests.Load())
+	require.Len(t, feisuyuanRequests, 2)
+	attempt := h.loadCurrentAttempt(t, order.ID)
+	require.Equal(t, "unknown", attempt.Status)
+	require.Contains(t, attempt.Receipt, "部分失败")
+	segments := make([]struct {
+		SegmentNo int    `db:"segment_no"`
+		Status    string `db:"status"`
+	}, 0)
+	require.NoError(t, h.app.Core().DB().GetCore().GetScan(context.Background(), &segments, `SELECT segment_no, status FROM external_order_attempt_segment WHERE attempt_id = ? ORDER BY segment_no ASC`, attempt.ID))
+	require.Equal(t, []struct {
+		SegmentNo int    `db:"segment_no"`
+		Status    string `db:"status"`
+	}{
+		{SegmentNo: 1, Status: "submitted"},
+		{SegmentNo: 2, Status: "failed"},
+		{SegmentNo: 3, Status: "pending"},
+	}, segments)
 }
 
 func TestOrderWorkerPassesKakayunMaxMoneyWithAllowedLoss(t *testing.T) {
@@ -838,6 +1044,29 @@ func (h *orderIntegrationHarness) createKakayunPlatformWithToken(t *testing.T, t
 	return data.ID
 }
 
+func (h *orderIntegrationHarness) createSupplierPlatform(t *testing.T, token, name string, typeID int, subjectID int64, hasTax int, host, tokenID string) int64 {
+	t.Helper()
+	res := h.postJSON("/api/admin/supplier-platforms", map[string]any{
+		"name":             name,
+		"domain":           host,
+		"backup_domain":    host,
+		"type_id":          typeID,
+		"subject_id":       subjectID,
+		"has_tax":          hasTax,
+		"token_id":         tokenID,
+		"secret_key":       "secret-key",
+		"threshold_amount": "5000.0000",
+		"sort":             1,
+		"crowd_name":       "订单群",
+	}, token)
+	require.Equal(t, 0, res.Code)
+	var data struct {
+		ID int64 `json:"id"`
+	}
+	require.NoError(t, json.Unmarshal(res.Data, &data))
+	return data.ID
+}
+
 func (h *orderIntegrationHarness) forceOrderDueForPoll(t *testing.T, orderNo string) {
 	t.Helper()
 	_, err := h.app.Core().DB().Exec(context.Background(), `UPDATE external_order SET next_poll_at = ? WHERE order_no = ?`, h.app.Core().Now().Add(-time.Second), orderNo)
@@ -863,4 +1092,23 @@ func (h *orderIntegrationHarness) scalarInt(t *testing.T, query string, args ...
 	value, err := h.app.Core().DB().GetCore().GetValue(context.Background(), query, args...)
 	require.NoError(t, err)
 	return value.Int64()
+}
+
+func readAllForIntegration(t *testing.T, r *http.Request) string {
+	t.Helper()
+	raw, err := io.ReadAll(r.Body)
+	require.NoError(t, err)
+	return string(raw)
+}
+
+func parseRequestFieldsForIntegration(t *testing.T, r *http.Request) url.Values {
+	t.Helper()
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+		require.NoError(t, r.ParseMultipartForm(1<<20))
+		return url.Values(r.MultipartForm.Value)
+	}
+	body := readAllForIntegration(t, r)
+	values, err := url.ParseQuery(body)
+	require.NoError(t, err)
+	return values
 }
