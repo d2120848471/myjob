@@ -9,9 +9,6 @@
 
 ## 当前文档
 
-- `specs/2026-04-28-supplier-provider-full-integration-design.md`：全量供应商渠道下单、查单、商品同步、防亏损、拆单和订阅边界设计。
-- `plans/2026-04-28-supplier-provider-full-integration.md`：全量供应商渠道对接实施计划，按 provider、订单 segment、商品同步和文档验证拆分任务。
-
 已完成事项应沉淀到稳定文档中，例如根 `README.md`、`docs/module-map.md`、`docs/development.md` 或 `docs/testing.md`。
 
 ## 维护要求
