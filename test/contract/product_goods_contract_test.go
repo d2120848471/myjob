@@ -3,6 +3,7 @@ package contract_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -850,13 +851,13 @@ func (h *testHarness) createSubject(t *testing.T, token, name string, hasTax int
 
 func (h *testHarness) createLimitedUserToken(t *testing.T, adminToken string, menuID int64) string {
 	t.Helper()
-	groupName := "商品受限组"
-	userName := "goodsv1"
-	phone := "13800005555"
+	groupName := fmt.Sprintf("受限组-%d", menuID)
+	userName := fmt.Sprintf("limited%d", menuID)
+	phone := fmt.Sprintf("138%08d", 5000+menuID)
 	if menuID == 0 {
 		groupName = "无商品权限组"
-		userName = "goodsb1"
-		phone = "13800006666"
+		userName = "limited0"
+		phone = "13800006000"
 	}
 
 	createGroup := h.postJSON("/api/admin/groups", map[string]any{

@@ -2,6 +2,7 @@ package contract_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -38,6 +39,61 @@ func TestOpenAPI_ProductModulePathsExposed(t *testing.T) {
 	require.Contains(t, res.body, "/api/admin/brands/upload")
 	require.Contains(t, res.body, "/api/admin/product-templates")
 	require.Contains(t, res.body, "/api/admin/product-templates/validate-types")
+}
+
+func TestProductModulePermissionSeedsStayInSync(t *testing.T) {
+	h := newTestHarness(t)
+
+	expectedMenus := []struct {
+		id   int64
+		name string
+		code string
+		sort int
+	}{
+		{id: 7, name: "品牌管理", code: "product.brand", sort: 7},
+		{id: 8, name: "行业管理", code: "product.industry", sort: 8},
+		{id: 10, name: "商品模板管理", code: "product.template", sort: 10},
+		{id: 11, name: "商品购买数量限制策略", code: "product.purchase_limit", sort: 11},
+		{id: 12, name: "第三方对接", code: "supplier.index", sort: 12},
+		{id: 13, name: "商品管理", code: "product.goods", sort: 13},
+		{id: 15, name: "充值风控", code: "order.recharge_risk", sort: 15},
+	}
+	for _, expected := range expectedMenus {
+		var menu struct {
+			ID        int64  `db:"id"`
+			Name      string `db:"name"`
+			Code      string `db:"code"`
+			SuperOnly int    `db:"super_only"`
+			Sort      int    `db:"sort"`
+		}
+		err := h.app.Core().DB().GetCore().GetScan(context.Background(), &menu, `
+SELECT id, name, code, super_only, sort
+FROM admin_menu
+WHERE id = ?
+`, expected.id)
+		require.NoError(t, err)
+		require.EqualValues(t, expected.id, menu.ID)
+		require.Equal(t, expected.name, menu.Name)
+		require.Equal(t, expected.code, menu.Code)
+		require.Equal(t, 0, menu.SuperOnly)
+		require.Equal(t, expected.sort, menu.Sort)
+
+		groupMenuCount, err := h.app.Core().DB().GetCore().GetValue(context.Background(), `
+SELECT COUNT(*)
+FROM admin_group_menu
+WHERE group_id = 1 AND menu_id = ?
+`, expected.id)
+		require.NoError(t, err)
+		require.Equal(t, 1, groupMenuCount.Int())
+	}
+
+	seedFile, err := os.ReadFile(filepath.Join("..", "..", "manifest", "sql", "002_seed_menu.sql"))
+	require.NoError(t, err)
+	for _, expected := range expectedMenus {
+		require.Contains(t, string(seedFile), fmt.Sprintf("'%s'", expected.name))
+		require.Contains(t, string(seedFile), fmt.Sprintf("'%s'", expected.code))
+		require.Contains(t, string(seedFile), fmt.Sprintf("(1, %d, NOW())", expected.id))
+	}
 }
 
 func TestProductBrandFlows(t *testing.T) {

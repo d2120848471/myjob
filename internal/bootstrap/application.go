@@ -160,6 +160,9 @@ func assemble(core *app.Core) (*Application, error) {
 		group.Group("", func(group *ghttp.RouterGroup) {
 			group.Middleware(guard.Require("product.goods", false))
 			group.Bind(productGoodsCtrl)
+		})
+		group.Group("", func(group *ghttp.RouterGroup) {
+			group.Middleware(guard.Require("product.price_change", false))
 			group.Bind(priceChangeCtrl)
 		})
 		group.Group("", func(group *ghttp.RouterGroup) {

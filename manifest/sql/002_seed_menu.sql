@@ -7,13 +7,16 @@ INSERT INTO admin_menu (id, parent_id, name, code, menu_type, menu_level, status
 (4, 0, '登录日志', 'admin.loginlog', 'permission', 1, 1, 0, 4, NOW(), NOW()),
 (5, 0, '主体配置', 'subject.manage', 'permission', 1, 1, 0, 5, NOW(), NOW()),
 (6, 0, '短信配置', 'config.sms', 'permission', 1, 1, 1, 6, NOW(), NOW()),
+(7, 0, '品牌管理', 'product.brand', 'permission', 1, 1, 0, 7, NOW(), NOW()),
+(8, 0, '行业管理', 'product.industry', 'permission', 1, 1, 0, 8, NOW(), NOW()),
 (9, 0, '系统参数配置', 'config.system', 'permission', 1, 1, 1, 9, NOW(), NOW()),
 (10, 0, '商品模板管理', 'product.template', 'permission', 1, 1, 0, 10, NOW(), NOW()),
 (11, 0, '商品购买数量限制策略', 'product.purchase_limit', 'permission', 1, 1, 0, 11, NOW(), NOW()),
 (12, 0, '第三方对接', 'supplier.index', 'permission', 1, 1, 0, 12, NOW(), NOW()),
 (13, 0, '商品管理', 'product.goods', 'permission', 1, 1, 0, 13, NOW(), NOW()),
 (14, 0, '订单记录', 'order.manage', 'permission', 1, 1, 0, 14, NOW(), NOW()),
-(15, 0, '充值风控', 'order.recharge_risk', 'permission', 1, 1, 0, 15, NOW(), NOW())
+(15, 0, '充值风控', 'order.recharge_risk', 'permission', 1, 1, 0, 15, NOW(), NOW()),
+(16, 0, '自动改价记录', 'product.price_change', 'permission', 1, 1, 0, 16, NOW(), NOW())
 ON DUPLICATE KEY UPDATE
   parent_id = VALUES(parent_id),
   name = VALUES(name),
@@ -26,8 +29,19 @@ ON DUPLICATE KEY UPDATE
   updated_at = VALUES(updated_at);
 
 INSERT INTO admin_group_menu (group_id, menu_id, created_at) VALUES
+(1, 1, NOW()),
+(1, 2, NOW()),
+(1, 3, NOW()),
+(1, 4, NOW()),
+(1, 5, NOW()),
+(1, 7, NOW()),
+(1, 8, NOW()),
+(1, 10, NOW()),
+(1, 11, NOW()),
+(1, 12, NOW()),
 (1, 13, NOW()),
 (1, 14, NOW()),
-(1, 15, NOW())
+(1, 15, NOW()),
+(1, 16, NOW())
 ON DUPLICATE KEY UPDATE
   created_at = created_at;

@@ -116,7 +116,7 @@
 - service：`ProductGoodsService`（`internal/service/product_goods.go`）、`ProductGoodsChannelPriceChangeService`（`internal/service/supplier_product_subscription.go`）
 - logic：`internal/logic/admin/product_goods*.go`、`internal/logic/admin/product_goods_channel*.go`、`internal/logic/admin/product_goods_channel_config*.go`
 - 路由前缀：`/api/admin/products*`、`/api/admin/products/{goodsId}/channel-bindings*`、`/api/admin/products/{goodsId}/inventory-config`、`/api/admin/product-goods-channel-price-changes`
-- 权限：`product.goods`
+- 权限：商品主档、渠道绑定和库存配置使用 `product.goods`；自动改价记录独立使用 `product.price_change`。
 - 主要能力：商品列表、详情、表单选项、新增、编辑、删除、启停、渠道摘要、库存配置、渠道绑定弹窗、单条自动改价、多供应商商品名称和进货价主动同步、自动改价记录、可验签供应商推送改价记录。
 - 边界：商品主档、渠道绑定和库存配置保持同 package 多文件拆分；商品关闭后不触发上游商品信息同步。
 
@@ -235,7 +235,7 @@ HTTP 协议适配层。`admin` 承载后台接口，`open` 承载开放订单接
 | 商品模板管理 | `/api/admin/product-templates*` | `product.template` |
 | 商品购买数量限制策略 | `/api/admin/purchase-limit-strategies*` | `product.purchase_limit` |
 | 商品管理 | `/api/admin/products*` | `product.goods` |
-| 商品渠道改价记录 | `/api/admin/product-goods-channel-price-changes` | `product.goods` |
+| 商品渠道改价记录 | `/api/admin/product-goods-channel-price-changes` | `product.price_change` |
 | 第三方对接 | `/api/admin/supplier-platform-types`、`/api/admin/supplier-platforms*` | `supplier.index` |
 | 供应商商品订阅 | `/api/admin/supplier-product-subscriptions*` | `supplier.index` |
 | 供应商商品变动回调 | `/api/open/supplier-platforms/{providerCode}/{platformAccountId}/product-change-callback` | 上游签名 |

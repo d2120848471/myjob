@@ -2,10 +2,67 @@ package contract_test
 
 import (
 	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
+
+func TestProductGoodsChannelPriceChangePermissionSeeded(t *testing.T) {
+	h := newTestHarness(t)
+
+	var menu struct {
+		ID        int64  `db:"id"`
+		Name      string `db:"name"`
+		Code      string `db:"code"`
+		SuperOnly int    `db:"super_only"`
+		Sort      int    `db:"sort"`
+	}
+	err := h.app.Core().DB().GetCore().GetScan(context.Background(), &menu, `
+SELECT id, name, code, super_only, sort
+FROM admin_menu
+WHERE id = ?
+`, 16)
+	require.NoError(t, err)
+	require.EqualValues(t, 16, menu.ID)
+	require.Equal(t, "自动改价记录", menu.Name)
+	require.Equal(t, "product.price_change", menu.Code)
+	require.Equal(t, 0, menu.SuperOnly)
+	require.Equal(t, 16, menu.Sort)
+
+	groupMenuCount, err := h.app.Core().DB().GetCore().GetValue(context.Background(), `
+SELECT COUNT(*)
+FROM admin_group_menu
+WHERE group_id = 1 AND menu_id = ?
+`, 16)
+	require.NoError(t, err)
+	require.Equal(t, 1, groupMenuCount.Int())
+
+	token := h.loginAdmin(t)
+	me := h.getJSON("/api/admin/auth/me", token)
+	require.Equal(t, 0, me.Code)
+	var meData struct {
+		Permissions []string `json:"permissions"`
+	}
+	require.NoError(t, json.Unmarshal(me.Data, &meData))
+	require.Contains(t, meData.Permissions, "product.price_change")
+
+	menuTree := h.getJSON("/api/admin/menus/tree", token)
+	require.Equal(t, 0, menuTree.Code)
+	var menuTreeData struct {
+		List []*menuTreeItem `json:"list"`
+	}
+	require.NoError(t, json.Unmarshal(menuTree.Data, &menuTreeData))
+	require.Contains(t, flattenMenuCodes(menuTreeData.List), "product.price_change")
+
+	seedFile, err := os.ReadFile(filepath.Join("..", "..", "manifest", "sql", "002_seed_menu.sql"))
+	require.NoError(t, err)
+	require.Contains(t, string(seedFile), "'自动改价记录'")
+	require.Contains(t, string(seedFile), "'product.price_change'")
+	require.Contains(t, string(seedFile), "(1, 16, NOW())")
+}
 
 func TestProductGoodsChannelPriceChangeList(t *testing.T) {
 	h := newTestHarness(t)
@@ -19,6 +76,21 @@ func TestProductGoodsChannelPriceChangeList(t *testing.T) {
 	require.Contains(t, string(list.Data), "2582531")
 	require.Contains(t, string(list.Data), "push")
 	require.Contains(t, string(list.Data), "变动前")
+}
+
+func TestProductGoodsChannelPriceChangeRequiresDedicatedPermission(t *testing.T) {
+	h := newTestHarness(t)
+	adminToken := h.loginAdmin(t)
+	h.seedProductGoodsChannelPriceChange(t, "monitor", "PRICE-CHANGE-PERM", "2582532")
+
+	productGoodsToken := h.createLimitedUserToken(t, adminToken, 13)
+	productGoodsRes := h.getJSON("/api/admin/product-goods-channel-price-changes?page=1&page_size=20", productGoodsToken)
+	require.Equal(t, 403, productGoodsRes.Code)
+
+	priceChangeToken := h.createLimitedUserToken(t, adminToken, 16)
+	priceChangeRes := h.getJSON("/api/admin/product-goods-channel-price-changes?page=1&page_size=20&keyword=PRICE-CHANGE-PERM", priceChangeToken)
+	require.Equal(t, 0, priceChangeRes.Code)
+	require.Contains(t, string(priceChangeRes.Data), "PRICE-CHANGE-PERM")
 }
 
 func (h *testHarness) seedProductGoodsChannelPriceChange(t *testing.T, source, goodsCode, supplierGoodsNo string) int64 {
