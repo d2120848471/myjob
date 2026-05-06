@@ -77,6 +77,44 @@ CREATE TABLE IF NOT EXISTS admin_subject (
   updated_at DATETIME NOT NULL COMMENT '更新时间'
 ) COMMENT='主体配置表';
 
+CREATE TABLE IF NOT EXISTS product_brand (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '品牌ID',
+  parent_id BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '父品牌ID',
+  name VARCHAR(100) NOT NULL COMMENT '品牌名称',
+  icon VARCHAR(500) NOT NULL DEFAULT '' COMMENT '品牌图标',
+  credential_image VARCHAR(500) NOT NULL DEFAULT '' COMMENT '资质图片',
+  description TEXT NULL COMMENT '品牌描述',
+  is_visible TINYINT NOT NULL DEFAULT 1 COMMENT '显示状态',
+  sort INT NOT NULL DEFAULT 0 COMMENT '排序值',
+  goods_count INT NOT NULL DEFAULT 0 COMMENT '商品数量',
+  created_at DATETIME NOT NULL COMMENT '创建时间',
+  updated_at DATETIME NOT NULL COMMENT '更新时间',
+  UNIQUE KEY uk_product_brand_parent_name (parent_id, name),
+  KEY idx_product_brand_parent_sort (parent_id, sort, id)
+) COMMENT='商品品牌表';
+
+CREATE TABLE IF NOT EXISTS product_industry (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '行业ID',
+  name VARCHAR(100) NOT NULL COMMENT '行业名称',
+  sort INT NOT NULL DEFAULT 0 COMMENT '排序值',
+  brand_count INT NOT NULL DEFAULT 0 COMMENT '品牌数量',
+  created_at DATETIME NOT NULL COMMENT '创建时间',
+  updated_at DATETIME NOT NULL COMMENT '更新时间',
+  UNIQUE KEY uk_product_industry_name (name),
+  KEY idx_product_industry_sort (sort, id)
+) COMMENT='商品行业表';
+
+CREATE TABLE IF NOT EXISTS product_industry_brand (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '关联ID',
+  industry_id BIGINT UNSIGNED NOT NULL COMMENT '行业ID',
+  brand_id BIGINT UNSIGNED NOT NULL COMMENT '品牌ID',
+  sort INT NOT NULL DEFAULT 0 COMMENT '排序值',
+  created_at DATETIME NOT NULL COMMENT '创建时间',
+  UNIQUE KEY uk_product_industry_brand (industry_id, brand_id),
+  KEY idx_product_industry_brand_sort (industry_id, sort, id),
+  KEY idx_product_industry_brand_brand (brand_id)
+) COMMENT='行业品牌关联表';
+
 CREATE TABLE IF NOT EXISTS product_template (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '模板ID',
   title VARCHAR(100) NOT NULL COMMENT '模板标题',

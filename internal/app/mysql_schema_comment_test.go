@@ -31,6 +31,17 @@ func TestManifestMySQLSchemaFilesIncludeTableAndColumnComments(t *testing.T) {
 	}
 }
 
+func TestManifestMySQLSchemaCoversApplicationSchemaTables(t *testing.T) {
+	manifestSchema := readManifestSchemaFiles(t)
+
+	manifestTables := collectCreateTableNames(manifestSchema)
+	applicationTables := collectCreateTableNames(mysqlSchema)
+
+	for table := range applicationTables {
+		require.Containsf(t, manifestTables, table, "manifest/sql must create application schema table %s", table)
+	}
+}
+
 func assertMySQLCreateTableComments(t *testing.T, source, schema string) {
 	t.Helper()
 
@@ -64,6 +75,39 @@ func assertMySQLCreateTableComments(t *testing.T, source, schema string) {
 	}
 
 	require.Greaterf(t, createTableCount, 0, "%s: no CREATE TABLE statement found", source)
+}
+
+func readManifestSchemaFiles(t *testing.T) string {
+	t.Helper()
+
+	var builder strings.Builder
+	for _, name := range []string{
+		"001_schema.sql",
+		"005_supplier_platform.sql",
+		"006_product_goods_channel_binding.sql",
+		"007_product_goods_channel_config.sql",
+		"008_external_order.sql",
+		"009_supplier_product_push.sql",
+	} {
+		path := filepath.Join("..", "..", "manifest", "sql", name)
+		content, err := os.ReadFile(path)
+		require.NoError(t, err)
+
+		builder.Write(content)
+		builder.WriteByte('\n')
+	}
+	return builder.String()
+}
+
+func collectCreateTableNames(schema string) map[string]struct{} {
+	tables := map[string]struct{}{}
+	for _, match := range createTablePattern.FindAllStringSubmatch(schema, -1) {
+		if len(match) != 2 {
+			continue
+		}
+		tables[match[1]] = struct{}{}
+	}
+	return tables
 }
 
 func splitSQLStatements(schema string) []string {
