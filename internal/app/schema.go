@@ -64,6 +64,25 @@ CREATE TABLE IF NOT EXISTS admin_login_log (
     ip_region TEXT NOT NULL,
     created_at DATETIME NOT NULL
 );
+CREATE TABLE IF NOT EXISTS customer_user (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_name TEXT NOT NULL,
+    phone TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    pay_password_hash TEXT NOT NULL,
+    status INTEGER NOT NULL DEFAULT 1,
+    is_deleted INTEGER NOT NULL DEFAULT 0,
+    last_login_ip TEXT,
+    last_login_at DATETIME,
+    token_version INTEGER NOT NULL DEFAULT 0,
+    deleted_at DATETIME,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_customer_user_status_deleted
+    ON customer_user(status, is_deleted, id);
+CREATE INDEX IF NOT EXISTS idx_customer_user_company
+    ON customer_user(company_name, id);
 CREATE TABLE IF NOT EXISTS admin_subject (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE,
@@ -563,6 +582,24 @@ CREATE TABLE IF NOT EXISTS admin_login_log (
     created_at DATETIME NOT NULL COMMENT '创建时间',
     KEY idx_admin_login_log_created_at (created_at)
 ) COMMENT='后台登录日志表';
+CREATE TABLE IF NOT EXISTS customer_user (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '客户ID',
+  company_name VARCHAR(100) NOT NULL COMMENT '店铺或公司名称',
+  phone VARCHAR(20) NOT NULL COMMENT '手机号',
+  password_hash VARCHAR(255) NOT NULL COMMENT '登录密码哈希',
+  pay_password_hash VARCHAR(255) NOT NULL COMMENT '支付密码哈希',
+  status TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1启用，0禁用',
+  is_deleted TINYINT NOT NULL DEFAULT 0 COMMENT '软删除标记',
+  last_login_ip VARCHAR(45) NULL COMMENT '最后登录IP',
+  last_login_at DATETIME NULL COMMENT '最后登录时间',
+  token_version INT NOT NULL DEFAULT 0 COMMENT '令牌版本',
+  deleted_at DATETIME NULL COMMENT '删除时间',
+  created_at DATETIME NOT NULL COMMENT '创建时间',
+  updated_at DATETIME NOT NULL COMMENT '更新时间',
+  UNIQUE KEY uk_customer_user_phone (phone),
+  KEY idx_customer_user_status_deleted (status, is_deleted, id),
+  KEY idx_customer_user_company (company_name, id)
+) COMMENT='客户账号表';
 CREATE TABLE IF NOT EXISTS admin_subject (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '主体ID',
     name VARCHAR(64) NOT NULL UNIQUE COMMENT '主体名称',

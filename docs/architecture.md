@@ -24,9 +24,11 @@ main.go
 
 - `api/`：请求/响应协议和 OpenAPI 元信息。
 - `internal/controller/admin`：后台 HTTP 协议适配。
+- `internal/controller/customer`：客户侧 HTTP 协议适配。
 - `internal/controller/open`：开放订单 HTTP 协议适配。
 - `internal/service`：controller 依赖的接口边界。
 - `internal/logic/admin`：后台业务编排、校验、事务和审计。
+- `internal/logic/customer`：客户注册、登录、忘记密码和客户短信验证码编排。
 - `internal/logic/order`：开放订单、后台订单列表、提交、轮询、补单和 worker 生命周期。
 - `internal/app`：配置、数据库、Redis、短信、区域解析、审计、schema/seed 和会话等运行时能力。
 - `internal/library`：跨模块基础能力和第三方 provider 适配。
@@ -82,6 +84,15 @@ POST /api/admin/auth/sms/verify
   -> 超过 5 次后清理临时登录态和验证码
   -> 成功后签发正式 token
 ```
+
+## 客户认证流程
+
+客户认证独立于后台员工认证，路由前缀为 `/api/customer/auth/*`。
+注册和找回密码复用后台维护的短信配置，但 Redis key 使用
+`customer:sms:<scene>:<phone>`、`customer:sms:send_lock:<scene>:<phone>`
+和 `customer:sms:attempts:<scene>:<phone>`，避免和后台登录二验混用，并限制错误验证码枚举。
+客户登录后签发独立客户 token，服务端 session 使用
+`customer:session:<jti>` 和 `customer:user:sessions:<customer_id>`。
 
 ## 权限模型
 

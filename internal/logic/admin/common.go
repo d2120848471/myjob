@@ -17,6 +17,7 @@ func apiErr(code gcode.Code, message string) error {
 type Services struct {
 	Auth                           service.AuthService
 	User                           service.UserService
+	Customer                       service.CustomerService
 	Group                          service.GroupService
 	Subject                        service.SubjectService
 	Brand                          service.BrandService
@@ -41,6 +42,7 @@ func NewServices(core *app.Core) *Services {
 	return &Services{
 		Auth:                           &AuthLogic{core: core},
 		User:                           &UserLogic{core: core},
+		Customer:                       &CustomerLogic{core: core},
 		Group:                          &GroupLogic{core: core},
 		Subject:                        &SubjectLogic{core: core},
 		Brand:                          &BrandLogic{core: core},

@@ -7,8 +7,8 @@
 - 快速启动项目：先读 `../README.md`，再读 `development.md`。
 - 理解系统定位和能力边界：读 `overview.md`。
 - 理解启动链路、分层职责和请求流：读 `architecture.md`。
-- 查询业务域、路由、权限和文件归属：读 `module-map.md`。
-- 跑测试、对齐 CI 或确认 lint 口径：读 `testing.md`。
+- 查询业务域、路由、权限和文件归属：读 `module-map.md`，其中包含客户管理边界。
+- 跑测试、对齐 CI 或确认 lint 口径：读 `testing.md`，其中包含客户认证和后台客户管理契约覆盖。
 - 理解历史迁移背景：读 `migration.md`。
 - 查看阶段性规格和实施计划目录约定：读 `superpowers/README.md`；当前已完成文档不再单独保留。
 - 查询第三方渠道原始接口资料：读 `../platform_docs/README.md`。

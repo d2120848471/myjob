@@ -30,6 +30,7 @@ var smsCodeRegexp = regexp.MustCompile(`^\d{6}$`)
 // Sender 抽象短信发送能力，业务层只依赖该接口，不感知具体供应商实现。
 type Sender interface {
 	SendLoginCode(ctx context.Context, phone, code string, cfg modelruntime.SMSConfig) error
+	SendCode(ctx context.Context, phone, code string, cfg modelruntime.SMSConfig) error
 }
 
 // MockSender 是用于本地/测试的短信发送器实现：不发送真实短信，仅记录验证码。
@@ -64,6 +65,11 @@ func (m *MockSender) SendLoginCode(_ context.Context, phone, code string, _ mode
 	defer m.mu.Unlock()
 	m.codes[phone] = code
 	return nil
+}
+
+// SendCode 记录通用验证码（mock 实现，不产生外部请求）。
+func (m *MockSender) SendCode(ctx context.Context, phone, code string, cfg modelruntime.SMSConfig) error {
+	return m.SendLoginCode(ctx, phone, code, cfg)
 }
 
 // LastCode 返回 mock 发送器给指定手机号记录的最近一次验证码。
@@ -141,6 +147,11 @@ func (s *AliyunSender) SendLoginCode(_ context.Context, phone, code string, cfg 
 		)
 	}
 	return nil
+}
+
+// SendCode 使用已保存的阿里云配置发送通用验证码。
+func (s *AliyunSender) SendCode(ctx context.Context, phone, code string, cfg modelruntime.SMSConfig) error {
+	return s.SendLoginCode(ctx, phone, code, cfg)
 }
 
 func newAliyunSMSClient(cfg modelruntime.SMSConfig) (aliyunSMSAPI, error) {

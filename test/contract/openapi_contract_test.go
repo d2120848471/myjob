@@ -13,6 +13,9 @@ func TestOpenAPIAndSwaggerExposed(t *testing.T) {
 	oaiRes := h.rawRequest("GET", "/api.json", nil, "")
 	require.Equal(t, 200, oaiRes.status)
 	require.Contains(t, oaiRes.body, "/api/admin/auth/login")
+	require.Contains(t, oaiRes.body, "/api/customer/auth/register")
+	require.Contains(t, oaiRes.body, "/api/customer/auth/login")
+	require.Contains(t, oaiRes.body, "/api/admin/customers")
 	require.Contains(t, oaiRes.body, "BearerAuth")
 	require.Contains(t, oaiRes.body, "message")
 

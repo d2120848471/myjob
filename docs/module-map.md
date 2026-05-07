@@ -7,6 +7,7 @@
 | 模块 | 核心业务流 |
 | --- | --- |
 | 认证与会话 | 用户登录后按账号状态和短信二验条件签发会话，后续接口通过 JWT 和 Redis 会话校验身份。 |
+| 客户管理 | 客户通过手机号验证码注册，使用手机号密码登录；后台维护客户资料、状态、回收站和密码重置。 |
 | 员工管理 | 超管或授权用户维护后台员工资料、状态和商务归属，删除后进入回收站再决定恢复或保留。 |
 | 用户组与授权 | 后台通过用户组绑定菜单权限，登录态用户的可见菜单和接口权限都来自该授权结果。 |
 | 主体管理 | 维护结算或业务主体基础资料，供商品、平台账号等后续业务选择和归属。 |
@@ -33,6 +34,21 @@
 - 路由前缀：`/api/admin/auth/*`
 - 进入条件：登录、发送验证码、校验验证码无需登录；`me` 和退出登录需要登录。
 - 主要能力：账号密码登录、条件短信二验、发送验证码、校验验证码、当前登录信息、退出登录。
+
+### 客户管理
+
+- 客户侧协议：`api/customer_auth.go`
+- 后台协议：`api/customer.go`
+- 客户侧 controller：`internal/controller/customer/auth.go`
+- 后台 controller：`internal/controller/admin/customer.go`
+- 客户侧 service：`CustomerAuthService`（`internal/service/customer_auth.go`）
+- 后台 service：`CustomerService`（`internal/service/customer.go`）
+- 客户侧 logic：`internal/logic/customer/auth*.go`
+- 后台 logic：`internal/logic/admin/customer*.go`
+- 路由前缀：`/api/customer/auth/*`、`/api/admin/customers*`
+- 后台权限：`customer.manage`
+- 主要能力：客户注册、登录、忘记密码、后台新增、列表、详情、编辑、启停、软删除、回收站、恢复、重置登录密码和支付密码。
+- 边界：客户会话和后台员工会话隔离；客户手机号即使在回收站也继续占用。
 
 ### 员工管理
 
@@ -195,7 +211,7 @@
 
 ### `internal/controller`
 
-HTTP 协议适配层。`admin` 承载后台接口，`open` 承载开放订单接口。
+HTTP 协议适配层。`admin` 承载后台接口，`customer` 承载客户侧认证接口，`open` 承载开放订单接口。
 
 ### `internal/service`
 
@@ -203,7 +219,7 @@ HTTP 协议适配层。`admin` 承载后台接口，`open` 承载开放订单接
 
 ### `internal/logic`
 
-业务编排层。`admin` 承载后台业务域，`order` 承载订单履约链路。
+业务编排层。`admin` 承载后台业务域，`customer` 承载客户侧认证链路，`order` 承载订单履约链路。
 
 ### `internal/app`
 
@@ -227,6 +243,8 @@ HTTP 协议适配层。`admin` 承载后台接口，`open` 承载开放订单接
 | --- | --- | --- |
 | 认证登录 / 短信发送 / 短信验证 | `/api/admin/auth/login`、`/api/admin/auth/sms/*` | 无需登录 |
 | 会话信息 / 退出登录 | `/api/admin/auth/me`、`/api/admin/auth/session` | 需要登录 |
+| 客户注册 / 登录 / 忘记密码 | `/api/customer/auth/*` | 无需登录 |
+| 后台客户管理 | `/api/admin/customers*` | `customer.manage` |
 | 员工管理 | `/api/admin/users*` | `admin.list` |
 | 用户组与授权 | `/api/admin/groups*`、`/api/admin/menus/tree` | `admin.department` |
 | 主体管理 | `/api/admin/subjects*` | `subject.manage` |

@@ -21,10 +21,11 @@ import (
 )
 
 var (
-	usernameRegexp = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9]{5,9}$`)
-	passwordRegexp = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{5,9}$`)
-	phoneRegexp    = regexp.MustCompile(`^1\d{10}$`)
-	smsCodeRegexp  = regexp.MustCompile(`^\d{6}$`)
+	usernameRegexp    = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9]{5,9}$`)
+	passwordRegexp    = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{5,9}$`)
+	phoneRegexp       = regexp.MustCompile(`^1\d{10}$`)
+	smsCodeRegexp     = regexp.MustCompile(`^\d{6}$`)
+	payPasswordRegexp = regexp.MustCompile(`^\d{6}$`)
 )
 
 // Config 是后台运行时配置结构（来自 internal/model/config）。
@@ -54,6 +55,12 @@ type Core struct {
 
 // AdminUser 是后台管理用户实体的类型别名。
 type AdminUser = entity.AdminUser
+
+// CustomerUser 是客户账号实体的类型别名。
+type CustomerUser = entity.CustomerUser
+
+// CustomerListItem 是后台客户列表条目结构的类型别名。
+type CustomerListItem = entity.CustomerListItem
 
 // UserListItem 是员工列表页条目结构的类型别名。
 type UserListItem = entity.UserListItem
@@ -195,3 +202,6 @@ func PhoneRegexp() *regexp.Regexp { return phoneRegexp }
 
 // SMSCodeRegexp 返回短信验证码校验正则（6 位数字）。
 func SMSCodeRegexp() *regexp.Regexp { return smsCodeRegexp }
+
+// PayPasswordRegexp 返回支付密码校验正则（6 位数字）。
+func PayPasswordRegexp() *regexp.Regexp { return payPasswordRegexp }

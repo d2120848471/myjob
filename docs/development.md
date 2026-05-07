@@ -49,7 +49,7 @@ go run .
 ## 常用验证命令
 
 ```bash
-go test ./... -count=1 -timeout 120s
+go test ./... -count=1 -timeout 60s
 go build ./...
 golangci-lint run --timeout=5m
 ```
@@ -98,6 +98,14 @@ golangci-lint run --timeout=5m
 - 业务规则、边界条件或事务分支变化，优先补包内单测或 `test/integration`。
 - 同步 `docs/module-map.md` 的业务域映射、核心业务流速览和路由权限摘要。
 - 同步 `docs/testing.md` 中新增的聚焦验证命令。
+
+### 客户相关能力
+
+新增客户相关能力时，协议仍放在 `api/*.go` 扁平目录中；客户侧认证优先放到
+`internal/logic/customer/auth*.go`，后台客户管理优先放到
+`internal/logic/admin/customer*.go`。新增客户权限点时同步
+`manifest/sql/002_seed_menu.sql`、`internal/app/bootstrap.go` 和
+`docs/module-map.md`。
 
 ### 6. 提交前自检
 

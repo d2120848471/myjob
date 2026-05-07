@@ -26,6 +26,10 @@ func (f failingSMSSender) SendLoginCode(context.Context, string, string, bootstr
 	return errors.New("send failed")
 }
 
+func (f failingSMSSender) SendCode(context.Context, string, string, bootstrap.SMSConfig) error {
+	return errors.New("send failed")
+}
+
 func TestAuthFlow_SessionSMSProfileLogout(t *testing.T) {
 	h := newTestHarness(t)
 

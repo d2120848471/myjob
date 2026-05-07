@@ -10,10 +10,12 @@ import (
 
 	"myjob/internal/app"
 	admincontroller "myjob/internal/controller/admin"
+	customercontroller "myjob/internal/controller/customer"
 	opencontroller "myjob/internal/controller/open"
 	authlib "myjob/internal/library/auth"
 	smslib "myjob/internal/library/sms"
 	adminlogic "myjob/internal/logic/admin"
+	customerlogic "myjob/internal/logic/customer"
 	orderlogic "myjob/internal/logic/order"
 	"myjob/internal/middleware"
 	modelconfig "myjob/internal/model/config"
@@ -85,6 +87,7 @@ func assemble(core *app.Core) (*Application, error) {
 	authCtrl := admincontroller.NewAuth(services.Auth)
 	sessionCtrl := admincontroller.NewSession(services.Auth)
 	userCtrl := admincontroller.NewUser(services.User)
+	customerCtrl := admincontroller.NewCustomer(services.Customer)
 	groupCtrl := admincontroller.NewGroup(services.Group)
 	subjectCtrl := admincontroller.NewSubject(services.Subject)
 	brandCtrl := admincontroller.NewBrand(services.Brand)
@@ -99,6 +102,7 @@ func assemble(core *app.Core) (*Application, error) {
 	settingsCtrl := admincontroller.NewSettings(services.SMSConfig, services.System)
 	operationLogCtrl := admincontroller.NewOperationLog(services.AuditLog)
 	loginLogCtrl := admincontroller.NewLoginLog(services.AuditLog)
+	customerAuthCtrl := customercontroller.NewAuth(customerlogic.NewAuthLogic(core))
 	orderLogic := orderlogic.NewOrderLogic(core)
 	orderSvc := orderLogic
 	openOrderCtrl := opencontroller.NewOrder(orderSvc)
@@ -121,6 +125,11 @@ func assemble(core *app.Core) (*Application, error) {
 		group.Bind(supplierProductCallbackCtrl)
 	})
 
+	s.Group("/api/customer", func(group *ghttp.RouterGroup) {
+		group.Middleware(middleware.Response)
+		group.Bind(customerAuthCtrl)
+	})
+
 	s.Group("/api/admin", func(group *ghttp.RouterGroup) {
 		group.Middleware(middleware.Response)
 		group.Bind(authCtrl)
@@ -132,6 +141,10 @@ func assemble(core *app.Core) (*Application, error) {
 		group.Group("", func(group *ghttp.RouterGroup) {
 			group.Middleware(guard.Require("admin.list", false))
 			group.Bind(userCtrl)
+		})
+		group.Group("", func(group *ghttp.RouterGroup) {
+			group.Middleware(guard.Require("customer.manage", false))
+			group.Bind(customerCtrl)
 		})
 		group.Group("", func(group *ghttp.RouterGroup) {
 			group.Middleware(guard.Require("admin.department", false))
@@ -247,7 +260,12 @@ func (a *Application) CreateTestUser(ctx context.Context, username, password, ph
 	return a.core.CreateTestUser(ctx, username, password, phone)
 }
 func (a *Application) SetSMSSender(sender smslib.Sender) { a.core.SetSMSSender(sender) }
-func (a *Application) Core() *app.Core                   { return a.core }
-func (a *Application) Server() *ghttp.Server             { return a.server }
-func SMSCodeKey(userID int64) string                     { return authlib.SMSCodeKey(userID) }
-func SMSSendLockKey(userID int64) string                 { return authlib.SMSSendLockKey(userID) }
+
+// Core 返回运行时核心对象，供契约测试验证缓存、短信和会话状态。
+func (a *Application) Core() *app.Core { return a.core }
+
+// Server 返回底层 HTTP server，供外部装配或测试读取服务状态。
+func (a *Application) Server() *ghttp.Server { return a.server }
+
+func SMSCodeKey(userID int64) string     { return authlib.SMSCodeKey(userID) }
+func SMSSendLockKey(userID int64) string { return authlib.SMSSendLockKey(userID) }

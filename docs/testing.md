@@ -3,7 +3,7 @@
 ## 推荐默认命令
 
 ```bash
-go test ./... -count=1 -timeout 120s
+go test ./... -count=1 -timeout 60s
 go build ./...
 golangci-lint run --timeout=5m
 ```
@@ -21,14 +21,26 @@ golangci-lint run --timeout=5m
 - 验证 OpenAPI / Swagger 暴露。
 - 验证统一响应 `code / message / data`。
 - 覆盖登录、短信二验、权限、主要后台业务、开放订单和后台订单主流程。
+- 覆盖客户短信验证码、注册、登录、忘记密码和后台客户管理主流程。
 
 运行：
 
 ```bash
-go test ./test/contract -count=1 -timeout 120s
+go test ./test/contract -count=1 -timeout 60s
 ```
 
 契约测试通过 `NewTestApplication()` 启动测试态应用，底层使用 MySQL 测试库 `admin_test`、`miniredis` 和 mock 短信 sender。
+
+客户认证和后台客户管理通过契约测试覆盖：
+
+- `customer_auth_contract_test.go`：短信验证码、注册、登录、忘记密码、禁用/删除账号登录失败。
+- `customer_admin_contract_test.go`：客户表、权限种子、后台新增、列表、详情、编辑、启停、软删除、回收站、恢复、密码重置。
+
+聚焦回归：
+
+```bash
+go test ./test/contract -run 'Customer|OpenAPI' -count=1 -timeout 60s
+```
 
 ## 集成测试
 

@@ -69,6 +69,25 @@ CREATE TABLE IF NOT EXISTS admin_login_log (
   created_at DATETIME NOT NULL COMMENT '创建时间'
 ) COMMENT='后台登录日志表';
 
+CREATE TABLE IF NOT EXISTS customer_user (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '客户ID',
+  company_name VARCHAR(100) NOT NULL COMMENT '店铺或公司名称',
+  phone VARCHAR(20) NOT NULL COMMENT '手机号',
+  password_hash VARCHAR(255) NOT NULL COMMENT '登录密码哈希',
+  pay_password_hash VARCHAR(255) NOT NULL COMMENT '支付密码哈希',
+  status TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1启用，0禁用',
+  is_deleted TINYINT NOT NULL DEFAULT 0 COMMENT '软删除标记',
+  last_login_ip VARCHAR(45) NULL COMMENT '最后登录IP',
+  last_login_at DATETIME NULL COMMENT '最后登录时间',
+  token_version INT NOT NULL DEFAULT 0 COMMENT '令牌版本',
+  deleted_at DATETIME NULL COMMENT '删除时间',
+  created_at DATETIME NOT NULL COMMENT '创建时间',
+  updated_at DATETIME NOT NULL COMMENT '更新时间',
+  UNIQUE KEY uk_customer_user_phone (phone),
+  KEY idx_customer_user_status_deleted (status, is_deleted, id),
+  KEY idx_customer_user_company (company_name, id)
+) COMMENT='客户账号表';
+
 CREATE TABLE IF NOT EXISTS admin_subject (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '主体ID',
   name VARCHAR(64) NOT NULL UNIQUE COMMENT '主体名称',
